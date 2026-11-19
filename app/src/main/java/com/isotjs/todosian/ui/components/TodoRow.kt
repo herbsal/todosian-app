@@ -1,6 +1,13 @@
 package com.isotjs.todosian.ui.components
 
+import android.Manifest
 import android.app.DatePickerDialog
+import android.app.TimePickerDialog
+import android.content.pm.PackageManager
+import android.os.Build
+import android.text.format.DateFormat
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -23,6 +30,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.outlined.AddCircle
+import androidx.compose.material.icons.outlined.Alarm
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Event
 import androidx.compose.material.icons.outlined.FlightTakeoff
@@ -60,11 +68,13 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import com.isotjs.todosian.R
 import com.isotjs.todosian.data.model.TasksPriority
 import com.isotjs.todosian.data.model.Todo
 import com.isotjs.todosian.utils.MarkdownParser
 import java.time.LocalDate
+import java.time.LocalDateTime
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Suppress("DEPRECATION") // dismissState this little fella causes problems with the new Material3 API, so we have to use the deprecated one for now
@@ -330,6 +340,18 @@ fun TasksMetaEditor(
             onClear = { onMetaChange(meta.copy(dueDate = null)) },
         )
 
+        ReminderMetaRow(
+            label = if (useEmojisInUi) {
+                stringResource(R.string.category_tasks_reminder)
+            } else {
+                stringResource(R.string.category_tasks_reminder_label)
+            },
+            icon = if (useEmojisInUi) null else Icons.Outlined.Alarm,
+            value = meta.reminder,
+            onPick = { picked -> onMetaChange(meta.copy(reminder = picked)) },
+            onClear = { onMetaChange(meta.copy(reminder = null)) },
+        )
+
         DateMetaRow(
             label = if (useEmojisInUi) stringResource(R.string.category_tasks_start) else stringResource(R.string.category_tasks_start_label),
             icon = if (useEmojisInUi) null else Icons.Outlined.FlightTakeoff,
@@ -438,6 +460,75 @@ private fun DateMetaRow(
         }
 
         if (allowClear && value != null) {
+            TextButton(onClick = onClear) {
+                Text(text = stringResource(R.string.action_clear))
+            }
+        }
+    }
+}
+
+/**
+ * Row for the ⏰ reminder: a date picker followed by a time picker. Asks for
+ * the notification permission when a reminder is set and it is missing.
+ */
+@Composable
+private fun ReminderMetaRow(
+    label: String,
+    icon: ImageVector?,
+    value: String?,
+    onPick: (String) -> Unit,
+    onClear: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val context = LocalContext.current
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { }
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        modifier = modifier.fillMaxWidth(),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.weight(1f),
+        ) {
+            if (icon != null) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
+
+        TextButton(
+            onClick = {
+                val initial = MarkdownParser.parseReminder(value)
+                    ?: LocalDateTime.now().plusHours(1).withMinute(0).withSecond(0).withNano(0)
+                showDateTimePicker(context = context, initial = initial) { picked ->
+                    onPick(MarkdownParser.formatReminder(picked))
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                        ContextCompat.checkSelfPermission(
+                            context,
+                            Manifest.permission.POST_NOTIFICATIONS,
+                        ) != PackageManager.PERMISSION_GRANTED
+                    ) {
+                        permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    }
+                }
+            },
+        ) {
+            Text(text = value ?: stringResource(R.string.action_set))
+        }
+
+        if (value != null) {
             TextButton(onClick = onClear) {
                 Text(text = stringResource(R.string.action_clear))
             }
@@ -563,6 +654,30 @@ internal fun showDatePicker(
     ).show()
 }
 
+internal fun showDateTimePicker(
+    context: android.content.Context,
+    initial: LocalDateTime,
+    onPicked: (LocalDateTime) -> Unit,
+) {
+    DatePickerDialog(
+        context,
+        { _, year, month, dayOfMonth ->
+            TimePickerDialog(
+                context,
+                { _, hour, minute ->
+                    onPicked(LocalDateTime.of(year, month + 1, dayOfMonth, hour, minute))
+                },
+                initial.hour,
+                initial.minute,
+                DateFormat.is24HourFormat(context),
+            ).show()
+        },
+        initial.year,
+        initial.monthValue - 1,
+        initial.dayOfMonth,
+    ).show()
+}
+
 internal data class TasksMetaChipUi(
     val label: String,
     val icon: ImageVector?,
@@ -614,6 +729,14 @@ internal fun buildTasksMetaChips(
             stringResource(R.string.category_tasks_chip_due_label, value)
         }
         chips.add(TasksMetaChipUi(label = label, icon = if (useEmojisInUi) null else Icons.Outlined.Event))
+    }
+    todo.reminder?.let { value ->
+        val label = if (useEmojisInUi) {
+            stringResource(R.string.category_tasks_chip_reminder, value)
+        } else {
+            stringResource(R.string.category_tasks_chip_reminder_label, value)
+        }
+        chips.add(TasksMetaChipUi(label = label, icon = if (useEmojisInUi) null else Icons.Outlined.Alarm))
     }
     todo.scheduledDate?.let { value ->
         val label = if (useEmojisInUi) {

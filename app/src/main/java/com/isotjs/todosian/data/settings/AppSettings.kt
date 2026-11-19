@@ -23,6 +23,7 @@ data class AppSettings(
     val includeSubfolders: Boolean = false,
     val reminderTimeHour: Int = 19,
     val reminderTimeMinute: Int = 0,
+    val reminderRepeat: ReminderRepeat = ReminderRepeat.OFF,
 ) {
     /** Resolves the configured markers, falling back to the emoji default when a field is blank. */
     fun toTaskMarkers(): TaskMarkers = TaskMarkers(
@@ -67,4 +68,11 @@ enum class TodoSort {
 enum class NewTodoFilePosition {
     TOP,
     BOTTOM,
+}
+
+/** How often a ⏰ reminder is shown again while its todo stays open. */
+enum class ReminderRepeat {
+    OFF,
+    HOURLY,
+    DAILY,
 }

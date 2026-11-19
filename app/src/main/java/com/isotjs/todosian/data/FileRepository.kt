@@ -31,6 +31,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import com.isotjs.todosian.notifications.TaskReminderScheduler
 import com.isotjs.todosian.ui.widget.WidgetRefresher
 import java.io.FileNotFoundException
 import java.io.FileOutputStream
@@ -156,6 +157,8 @@ class SafFileRepository(
     private var widgetUpdateJob: Job? = null
 
     private fun scheduleWidgetUpdate() {
+        // Every path that changes notes or folders ends here, so reminders are re-planned too.
+        TaskReminderScheduler.requestSync(appContext)
         widgetUpdateJob?.cancel()
         widgetUpdateJob = widgetUpdateScope.launch {
             delay(WIDGET_UPDATE_DEBOUNCE_MS)

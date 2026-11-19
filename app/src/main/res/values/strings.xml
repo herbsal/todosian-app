@@ -67,6 +67,7 @@
     <string name="category_tasks_metadata_title">Tasks metadata</string>
     <string name="category_tasks_created">➕ Created</string>
     <string name="category_tasks_due">📅 Due</string>
+    <string name="category_tasks_reminder">⏰ Reminder</string>
     <string name="category_tasks_start">🛫 Start</string>
     <string name="category_tasks_scheduled">⏳ Scheduled</string>
     <string name="category_tasks_done">✅ Done</string>
@@ -75,6 +76,7 @@
 
     <string name="category_tasks_created_label">Created</string>
     <string name="category_tasks_due_label">Due</string>
+    <string name="category_tasks_reminder_label">Reminder</string>
     <string name="category_tasks_start_label">Start</string>
     <string name="category_tasks_scheduled_label">Scheduled</string>
     <string name="category_tasks_done_label">Done</string>
@@ -97,6 +99,7 @@
     <string name="category_tasks_chip_start">🛫 %1$s</string>
     <string name="category_tasks_chip_scheduled">⏳ %1$s</string>
     <string name="category_tasks_chip_due">📅 %1$s</string>
+    <string name="category_tasks_chip_reminder">⏰ %1$s</string>
     <string name="category_tasks_chip_done">✅ %1$s</string>
     <string name="category_tasks_chip_recurrence">🔁 %1$s</string>
 
@@ -104,6 +107,7 @@
     <string name="category_tasks_chip_start_label">%1$s</string>
     <string name="category_tasks_chip_scheduled_label">%1$s</string>
     <string name="category_tasks_chip_due_label">%1$s</string>
+    <string name="category_tasks_chip_reminder_label">%1$s</string>
     <string name="category_tasks_chip_done_label">%1$s</string>
     <string name="category_tasks_chip_recurrence_label">%1$s</string>
 
@@ -230,6 +234,18 @@
     <string name="action_ok">OK</string>
 
     <!-- Notifications -->
+    <string name="notification_task_reminder_channel_name">Task reminders</string>
+    <string name="notification_task_reminder_channel_description">Reminds you at the time set with ⏰ on a task.</string>
+    <string name="notification_task_reminder_body">Reminder for %1$s</string>
+    <string name="notification_task_reminder_untitled">Untitled task</string>
+    <string name="notification_task_reminder_done">Done</string>
+    <string name="notification_task_reminder_later">In 1 hour</string>
+    <string name="notification_task_reminder_tomorrow">Tomorrow</string>
+    <string name="settings_reminder_repeat">Remind again</string>
+    <string name="settings_reminder_repeat_subtitle">While a task with ⏰ stays open: %1$s</string>
+    <string name="settings_reminder_repeat_off">Never</string>
+    <string name="settings_reminder_repeat_hourly">Every hour</string>
+    <string name="settings_reminder_repeat_daily">Every day</string>
     <string name="notification_due_channel_name">Due reminders</string>
     <string name="notification_due_channel_description">Reminds you when tasks are close to their due date.</string>
     <plurals name="notification_due_title">

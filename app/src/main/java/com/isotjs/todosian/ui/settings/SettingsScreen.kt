@@ -113,6 +113,7 @@ import com.isotjs.todosian.data.model.Category
 import com.isotjs.todosian.data.settings.AppSettings
 import com.isotjs.todosian.data.settings.AppSettingsRepository
 import com.isotjs.todosian.data.settings.CategorySort
+import com.isotjs.todosian.data.settings.ReminderRepeat
 import com.isotjs.todosian.data.settings.DailyFocusMode
 import com.isotjs.todosian.data.settings.NewTodoFilePosition
 import com.isotjs.todosian.data.settings.ThemeMode
@@ -201,6 +202,7 @@ fun SettingsScreen(
     var showResetDialog by remember { mutableStateOf(false) }
     var showDailyFocusModeDialog by remember { mutableStateOf(false) }
     var showReminderTimeDialog by remember { mutableStateOf(false) }
+    var showReminderRepeatDialog by remember { mutableStateOf(false) }
     var showMarkersSheet by remember { mutableStateOf(false) }
 
     val reminderTimeLabel = remember(settings.reminderTimeHour, settings.reminderTimeMinute) {
@@ -266,6 +268,16 @@ fun SettingsScreen(
             selected = settings.todoSort,
             onSelected = { appSettingsRepository.setTodoSort(it) },
             onDismiss = { showTodoSortDialog = false },
+        )
+    }
+
+    if (showReminderRepeatDialog) {
+        SingleChoiceDialog(
+            title = stringResource(R.string.settings_reminder_repeat),
+            options = ReminderRepeat.entries.map { ChoiceOption(it, reminderRepeatLabel(it)) },
+            selected = settings.reminderRepeat,
+            onSelected = { appSettingsRepository.setReminderRepeat(it) },
+            onDismiss = { showReminderRepeatDialog = false },
         )
     }
 
@@ -676,6 +688,18 @@ fun SettingsScreen(
                                 )
                             }
                         }
+
+                        SettingsDivider()
+
+                        SettingsNavRow(
+                            icon = Icons.Filled.Schedule,
+                            title = stringResource(R.string.settings_reminder_repeat),
+                            subtitle = stringResource(
+                                R.string.settings_reminder_repeat_subtitle,
+                                reminderRepeatLabel(settings.reminderRepeat),
+                            ),
+                            onClick = { showReminderRepeatDialog = true },
+                        )
 
                         SettingsDivider()
 
@@ -1150,4 +1174,11 @@ private class SettingsViewModelFactory(
         }
         throw IllegalArgumentException("Unknown ViewModel class")
     }
+}
+
+@Composable
+private fun reminderRepeatLabel(repeat: ReminderRepeat): String = when (repeat) {
+    ReminderRepeat.OFF -> stringResource(R.string.settings_reminder_repeat_off)
+    ReminderRepeat.HOURLY -> stringResource(R.string.settings_reminder_repeat_hourly)
+    ReminderRepeat.DAILY -> stringResource(R.string.settings_reminder_repeat_daily)
 }
