@@ -73,3 +73,40 @@ private val PROJECTION = arrayOf(
     DocumentsContract.Document.COLUMN_DISPLAY_NAME,
     DocumentsContract.Document.COLUMN_MIME_TYPE,
 )
+
+/**
+ * A cheap fingerprint of the notes below [treeUri]: path, last-modified time and size of every
+ * Markdown file, without reading any content. It changes when a note is added, removed, renamed
+ * or written.
+ */
+internal fun markdownTreeFingerprint(context: Context, treeUri: Uri, recursive: Boolean): Long {
+    val resolver = context.contentResolver
+    val stamps = HashMap<String, String>()
+    val tree = walkMarkdownTree(DocumentsContract.getTreeDocumentId(treeUri), recursive) { folderId ->
+        val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, folderId)
+        resolver.query(childrenUri, STAMP_PROJECTION, null, null, null)?.use { cursor ->
+            buildList {
+                while (cursor.moveToNext()) {
+                    val id = cursor.getString(0) ?: continue
+                    val name = cursor.getString(1) ?: continue
+                    val isDirectory = cursor.getString(2) == DocumentsContract.Document.MIME_TYPE_DIR
+                    if (!isDirectory) {
+                        val modified = if (cursor.isNull(3)) 0L else cursor.getLong(3)
+                        val size = if (cursor.isNull(4)) 0L else cursor.getLong(4)
+                        stamps[id] = "$modified:$size"
+                    }
+                    add(DocumentEntry(id = id, name = name, isDirectory = isDirectory))
+                }
+            }
+        }.orEmpty()
+    }
+    return fingerprintOf(tree.files.map { it.relativePath to stamps[it.ref].orEmpty() })
+}
+
+private val STAMP_PROJECTION = arrayOf(
+    DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+    DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+    DocumentsContract.Document.COLUMN_MIME_TYPE,
+    DocumentsContract.Document.COLUMN_LAST_MODIFIED,
+    DocumentsContract.Document.COLUMN_SIZE,
+)

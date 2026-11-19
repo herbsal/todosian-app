@@ -18,6 +18,8 @@ import androidx.core.net.toUri
 import com.isotjs.todosian.MainActivity
 import com.isotjs.todosian.R
 import com.isotjs.todosian.TodosianApplication
+import com.isotjs.todosian.data.settings.SharedPrefsAppSettingsRepository
+import com.isotjs.todosian.sync.FolderWatchScheduler
 import com.isotjs.todosian.utils.MarkdownParser
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -48,7 +50,13 @@ class TaskReminderReceiver : BroadcastReceiver() {
                     ACTION_TOMORROW -> postpone(context, intent) { _, reminder ->
                         LocalDate.now().plusDays(1).atTime(reminder.toLocalTime())
                     }
-                    else -> TaskReminderScheduler.sync(context)
+                    else -> {
+                        TaskReminderScheduler.sync(context)
+                        if (intent.action == Intent.ACTION_BOOT_COMPLETED || intent.action == Intent.ACTION_MY_PACKAGE_REPLACED) {
+                            val mode = SharedPrefsAppSettingsRepository(context).settings.first().folderWatchMode
+                            FolderWatchScheduler.apply(context, mode)
+                        }
+                    }
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "Handling ${intent.action} failed", e)

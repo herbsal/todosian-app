@@ -44,6 +44,8 @@ interface AppSettingsRepository {
     fun setReminderTime(hour: Int, minute: Int)
 
     fun setReminderRepeat(repeat: ReminderRepeat)
+
+    fun setFolderWatchMode(mode: FolderWatchMode)
 }
 
 class SharedPrefsAppSettingsRepository(
@@ -152,6 +154,10 @@ class SharedPrefsAppSettingsRepository(
         prefs.edit { putString(KEY_REMINDER_REPEAT, repeat.name) }
     }
 
+    override fun setFolderWatchMode(mode: FolderWatchMode) {
+        prefs.edit { putString(KEY_FOLDER_WATCH_MODE, mode.name) }
+    }
+
     private fun readSettings(): AppSettings {
         val themeMode = prefs.getString(KEY_THEME_MODE, null)?.let { raw ->
             runCatching { ThemeMode.valueOf(raw) }.getOrNull()
@@ -199,6 +205,9 @@ class SharedPrefsAppSettingsRepository(
             reminderRepeat = prefs.getString(KEY_REMINDER_REPEAT, null)?.let { raw ->
                 runCatching { ReminderRepeat.valueOf(raw) }.getOrNull()
             } ?: ReminderRepeat.OFF,
+            folderWatchMode = prefs.getString(KEY_FOLDER_WATCH_MODE, null)?.let { raw ->
+                runCatching { FolderWatchMode.valueOf(raw) }.getOrNull()
+            } ?: FolderWatchMode.PERIODIC,
         )
     }
 
@@ -231,5 +240,6 @@ class SharedPrefsAppSettingsRepository(
         private const val KEY_REMINDER_TIME_HOUR = "reminder_time_hour"
         private const val KEY_REMINDER_TIME_MINUTE = "reminder_time_minute"
         private const val KEY_REMINDER_REPEAT = "reminder_repeat"
+        private const val KEY_FOLDER_WATCH_MODE = "folder_watch_mode"
     }
 }

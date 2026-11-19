@@ -246,6 +246,16 @@
     <string name="settings_reminder_repeat_off">Never</string>
     <string name="settings_reminder_repeat_hourly">Every hour</string>
     <string name="settings_reminder_repeat_daily">Every day</string>
+    <string name="settings_folder_watch">Notice changes from other apps</string>
+    <string name="settings_folder_watch_subtitle">For notes changed by Obsidian or a sync app: %1$s</string>
+    <string name="settings_folder_watch_periodic">Every 15 minutes</string>
+    <string name="settings_folder_watch_instant">Instantly</string>
+    <string name="settings_folder_watch_instant_hint">Instantly needs \"All files access\" and shows a silent permanent notification.</string>
+    <string name="settings_folder_watch_no_access">Instantly (all files access missing, checking every 15 minutes)</string>
+    <string name="folder_watch_channel_name">Folder watching</string>
+    <string name="folder_watch_channel_description">Shown while Todosian watches your note folders for changes.</string>
+    <string name="folder_watch_notification_title">Watching your notes</string>
+    <string name="folder_watch_notification_text">Reminders follow changes from other apps right away.</string>
     <string name="notification_due_channel_name">Due reminders</string>
     <string name="notification_due_channel_description">Reminds you when tasks are close to their due date.</string>
     <plurals name="notification_due_title">
