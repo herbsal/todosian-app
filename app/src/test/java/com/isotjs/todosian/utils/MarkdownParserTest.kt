@@ -1,5 +1,6 @@
 package com.isotjs.todosian.utils
 
+import com.isotjs.todosian.data.model.TasksPriority
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import java.time.LocalDate
@@ -683,5 +684,163 @@ class MarkdownParserTest {
         val todo = MarkdownParser.parse(lines, markers).single()
         assertEquals("2024-01-02", todo.dueDate)
         assertEquals("Test", todo.text)
+    }
+
+    @Test
+    fun parse_reads_on_completion_separately_from_recurrence() {
+        val todo = MarkdownParser.parse(
+            listOf("- [ ] Einkaufen #kontext/unterwegs 🔁 every week when done 🏁 delete 📅 2026-11-23"),
+        ).single()
+
+        assertEquals("Einkaufen #kontext/unterwegs", todo.text)
+        assertEquals("every week when done", todo.recurrence)
+        assertEquals("delete", todo.onCompletion)
+        assertEquals("2026-11-23", todo.dueDate)
+    }
+
+    @Test
+    fun parse_moves_tags_between_fields_into_text_and_keeps_reading_fields() {
+        val todo = MarkdownParser.parse(
+            listOf("- [ ] Updates einspielen 🔁 every week on Saturday 🏁 delete 📅 2026-11-21 #kontext/pc ➕ 2026-11-16"),
+        ).single()
+
+        assertEquals("Updates einspielen #kontext/pc", todo.text)
+        assertEquals("every week on Saturday", todo.recurrence)
+        assertEquals("2026-11-21", todo.dueDate)
+        assertEquals("2026-11-16", todo.createdDate)
+    }
+
+    @Test
+    fun parse_leaves_trailing_tags_without_fields_untouched() {
+        val todo = MarkdownParser.parse(listOf("- [ ] Buy milk  #home #shop")).single()
+
+        assertEquals("Buy milk  #home #shop", todo.text)
+        assertEquals(null, todo.dueDate)
+    }
+
+    @Test
+    fun toggle_with_on_completion_delete_keeps_only_next_occurrence() {
+        val lines = listOf(
+            "# Alltag",
+            "- [ ] Updates einspielen 🔁 every week 🏁 delete 📅 2026-11-21 #kontext/pc",
+            "after",
+        )
+
+        val result = MarkdownParser.toggleLine(
+            lines,
+            lineIndex = 1,
+            enableTasksPlugin = true,
+            today = LocalDate.of(2026, 11, 16),
+        )
+
+        assertEquals(
+            listOf(
+                "# Alltag",
+                "- [ ] Updates einspielen #kontext/pc 📅 2026-11-28 🔁 every week 🏁 delete",
+                "after",
+            ),
+            result,
+        )
+    }
+
+    @Test
+    fun toggle_with_on_completion_delete_and_no_recurrence_removes_the_line() {
+        val lines = listOf("- [ ] One-off 🏁 delete", "- [ ] Other")
+
+        val result = MarkdownParser.toggleLine(lines, lineIndex = 0, enableTasksPlugin = true)
+
+        assertEquals(listOf("- [ ] Other"), result)
+    }
+
+    @Test
+    fun toggle_with_on_completion_delete_keeps_line_that_has_subtasks() {
+        val lines = listOf("- [ ] Parent 🏁 delete", "  - [ ] Child")
+
+        val result = MarkdownParser.toggleLine(
+            lines,
+            lineIndex = 0,
+            enableTasksPlugin = true,
+            today = LocalDate.of(2026, 11, 16),
+        )
+
+        assertEquals(listOf("- [x] Parent 🏁 delete ✅ 2026-11-16", "  - [ ] Child"), result)
+    }
+
+    @Test
+    fun toggle_with_on_completion_keep_or_plugin_off_keeps_the_done_line() {
+        val keep = listOf("- [ ] Task 🏁 keep")
+        assertEquals(
+            listOf("- [x] Task 🏁 keep ✅ 2026-11-16"),
+            MarkdownParser.toggleLine(keep, 0, enableTasksPlugin = true, today = LocalDate.of(2026, 11, 16)),
+        )
+
+        val delete = listOf("- [ ] Task 🏁 delete")
+        assertEquals(listOf("- [x] Task 🏁 delete"), MarkdownParser.toggleLine(delete, 0, enableTasksPlugin = false))
+    }
+
+    @Test
+    fun editTodo_keeps_on_completion() {
+        val lines = listOf("- [ ] Old 🔁 every day 🏁 delete 📅 2026-11-16")
+        val todo = MarkdownParser.parse(lines).single()
+
+        val result = MarkdownParser.editTodo(
+            lines = lines,
+            lineIndex = 0,
+            newText = "New",
+            meta = MarkdownParser.TasksMeta(
+                dueDate = todo.dueDate,
+                recurrence = todo.recurrence,
+                onCompletion = todo.onCompletion,
+            ),
+            enableTasksPlugin = true,
+        )
+
+        assertEquals(listOf("- [ ] New 📅 2026-11-16 🔁 every day 🏁 delete"), result)
+    }
+
+    @Test
+    fun parse_reads_due_date_followed_by_tag() {
+        val todo = MarkdownParser.parse(listOf("- [ ] Arzttermin vereinbaren 📅 2026-11-21 #kinder")).single()
+
+        assertEquals("Arzttermin vereinbaren #kinder", todo.text)
+        assertEquals("2026-11-21", todo.dueDate)
+    }
+
+    @Test
+    fun parse_reads_fields_followed_by_several_tags() {
+        val todo = MarkdownParser.parse(
+            listOf("- [ ] Rezept abholen ⏫ ⏳ 2026-11-20 #kinder #aufwand/5min"),
+        ).single()
+
+        assertEquals("Rezept abholen #kinder #aufwand/5min", todo.text)
+        assertEquals("2026-11-20", todo.scheduledDate)
+        assertEquals(TasksPriority.HIGH, todo.priority)
+    }
+
+    @Test
+    fun parse_reads_due_date_followed_by_tag_with_custom_markers() {
+        val todo = MarkdownParser.parse(listOf("- [ ] Call due: 2026-11-21 #phone"), customMarkers).single()
+
+        assertEquals("Call #phone", todo.text)
+        assertEquals("2026-11-21", todo.dueDate)
+    }
+
+    @Test
+    fun toggle_keeps_tag_after_due_date_in_place() {
+        val lines = listOf("- [ ] Arzttermin vereinbaren 📅 2026-11-21 #kinder")
+
+        val done = MarkdownParser.toggleLine(lines, 0, enableTasksPlugin = true, today = LocalDate.of(2026, 11, 19))
+        assertEquals(listOf("- [x] Arzttermin vereinbaren 📅 2026-11-21 #kinder ✅ 2026-11-19"), done)
+
+        val undone = MarkdownParser.toggleLine(done, 0, enableTasksPlugin = true)
+        assertEquals(lines, undone)
+    }
+
+    @Test
+    fun parse_keeps_tag_inside_recurrence_free_text_out_of_rule() {
+        val todo = MarkdownParser.parse(listOf("- [ ] Müll 🔁 every week #haushalt")).single()
+
+        assertEquals("Müll #haushalt", todo.text)
+        assertEquals("every week", todo.recurrence)
     }
 }
