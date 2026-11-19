@@ -138,7 +138,7 @@
     <string name="settings_change_folder">Change folder</string>
     <string name="settings_change_folder_subtitle">Choose a different Obsidian todo folder.</string>
     <string name="settings_add_extra_folder">Add another folder</string>
-    <string name="settings_add_extra_folder_subtitle">Show notes from a second folder too, for example one you share with your family.</string>
+    <string name="settings_add_extra_folder_subtitle">Show notes from a second folder too, for example one that is synced separately.</string>
     <string name="settings_extra_folder_subtitle">Notes appear as “%1$s/…”. New notes go here when named “%1$s/Name”.</string>
     <string name="settings_extra_folder_remove">Remove folder</string>
     <string name="settings_extra_folder_remove_title">Remove “%1$s”?</string>

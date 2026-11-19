@@ -67,7 +67,7 @@ class TodoLineChangedException : IllegalStateException("Todo line changed on dis
 /** A folder the app reads notes from; [prefix] is put in front of its notes' names, empty for the main folder. */
 internal data class NoteFolder(val uri: Uri, val prefix: String)
 
-/** Splits `Family/Groceries` into the extra folder named `Family` and `Groceries`, if such a folder exists. */
+/** Splits `Shared/Groceries` into the extra folder named `Shared` and `Groceries`, if such a folder exists. */
 internal fun <T> splitFolderPrefix(name: String, extraFolders: Map<String, T>): Pair<T, String>? {
     val slash = name.indexOf('/')
     if (slash <= 0) return null
@@ -116,8 +116,8 @@ interface FileRepository {
     suspend fun createCategory(folderUri: Uri, name: String): Result<Uri>
 
     /**
-     * Creates a note from what the user typed: `Family/Groceries` goes into the extra folder
-     * `Family` when there is one, anything else into the main folder.
+     * Creates a note from what the user typed: `Shared/Groceries` goes into the extra folder
+     * `Shared` when there is one, anything else into the main folder.
      */
     suspend fun createCategoryByName(name: String): Result<Uri>
 

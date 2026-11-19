@@ -40,7 +40,7 @@ class PreferencesManager(
     }
 
     /**
-     * Further folders whose notes are shown next to the main folder's, e.g. a "Family" folder that
+     * Further folders whose notes are shown next to the main folder's, e.g. a shared folder that
      * is synced separately. Kept in the order they were added.
      */
     fun getExtraFolderUris(): List<Uri> =

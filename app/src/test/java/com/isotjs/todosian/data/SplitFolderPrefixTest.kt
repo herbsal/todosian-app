@@ -5,11 +5,11 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 class SplitFolderPrefixTest {
-    private val folders = mapOf("Familie" to 1, "Arbeit" to 2)
+    private val folders = mapOf("Geteilt" to 1, "Arbeit" to 2)
 
     @Test
     fun prefix_of_an_extra_folder_selects_that_folder() {
-        assertEquals(1 to "Einkauf", splitFolderPrefix("Familie/Einkauf", folders))
+        assertEquals(1 to "Einkauf", splitFolderPrefix("Geteilt/Einkauf", folders))
     }
 
     @Test
@@ -30,12 +30,12 @@ class SplitFolderPrefixTest {
     @Test
     fun empty_parts_are_not_split() {
         assertNull(splitFolderPrefix("/Einkauf", folders))
-        assertNull(splitFolderPrefix("Familie/", folders))
-        assertNull(splitFolderPrefix("Familie/   ", folders))
+        assertNull(splitFolderPrefix("Geteilt/", folders))
+        assertNull(splitFolderPrefix("Geteilt/   ", folders))
     }
 
     @Test
     fun no_extra_folders_means_no_split() {
-        assertNull(splitFolderPrefix("Familie/Einkauf", emptyMap<String, Int>()))
+        assertNull(splitFolderPrefix("Geteilt/Einkauf", emptyMap<String, Int>()))
     }
 }
