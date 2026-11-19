@@ -319,6 +319,7 @@ fun DailyFocusScreen(
                                 priority = task.todo.priority,
                                 recurrence = task.todo.recurrence,
                                 onCompletion = task.todo.onCompletion,
+                                reminder = task.todo.reminder,
                             )
                             sheetTask = task
                         },

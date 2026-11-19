@@ -36,4 +36,5 @@ data class Todo(
     val priority: TasksPriority? = null,
     val recurrence: String? = null, // 🔁 <text>
     val onCompletion: String? = null, // 🏁 keep|delete
+    val reminder: String? = null, // ⏰ yyyy-MM-dd HH:mm
 )

@@ -3,6 +3,8 @@ package com.isotjs.todosian.utils
 import com.isotjs.todosian.data.model.TasksPriority
 import com.isotjs.todosian.data.model.Todo
 import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
 import java.util.UUID
 import kotlin.math.abs
 
@@ -22,6 +24,10 @@ data class TaskMarkers(
 private const val ON_COMPLETION_MARKER = "🏁"
 private const val ON_COMPLETION_DELETE = "delete"
 
+/** Todosian's own reminder field, written right after the description: `⏰ 2026-11-24 19:00`. */
+const val REMINDER_MARKER = "⏰"
+private val REMINDER_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
+
 object MarkdownParser {
     private val todoRegex = Regex("""^([ \t]*)- \[(x| )\] (.*)$""")
 
@@ -31,6 +37,21 @@ object MarkdownParser {
     private val onCompletionSuffixRegex = Regex("""\s🏁\s*(keep|delete)\s*$""", RegexOption.IGNORE_CASE)
 
     private val tagSuffixRegex = Regex("""\s#[^\s#]+\s*$""")
+
+    // Anywhere in the line, so a reminder typed after the Tasks fields is still found.
+    private val reminderRegex = Regex("""(^|\s)⏰\x{FE0F}?\s*(\d{4}-\d{2}-\d{2})[ T](\d{1,2}:\d{2})(?=\s|$)""")
+
+    /** Parses a reminder value such as `2026-11-24 19:00`; null when it is not a valid date and time. */
+    fun parseReminder(value: String?): LocalDateTime? {
+        if (value.isNullOrBlank()) return null
+        val normalized = value.trim().replace('T', ' ').let { raw ->
+            // Accept a single-digit hour like "9:30".
+            if (raw.length == 15) raw.substring(0, 11) + "0" + raw.substring(11) else raw
+        }
+        return runCatching { LocalDateTime.parse(normalized, REMINDER_FORMAT) }.getOrNull()
+    }
+
+    fun formatReminder(value: LocalDateTime): String = value.format(REMINDER_FORMAT)
 
     private fun dateSuffixRegex(marker: String) =
         Regex("""\s${Regex.escape(marker)}\s*(\d{4}-\d{2}-\d{2})\s*$""")
@@ -79,6 +100,7 @@ object MarkdownParser {
                 priority = parsed.meta.priority,
                 recurrence = parsed.meta.recurrence,
                 onCompletion = parsed.meta.onCompletion,
+                reminder = parsed.meta.reminder,
             )
         }
     }
@@ -289,6 +311,7 @@ object MarkdownParser {
 
         val newRemainder = buildString {
             append(cleaned)
+            parsed.meta.reminder?.let { append(" $REMINDER_MARKER $it") }
             if (parsed.suffixRaw.isNotEmpty()) append(parsed.suffixRaw)
         }
 
@@ -412,6 +435,7 @@ object MarkdownParser {
             priority = originalMeta.priority,
             recurrence = originalMeta.recurrence,
             onCompletion = originalMeta.onCompletion,
+            reminder = nextReminder(originalMeta, next, rule, today),
         )
 
         return buildString {
@@ -421,6 +445,39 @@ object MarkdownParser {
             val suffix = newMeta.toSuffixString(markers)
             if (suffix.isNotEmpty()) append(suffix)
         }
+    }
+
+    /**
+     * Moves the reminder of a recurring task along with it: by the same number of days as its
+     * due, scheduled or start date, or by the rule itself when the reminder is the only date.
+     */
+    private fun nextReminder(
+        originalMeta: TasksMeta,
+        next: RecurrenceEngine.NextOccurrence,
+        rule: String,
+        today: LocalDate,
+    ): String? {
+        val reminder = parseReminder(originalMeta.reminder) ?: return null
+        val pairs = listOf(
+            originalMeta.dueDate to next.dueDate,
+            originalMeta.scheduledDate to next.scheduledDate,
+            originalMeta.startDate to next.startDate,
+        )
+        val (from, to) = pairs.firstOrNull { (old, new) -> old != null && new != null }
+            ?.let { (old, new) -> runCatching { LocalDate.parse(old) }.getOrNull() to new }
+            ?: run {
+                val onlyReminder = RecurrenceEngine.nextOccurrence(
+                    ruleText = rule,
+                    dueDate = reminder.toLocalDate().toString(),
+                    scheduledDate = null,
+                    startDate = null,
+                    today = today,
+                ) ?: return null
+                reminder.toLocalDate() to onlyReminder.dueDate
+            }
+        if (from == null || to == null) return null
+        val days = to.toEpochDay() - from.toEpochDay()
+        return formatReminder(reminder.plusDays(days))
     }
 
     private fun buildTodoLine(
@@ -481,9 +538,12 @@ object MarkdownParser {
         val recurrence: String? = null,
         /** Obsidian Tasks on-completion action (`🏁 keep` or `🏁 delete`). */
         val onCompletion: String? = null,
+        /** Todosian reminder, `yyyy-MM-dd HH:mm`; written before the Tasks fields so Obsidian Tasks keeps reading them. */
+        val reminder: String? = null,
     ) {
         fun toSuffixString(markers: TaskMarkers = TaskMarkers.Default): String {
-            val parts = ArrayList<String>(8)
+            val parts = ArrayList<String>(9)
+            if (!reminder.isNullOrBlank()) parts.add("$REMINDER_MARKER ${reminder.trim()}")
             if (createdDate != null) parts.add("${markers.created} $createdDate")
             if (startDate != null) parts.add("${markers.start} $startDate")
             if (scheduledDate != null) parts.add("${markers.scheduled} $scheduledDate")
@@ -506,6 +566,17 @@ object MarkdownParser {
 
     private fun parseRemainder(remainder: String, markers: TaskMarkers): ParsedRemainder {
         var working = remainder.trimEnd()
+
+        var reminder: String? = null
+        reminderRegex.findAll(working).lastOrNull()?.let { match ->
+            val value = "${match.groupValues[2]} ${match.groupValues[3]}"
+            parseReminder(value)?.let { parsedReminder ->
+                reminder = formatReminder(parsedReminder)
+                val before = working.substring(0, match.range.first)
+                val after = working.substring(match.range.last + 1)
+                working = (before.trimEnd() + " " + after.trimStart()).trim()
+            }
+        }
 
         val completionRegex = dateSuffixRegex(markers.done)
         val dueRegex = dateSuffixRegex(markers.due)
@@ -576,6 +647,7 @@ object MarkdownParser {
                 priority = priority,
                 recurrence = recurrence,
                 onCompletion = onCompletion,
+                reminder = reminder,
             ),
         )
     }

@@ -558,6 +558,7 @@ fun CategoryScreen(
                                         priority = todo.priority,
                                         recurrence = todo.recurrence,
                                         onCompletion = todo.onCompletion,
+                                        reminder = todo.reminder,
                                     )
                                 },
                                 onAddSubtask = {
@@ -613,6 +614,7 @@ fun CategoryScreen(
                                         priority = todo.priority,
                                         recurrence = todo.recurrence,
                                         onCompletion = todo.onCompletion,
+                                        reminder = todo.reminder,
                                     )
                                 },
                                 onAddSubtask = {
@@ -666,6 +668,7 @@ fun CategoryScreen(
                                         priority = todo.priority,
                                         recurrence = todo.recurrence,
                                         onCompletion = todo.onCompletion,
+                                        reminder = todo.reminder,
                                     )
                                 },
                                 onAddSubtask = {
