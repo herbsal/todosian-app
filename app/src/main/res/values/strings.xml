@@ -127,6 +127,7 @@
     <string name="error_folder_invalid">Could not access the selected folder.</string>
     <string name="error_read_failed">Could not read the file.</string>
     <string name="error_write_failed">Could not save your changes.</string>
+    <string name="error_todo_changed_externally">This todo was changed in another app, so your change was not saved. The list has been reloaded.</string>
 
     <!-- Settings -->
     <string name="settings_title">Settings</string>

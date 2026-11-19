@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.isotjs.todosian.R
 import com.isotjs.todosian.data.FileRepository
+import com.isotjs.todosian.data.TodoLineChangedException
 import com.isotjs.todosian.data.model.Todo
 import com.isotjs.todosian.data.settings.AppSettingsRepository
 import com.isotjs.todosian.ui.components.awaitMinimumPullRefreshDuration
@@ -146,35 +147,13 @@ class CategoryViewModel(
     }
 
     fun toggleTodo(todo: Todo, enableTasksPluginSupport: Boolean) {
-        viewModelScope.launch {
-            val markers = currentMarkers()
-            val previousLines = _uiState.value.lines
-            val newLines = MarkdownParser.tryToggleLine(
-                lines = previousLines,
-                lineIndex = todo.lineIndex,
+        editTodoLine(todo) { lines, index, markers ->
+            MarkdownParser.tryToggleLine(
+                lines = lines,
+                lineIndex = index,
                 enableTasksPlugin = enableTasksPluginSupport,
                 markers = markers,
             )
-            if (newLines == null) {
-                _events.emit(Event.ShowMessage(R.string.error_read_failed))
-                refreshFromDisk(showLoading = false)
-                return@launch
-            }
-
-            applyLines(newLines, markers)
-
-            inFlightWrites.incrementAndGet()
-            try {
-                val write = fileRepository.writeLines(categoryUri, newLines)
-                if (write.isFailure) {
-                    if (_uiState.value.lines == newLines) {
-                        applyLines(previousLines, markers)
-                    }
-                    _events.emit(Event.ShowMessage(R.string.error_write_failed))
-                }
-            } finally {
-                onWriteFinishedMaybeRefresh()
-            }
         }
     }
 
@@ -184,33 +163,15 @@ class CategoryViewModel(
         enableTasksPluginSupport: Boolean,
         addAtStart: Boolean = false,
     ) {
-        viewModelScope.launch {
-            val markers = currentMarkers()
-            val previousLines = _uiState.value.lines
-            val newLines = MarkdownParser.addTodo(
-                lines = previousLines,
+        editLines { lines, markers ->
+            MarkdownParser.addTodo(
+                lines = lines,
                 text = text,
                 meta = meta,
                 enableTasksPlugin = enableTasksPluginSupport,
                 addAtStart = addAtStart,
                 markers = markers,
             )
-            if (newLines == previousLines) return@launch
-
-            applyLines(newLines, markers)
-
-            inFlightWrites.incrementAndGet()
-            try {
-                val write = fileRepository.writeLines(categoryUri, newLines)
-                if (write.isFailure) {
-                    if (_uiState.value.lines == newLines) {
-                        applyLines(previousLines, markers)
-                    }
-                    _events.emit(Event.ShowMessage(R.string.error_write_failed))
-                }
-            } finally {
-                onWriteFinishedMaybeRefresh()
-            }
         }
     }
 
@@ -220,37 +181,15 @@ class CategoryViewModel(
         meta: MarkdownParser.TasksMeta?,
         enableTasksPluginSupport: Boolean,
     ) {
-        viewModelScope.launch {
-            val markers = currentMarkers()
-            val previousLines = _uiState.value.lines
-            val newLines = MarkdownParser.addSubTodo(
-                lines = previousLines,
-                parentLineIndex = parent.lineIndex,
+        editTodoLine(parent) { lines, index, markers ->
+            MarkdownParser.addSubTodo(
+                lines = lines,
+                parentLineIndex = index,
                 text = text,
                 meta = meta,
                 enableTasksPlugin = enableTasksPluginSupport,
                 markers = markers,
             )
-            if (newLines == null) {
-                _events.emit(Event.ShowMessage(R.string.error_read_failed))
-                refreshFromDisk(showLoading = false)
-                return@launch
-            }
-
-            applyLines(newLines, markers)
-
-            inFlightWrites.incrementAndGet()
-            try {
-                val write = fileRepository.writeLines(categoryUri, newLines)
-                if (write.isFailure) {
-                    if (_uiState.value.lines == newLines) {
-                        applyLines(previousLines, markers)
-                    }
-                    _events.emit(Event.ShowMessage(R.string.error_write_failed))
-                }
-            } finally {
-                onWriteFinishedMaybeRefresh()
-            }
         }
     }
 
@@ -260,70 +199,25 @@ class CategoryViewModel(
         meta: MarkdownParser.TasksMeta?,
         enableTasksPluginSupport: Boolean,
     ) {
-        viewModelScope.launch {
-            val markers = currentMarkers()
-            val previousLines = _uiState.value.lines
-            val newLines = if (enableTasksPluginSupport) {
+        editTodoLine(todo) { lines, index, markers ->
+            if (enableTasksPluginSupport) {
                 MarkdownParser.editTodo(
-                    lines = previousLines,
-                    lineIndex = todo.lineIndex,
+                    lines = lines,
+                    lineIndex = index,
                     newText = newText,
                     meta = meta,
                     enableTasksPlugin = true,
                     markers = markers,
                 )
             } else {
-                val updated = MarkdownParser.tryEditTodoText(previousLines, todo.lineIndex, newText, markers)
-                if (updated == null) {
-                    _events.emit(Event.ShowMessage(R.string.error_read_failed))
-                    refreshFromDisk(showLoading = false)
-                    return@launch
-                }
-                updated
-            }
-
-            applyLines(newLines, markers)
-
-            inFlightWrites.incrementAndGet()
-            try {
-                val write = fileRepository.writeLines(categoryUri, newLines)
-                if (write.isFailure) {
-                    if (_uiState.value.lines == newLines) {
-                        applyLines(previousLines, markers)
-                    }
-                    _events.emit(Event.ShowMessage(R.string.error_write_failed))
-                }
-            } finally {
-                onWriteFinishedMaybeRefresh()
+                MarkdownParser.tryEditTodoText(lines, index, newText, markers)
             }
         }
     }
 
     fun deleteTodo(todo: Todo) {
-        viewModelScope.launch {
-            val markers = currentMarkers()
-            val previousLines = _uiState.value.lines
-            val newLines = MarkdownParser.tryDeleteTodoWithSubtasks(previousLines, todo.lineIndex)
-            if (newLines == null) {
-                _events.emit(Event.ShowMessage(R.string.error_read_failed))
-                refreshFromDisk(showLoading = false)
-                return@launch
-            }
-
-            applyLines(newLines, markers)
-
-            inFlightWrites.incrementAndGet()
-            try {
-                val write = fileRepository.writeLines(categoryUri, newLines)
-                if (write.isFailure) {
-                    if (_uiState.value.lines == newLines) {
-                        applyLines(previousLines, markers)
-                    }
-                    _events.emit(Event.ShowMessage(R.string.error_write_failed))
-                }
-            } finally {
-                onWriteFinishedMaybeRefresh()
-            }
+        editTodoLine(todo) { lines, index, _ ->
+            MarkdownParser.tryDeleteTodoWithSubtasks(lines, index)
         }
     }
 
@@ -335,8 +229,9 @@ class CategoryViewModel(
             }
             val markers = currentMarkers()
             val previousLines = _uiState.value.lines
+            val expectedLine = previousLines.getOrNull(todo.lineIndex)
             val newLines = MarkdownParser.tryDeleteTodoWithSubtasks(previousLines, todo.lineIndex)
-            if (newLines == null) {
+            if (expectedLine == null || newLines == null) {
                 _events.emit(Event.ShowMessage(R.string.error_read_failed))
                 refreshFromDisk(showLoading = false)
                 return@launch
@@ -346,12 +241,12 @@ class CategoryViewModel(
 
             inFlightWrites.incrementAndGet()
             try {
-                val result = fileRepository.moveTodoLine(categoryUri, targetUri, todo.lineIndex)
+                val result = fileRepository.moveTodoLine(categoryUri, targetUri, todo.lineIndex, expectedLine)
                 if (result.isFailure) {
                     if (_uiState.value.lines == newLines) {
                         applyLines(previousLines, markers)
                     }
-                    _events.emit(Event.ShowMessage(R.string.error_write_failed))
+                    reportFailure(result.exceptionOrNull())
                 } else {
                     _events.emit(Event.ShowMessage(R.string.category_move_success))
                 }
@@ -363,17 +258,90 @@ class CategoryViewModel(
 
     fun copyTodo(todo: Todo, targetUri: Uri) {
         viewModelScope.launch {
+            val expectedLine = _uiState.value.lines.getOrNull(todo.lineIndex)
+            if (expectedLine == null) {
+                _events.emit(Event.ShowMessage(R.string.error_read_failed))
+                refreshFromDisk(showLoading = false)
+                return@launch
+            }
             inFlightWrites.incrementAndGet()
             try {
-                val result = fileRepository.copyTodoLine(categoryUri, targetUri, todo.lineIndex)
+                val result = fileRepository.copyTodoLine(categoryUri, targetUri, todo.lineIndex, expectedLine)
                 if (result.isFailure) {
-                    _events.emit(Event.ShowMessage(R.string.error_write_failed))
+                    reportFailure(result.exceptionOrNull())
                 } else {
                     _events.emit(Event.ShowMessage(R.string.category_copy_success))
                 }
             } finally {
                 onWriteFinishedMaybeRefresh()
             }
+        }
+    }
+
+    /**
+     * Applies an edit of the line [todo] was parsed from. The edit runs twice: on the lines shown
+     * (for an instant UI update) and on the file as it is right before writing, where the line is
+     * looked up again so a newer version written by another app is never overwritten.
+     */
+    private fun editTodoLine(
+        todo: Todo,
+        edit: (lines: List<String>, lineIndex: Int, markers: TaskMarkers) -> List<String>?,
+    ) {
+        val expectedLine = _uiState.value.lines.getOrNull(todo.lineIndex)
+        editLines { lines, markers ->
+            if (expectedLine == null) return@editLines null
+            val index = MarkdownParser.locateTodoLine(lines, todo.lineIndex, expectedLine)
+                ?: return@editLines null
+            edit(lines, index, markers)
+        }
+    }
+
+    /** [edit] returns null when it cannot be applied to the given lines. */
+    private fun editLines(edit: (lines: List<String>, markers: TaskMarkers) -> List<String>?) {
+        viewModelScope.launch {
+            val markers = currentMarkers()
+            val previousLines = _uiState.value.lines
+            val optimisticLines = edit(previousLines, markers)
+            if (optimisticLines == null) {
+                _events.emit(Event.ShowMessage(R.string.error_read_failed))
+                refreshFromDisk(showLoading = false)
+                return@launch
+            }
+            if (optimisticLines == previousLines) return@launch
+
+            applyLines(optimisticLines, markers)
+
+            inFlightWrites.incrementAndGet()
+            try {
+                val result = fileRepository.updateLines(categoryUri) { freshLines -> edit(freshLines, markers) }
+                result.onSuccess { writtenLines ->
+                    when {
+                        writtenLines == null -> {
+                            _events.emit(Event.ShowMessage(R.string.error_todo_changed_externally))
+                            pendingRefreshFromObserver.set(true)
+                        }
+                        // Show what is on disk now, unless a later edit is still being saved.
+                        inFlightWrites.get() == 1 -> applyLines(writtenLines, markers)
+                        else -> pendingRefreshFromObserver.set(true)
+                    }
+                }.onFailure {
+                    if (_uiState.value.lines == optimisticLines) {
+                        applyLines(previousLines, markers)
+                    }
+                    _events.emit(Event.ShowMessage(R.string.error_write_failed))
+                }
+            } finally {
+                onWriteFinishedMaybeRefresh()
+            }
+        }
+    }
+
+    private suspend fun reportFailure(error: Throwable?) {
+        if (error is TodoLineChangedException) {
+            _events.emit(Event.ShowMessage(R.string.error_todo_changed_externally))
+            pendingRefreshFromObserver.set(true)
+        } else {
+            _events.emit(Event.ShowMessage(R.string.error_write_failed))
         }
     }
 

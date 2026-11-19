@@ -4,6 +4,7 @@ import com.isotjs.todosian.data.model.TasksPriority
 import com.isotjs.todosian.data.model.Todo
 import java.time.LocalDate
 import java.util.UUID
+import kotlin.math.abs
 
 data class TaskMarkers(
     val created: String = "➕",
@@ -33,6 +34,20 @@ object MarkdownParser {
         Regex("""\s${Regex.escape(marker)}\s*\d{4}-\d{2}-\d{2}(?=\s|$)""")
 
     private fun isTodoLine(line: String): Boolean = todoRegex.matches(line)
+
+    /**
+     * Finds [expectedLine] in [lines], which may have been changed by another app since
+     * [expectedLine] was read at [lineIndex]. Returns [lineIndex] when the line is still there,
+     * otherwise the index of the nearest identical todo line, or null when the todo is gone or was
+     * edited elsewhere. Callers then refuse to write instead of overwriting the newer content.
+     */
+    fun locateTodoLine(lines: List<String>, lineIndex: Int, expectedLine: String): Int? {
+        if (!isTodoLine(expectedLine)) return null
+        if (lines.getOrNull(lineIndex) == expectedLine) return lineIndex
+        return lines.indices
+            .filter { lines[it] == expectedLine }
+            .minByOrNull { abs(it - lineIndex) }
+    }
 
     fun parse(lines: List<String>, markers: TaskMarkers = TaskMarkers.Default): List<Todo> {
         return lines.mapIndexedNotNull { index, line ->
