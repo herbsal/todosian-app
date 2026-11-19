@@ -27,6 +27,9 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import com.isotjs.todosian.ui.widget.WidgetRefresher
+import java.io.FileNotFoundException
+import java.io.FileOutputStream
+import java.io.OutputStream
 import java.time.LocalDate
 
 private const val CONTENT_SCHEME = "content"
@@ -42,6 +45,12 @@ internal fun isDocumentWithinFolder(
     if (candidateAuthority != folderAuthority) return false
     return !candidateDocumentId.isNullOrEmpty()
 }
+
+/**
+ * The todo line a change was meant for is no longer in the file, usually because another app
+ * (Obsidian, Syncthing) changed it after Todosian last read the file. Nothing was written.
+ */
+class TodoLineChangedException : IllegalStateException("Todo line changed on disk")
 
 interface FileRepository {
     fun getFolderUri(): Uri?
@@ -62,7 +71,12 @@ interface FileRepository {
 
     suspend fun writeLines(uri: Uri, lines: List<String>): Result<Unit>
     
-    suspend fun updateLines(uri: Uri, transform: (List<String>) -> List<String>?): Result<Unit>
+    /**
+     * Reads the current file, applies [transform] to those lines and writes the result, all while
+     * holding the file lock, so changes made by other apps since the last read are not lost.
+     * Returns the lines now on disk, or null when [transform] returned null and nothing was written.
+     */
+    suspend fun updateLines(uri: Uri, transform: (List<String>) -> List<String>?): Result<List<String>?>
 
     suspend fun createCategory(folderUri: Uri, name: String): Result<Uri>
 
@@ -70,9 +84,11 @@ interface FileRepository {
 
     suspend fun deleteCategory(categoryUri: Uri): Result<Unit>
 
-    suspend fun moveTodoLine(sourceUri: Uri, targetUri: Uri, lineIndex: Int): Result<Unit>
+    /** Fails with [TodoLineChangedException] when [expectedLine] is no longer in the source file. */
+    suspend fun moveTodoLine(sourceUri: Uri, targetUri: Uri, lineIndex: Int, expectedLine: String): Result<Unit>
 
-    suspend fun copyTodoLine(sourceUri: Uri, targetUri: Uri, lineIndex: Int): Result<Unit>
+    /** Fails with [TodoLineChangedException] when [expectedLine] is no longer in the source file. */
+    suspend fun copyTodoLine(sourceUri: Uri, targetUri: Uri, lineIndex: Int, expectedLine: String): Result<Unit>
 
     fun hasPersistedReadWritePermission(uri: Uri): Boolean
 
@@ -233,14 +249,15 @@ class SafFileRepository(
         }
     }
 
-    override suspend fun updateLines(uri: Uri, transform: (List<String>) -> List<String>?): Result<Unit> {
+    override suspend fun updateLines(uri: Uri, transform: (List<String>) -> List<String>?): Result<List<String>?> {
         if (!isCategoryUri(uri)) return foreignUriError()
         return withContext(Dispatchers.IO) {
             runCatching {
                 fileMutex.withLock {
                     val currentLines = readLinesInternal(uri)
-                    val newLines = transform(currentLines) ?: return@withLock
-                    writeLinesInternal(uri, newLines)
+                    val newLines = transform(currentLines) ?: return@withLock null
+                    if (newLines != currentLines) writeLinesInternal(uri, newLines)
+                    newLines
                 }
             }
         }
@@ -298,37 +315,56 @@ class SafFileRepository(
         }
     }
 
-    override suspend fun moveTodoLine(sourceUri: Uri, targetUri: Uri, lineIndex: Int): Result<Unit> {
+    override suspend fun moveTodoLine(
+        sourceUri: Uri,
+        targetUri: Uri,
+        lineIndex: Int,
+        expectedLine: String,
+    ): Result<Unit> {
         if (!isCategoryUri(sourceUri) || !isCategoryUri(targetUri)) return foreignUriError()
         return withContext(Dispatchers.IO) {
             runCatching {
-                val sourceLines = readLinesInternal(sourceUri)
-                val targetLines = readLinesInternal(targetUri)
-                val updated = MarkdownParser.tryMoveTodoLine(
-                    sourceLines = sourceLines,
-                    lineIndex = lineIndex,
-                    targetLines = targetLines,
-                ) ?: throw IllegalStateException("Invalid todo line")
+                fileMutex.withLock {
+                    val sourceLines = readLinesInternal(sourceUri)
+                    val currentIndex = MarkdownParser.locateTodoLine(sourceLines, lineIndex, expectedLine)
+                        ?: throw TodoLineChangedException()
+                    val targetLines = readLinesInternal(targetUri)
+                    val updated = MarkdownParser.tryMoveTodoLine(
+                        sourceLines = sourceLines,
+                        lineIndex = currentIndex,
+                        targetLines = targetLines,
+                    ) ?: throw TodoLineChangedException()
 
-                writeLinesInternal(sourceUri, updated.first)
-                writeLinesInternal(targetUri, updated.second)
+                    // Target first: if the second write fails the todo exists twice instead of not at all.
+                    writeLinesInternal(targetUri, updated.second)
+                    writeLinesInternal(sourceUri, updated.first)
+                }
             }
         }
     }
 
-    override suspend fun copyTodoLine(sourceUri: Uri, targetUri: Uri, lineIndex: Int): Result<Unit> {
+    override suspend fun copyTodoLine(
+        sourceUri: Uri,
+        targetUri: Uri,
+        lineIndex: Int,
+        expectedLine: String,
+    ): Result<Unit> {
         if (!isCategoryUri(sourceUri) || !isCategoryUri(targetUri)) return foreignUriError()
         return withContext(Dispatchers.IO) {
             runCatching {
-                val sourceLines = readLinesInternal(sourceUri)
-                val targetLines = readLinesInternal(targetUri)
-                val updated = MarkdownParser.tryCopyTodoLine(
-                    sourceLines = sourceLines,
-                    lineIndex = lineIndex,
-                    targetLines = targetLines,
-                ) ?: throw IllegalStateException("Invalid todo line")
+                fileMutex.withLock {
+                    val sourceLines = readLinesInternal(sourceUri)
+                    val currentIndex = MarkdownParser.locateTodoLine(sourceLines, lineIndex, expectedLine)
+                        ?: throw TodoLineChangedException()
+                    val targetLines = readLinesInternal(targetUri)
+                    val updated = MarkdownParser.tryCopyTodoLine(
+                        sourceLines = sourceLines,
+                        lineIndex = currentIndex,
+                        targetLines = targetLines,
+                    ) ?: throw TodoLineChangedException()
 
-                writeLinesInternal(targetUri, updated.second)
+                    writeLinesInternal(targetUri, updated.second)
+                }
             }
         }
     }
@@ -483,6 +519,18 @@ class SafFileRepository(
         }.conflate()
     }
 
+    // SAF offers no atomic replace, so truncate and write in one go. Not every provider knows "wt".
+    private fun openTruncatingOutputStream(uri: Uri): OutputStream? {
+        val resolver = appContext.contentResolver
+        return try {
+            resolver.openOutputStream(uri, "wt")
+        } catch (e: FileNotFoundException) {
+            resolver.openOutputStream(uri, "w")
+        } catch (e: IllegalArgumentException) {
+            resolver.openOutputStream(uri, "w")
+        }
+    }
+
     private fun readLinesInternal(uri: Uri): List<String> {
         appContext.contentResolver.openInputStream(uri)?.bufferedReader()?.use { reader ->
             return reader.readLines()
@@ -490,16 +538,17 @@ class SafFileRepository(
     }
 
     private fun writeLinesInternal(uri: Uri, lines: List<String>) {
-        appContext.contentResolver.openOutputStream(uri, "w")?.use { out ->
-            runCatching { (out as? java.io.FileOutputStream)?.channel?.truncate(0) }
-            out.bufferedWriter().use { writer ->
-                lines.forEachIndexed { index, line ->
-                    if (index > 0) writer.newLine()
-                    writer.write(line)
-                }
-            }
+        // Encode everything before opening the file, so a failure cannot leave it half written.
+        val bytes = lines.joinToString(separator = "\n").toByteArray(Charsets.UTF_8)
+        openTruncatingOutputStream(uri)?.use { out ->
+            runCatching { (out as? FileOutputStream)?.channel?.truncate(0) }
+            out.write(bytes)
+            out.flush()
+            // Make sure the data reaches the disk before sync tools pick the file up.
+            runCatching { (out as? FileOutputStream)?.fd?.sync() }
         } ?: throw IllegalStateException("Unable to open output stream")
-        
+
+
         try {
             appContext.contentResolver.notifyChange(uri, null)
         } catch (e: Exception) {

@@ -132,35 +132,13 @@ class DailyFocusViewModel(
     }
 
     fun toggleTodo(task: DailyFocusTask) {
-        viewModelScope.launch {
-            val markers = currentMarkers()
-            val previousLines = currentLinesFor(task)
-            val newLines = MarkdownParser.tryToggleLine(
-                lines = previousLines,
-                lineIndex = task.todo.lineIndex,
+        editTaskLine(task) { lines, index, markers ->
+            MarkdownParser.tryToggleLine(
+                lines = lines,
+                lineIndex = index,
                 enableTasksPlugin = enableTasksPluginSupport,
                 markers = markers,
             )
-            if (newLines == null) {
-                _events.emit(Event.ShowMessage(R.string.error_read_failed))
-                refreshFromDisk(showLoading = false)
-                return@launch
-            }
-
-            applyLines(task.categoryUri, newLines, markers)
-
-            inFlightWrites.incrementAndGet()
-            try {
-                val write = fileRepository.writeLines(task.categoryUri, newLines)
-                if (write.isFailure) {
-                    if (currentLinesFor(task) == newLines) {
-                        applyLines(task.categoryUri, previousLines, markers)
-                    }
-                    _events.emit(Event.ShowMessage(R.string.error_write_failed))
-                }
-            } finally {
-                onWriteFinishedMaybeRefresh()
-            }
         }
     }
 
@@ -169,63 +147,73 @@ class DailyFocusViewModel(
         newText: String,
         meta: MarkdownParser.TasksMeta?,
     ) {
-        viewModelScope.launch {
-            val markers = currentMarkers()
-            val previousLines = currentLinesFor(task)
-            val newLines = if (enableTasksPluginSupport) {
+        editTaskLine(task) { lines, index, markers ->
+            if (enableTasksPluginSupport) {
                 MarkdownParser.editTodo(
-                    lines = previousLines,
-                    lineIndex = task.todo.lineIndex,
+                    lines = lines,
+                    lineIndex = index,
                     newText = newText,
                     meta = meta,
                     enableTasksPlugin = true,
                     markers = markers,
                 )
             } else {
-                val updated = MarkdownParser.tryEditTodoText(previousLines, task.todo.lineIndex, newText, markers)
-                if (updated == null) {
-                    _events.emit(Event.ShowMessage(R.string.error_read_failed))
-                    refreshFromDisk(showLoading = false)
-                    return@launch
-                }
-                updated
-            }
-
-            applyLines(task.categoryUri, newLines, markers)
-
-            inFlightWrites.incrementAndGet()
-            try {
-                val write = fileRepository.writeLines(task.categoryUri, newLines)
-                if (write.isFailure) {
-                    if (currentLinesFor(task) == newLines) {
-                        applyLines(task.categoryUri, previousLines, markers)
-                    }
-                    _events.emit(Event.ShowMessage(R.string.error_write_failed))
-                }
-            } finally {
-                onWriteFinishedMaybeRefresh()
+                MarkdownParser.tryEditTodoText(lines, index, newText, markers)
             }
         }
     }
 
     fun deleteTodo(task: DailyFocusTask) {
+        editTaskLine(task) { lines, index, _ ->
+            MarkdownParser.tryDeleteTodoWithSubtasks(lines, index)
+        }
+    }
+
+    /**
+     * Applies an edit of the line [task] was parsed from, first to the cached lines for an instant
+     * UI update, then to the file as it is right before writing. The line is looked up again in the
+     * fresh content, so a newer version written by another app is never overwritten.
+     */
+    private fun editTaskLine(
+        task: DailyFocusTask,
+        edit: (lines: List<String>, lineIndex: Int, markers: TaskMarkers) -> List<String>?,
+    ) {
         viewModelScope.launch {
             val markers = currentMarkers()
             val previousLines = currentLinesFor(task)
-            val newLines = MarkdownParser.tryDeleteTodoWithSubtasks(previousLines, task.todo.lineIndex)
-            if (newLines == null) {
+            val expectedLine = previousLines.getOrNull(task.todo.lineIndex)
+
+            fun editOf(lines: List<String>): List<String>? {
+                if (expectedLine == null) return null
+                val index = MarkdownParser.locateTodoLine(lines, task.todo.lineIndex, expectedLine) ?: return null
+                return edit(lines, index, markers)
+            }
+
+            val optimisticLines = editOf(previousLines)
+            if (optimisticLines == null) {
                 _events.emit(Event.ShowMessage(R.string.error_read_failed))
                 refreshFromDisk(showLoading = false)
                 return@launch
             }
+            if (optimisticLines == previousLines) return@launch
 
-            applyLines(task.categoryUri, newLines, markers)
+            applyLines(task.categoryUri, optimisticLines, markers)
 
             inFlightWrites.incrementAndGet()
             try {
-                val write = fileRepository.writeLines(task.categoryUri, newLines)
-                if (write.isFailure) {
-                    if (currentLinesFor(task) == newLines) {
+                val result = fileRepository.updateLines(task.categoryUri) { freshLines -> editOf(freshLines) }
+                result.onSuccess { writtenLines ->
+                    when {
+                        writtenLines == null -> {
+                            _events.emit(Event.ShowMessage(R.string.error_todo_changed_externally))
+                            pendingRefreshFromObserver.set(true)
+                        }
+                        // Show what is on disk now, unless a later edit is still being saved.
+                        inFlightWrites.get() == 1 -> applyLines(task.categoryUri, writtenLines, markers)
+                        else -> pendingRefreshFromObserver.set(true)
+                    }
+                }.onFailure {
+                    if (currentLinesFor(task) == optimisticLines) {
                         applyLines(task.categoryUri, previousLines, markers)
                     }
                     _events.emit(Event.ShowMessage(R.string.error_write_failed))
