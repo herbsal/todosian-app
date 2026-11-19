@@ -21,7 +21,10 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.conflate
+import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
@@ -61,8 +64,31 @@ internal fun joinLinesLike(original: String, lines: List<String>): String {
  */
 class TodoLineChangedException : IllegalStateException("Todo line changed on disk")
 
+/** A folder the app reads notes from; [prefix] is put in front of its notes' names, empty for the main folder. */
+internal data class NoteFolder(val uri: Uri, val prefix: String)
+
+/** Splits `Family/Groceries` into the extra folder named `Family` and `Groceries`, if such a folder exists. */
+internal fun <T> splitFolderPrefix(name: String, extraFolders: Map<String, T>): Pair<T, String>? {
+    val slash = name.indexOf('/')
+    if (slash <= 0) return null
+    val folderName = name.substring(0, slash).trim()
+    val rest = name.substring(slash + 1).trim()
+    if (rest.isEmpty()) return null
+    val folder = extraFolders.entries.firstOrNull { it.key.equals(folderName, ignoreCase = true) }?.value ?: return null
+    return folder to rest
+}
+
 interface FileRepository {
     fun getFolderUri(): Uri?
+
+    /** Folders added next to the main folder, in the order they were added. */
+    fun getExtraFolderUris(): List<Uri>
+
+    /** Takes a persistent permission for [uri] and adds it as an extra folder. */
+    suspend fun addExtraFolder(uri: Uri): Result<Unit>
+
+    /** Forgets the extra folder [uri] and releases its permission. Its files are not touched. */
+    suspend fun removeExtraFolder(uri: Uri): Result<Unit>
 
     fun isCategoryUri(uri: Uri): Boolean
 
@@ -89,6 +115,12 @@ interface FileRepository {
 
     suspend fun createCategory(folderUri: Uri, name: String): Result<Uri>
 
+    /**
+     * Creates a note from what the user typed: `Family/Groceries` goes into the extra folder
+     * `Family` when there is one, anything else into the main folder.
+     */
+    suspend fun createCategoryByName(name: String): Result<Uri>
+
     suspend fun renameCategory(categoryUri: Uri, newName: String): Result<Unit>
 
     suspend fun deleteCategory(categoryUri: Uri): Result<Unit>
@@ -106,6 +138,9 @@ interface FileRepository {
     fun observeDocumentChanges(documentUri: Uri): Flow<Unit>
 
     fun observeMarkdownFilesChanges(folderUri: Uri): Flow<Unit>
+
+    /** Changes to the notes of the main folder and every extra folder. */
+    fun observeAllMarkdownFilesChanges(): Flow<Unit>
 }
 
 class SafFileRepository(
@@ -147,16 +182,70 @@ class SafFileRepository(
 
     private suspend fun includeSubfolders(): Boolean = appSettingsRepository.settings.first().includeSubfolders
 
+    override fun getExtraFolderUris(): List<Uri> {
+        val main = getFolderUri()
+        return preferencesManager.getExtraFolderUris().filter { it != main }
+    }
+
+    private fun allFolderUris(): List<Uri> = listOfNotNull(getFolderUri()) + getExtraFolderUris()
+
+    override suspend fun addExtraFolder(uri: Uri): Result<Unit> {
+        return withContext(Dispatchers.IO) {
+            runCatching {
+                require(uri != getFolderUri()) { "Already the main folder" }
+                val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                appContext.contentResolver.takePersistableUriPermission(uri, flags)
+                preferencesManager.saveExtraFolderUris(preferencesManager.getExtraFolderUris() + uri)
+            }.onSuccess {
+                scheduleWidgetUpdate()
+            }
+        }
+    }
+
+    override suspend fun removeExtraFolder(uri: Uri): Result<Unit> {
+        return withContext(Dispatchers.IO) {
+            runCatching {
+                preferencesManager.saveExtraFolderUris(preferencesManager.getExtraFolderUris() - uri)
+                preferencesManager.getDefaultAddTaskFileUri()
+                    ?.takeIf { it.isWithinTree(uri) }
+                    ?.let { preferencesManager.clearDefaultAddTaskFileUri() }
+                if (uri != getFolderUri()) {
+                    val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                    runCatching { appContext.contentResolver.releasePersistableUriPermission(uri, flags) }
+                }
+            }.onSuccess {
+                scheduleWidgetUpdate()
+            }
+        }
+    }
+
+    private fun Uri.isWithinTree(treeUri: Uri): Boolean =
+        authority == treeUri.authority &&
+            runCatching { DocumentsContract.getTreeDocumentId(this) }.getOrNull() ==
+            runCatching { DocumentsContract.getTreeDocumentId(treeUri) }.getOrNull()
+
+    private fun noteFolders(): List<NoteFolder> {
+        val main = getFolderUri()
+        return listOfNotNull(main?.let { NoteFolder(it, prefix = "") }) +
+            getExtraFolderUris().map { NoteFolder(it, prefix = folderNameOf(it) + "/") }
+    }
+
+    private fun folderNameOf(folderUri: Uri): String =
+        runCatching { DocumentFile.fromTreeUri(appContext, folderUri)?.name }.getOrNull()
+            ?: folderUri.lastPathSegment?.substringAfterLast(':')?.substringAfterLast('/')
+            ?: folderUri.toString()
+
     override fun isCategoryUri(uri: Uri): Boolean {
-        val folderUri = getFolderUri() ?: return false
-        if (folderUri == uri) return false
-        val documentId = runCatching { DocumentsContract.getDocumentId(uri) }.getOrNull()
-        return isDocumentWithinFolder(
-            folderAuthority = folderUri.authority,
-            candidateScheme = uri.scheme,
-            candidateAuthority = uri.authority,
-            candidateDocumentId = documentId,
-        )
+        return allFolderUris().any { folderUri ->
+            if (folderUri == uri) return@any false
+            val documentId = runCatching { DocumentsContract.getDocumentId(uri) }.getOrNull()
+            isDocumentWithinFolder(
+                folderAuthority = folderUri.authority,
+                candidateScheme = uri.scheme,
+                candidateAuthority = uri.authority,
+                candidateDocumentId = documentId,
+            )
+        }
     }
 
     private fun <T> foreignUriError(): Result<T> =
@@ -180,14 +269,15 @@ class SafFileRepository(
     }
 
     override suspend fun getCategories(markers: TaskMarkers): Result<List<Category>> {
-        val folderUri = getFolderUri() ?: return Result.success(emptyList())
+        if (getFolderUri() == null) return Result.success(emptyList())
         return withContext(Dispatchers.IO) {
             val recursive = includeSubfolders()
             runCatching {
-                scanMarkdownTree(appContext, folderUri, recursive).files
+                noteFolders()
                     .asSequence()
-                    .map { file ->
-                        val displayName = file.relativePath
+                    .flatMap { folder -> scanFolderOrEmpty(folder, recursive).asSequence() }
+                    .map { (folder, file) ->
+                        val displayName = folder.prefix + file.relativePath
                         val lines = readLinesInternal(file.ref)
                         val todos = MarkdownParser.parse(lines, markers)
                         val doneCount = todos.count { it.isDone }
@@ -265,6 +355,28 @@ class SafFileRepository(
                 }
             }
         }
+    }
+
+    /** The main folder must be readable; an extra folder that went missing is skipped. */
+    private fun scanFolderOrEmpty(folder: NoteFolder, recursive: Boolean): List<Pair<NoteFolder, MarkdownEntry<Uri>>> {
+        val files = if (folder.prefix.isEmpty()) {
+            scanMarkdownTree(appContext, folder.uri, recursive).files
+        } else {
+            runCatching { scanMarkdownTree(appContext, folder.uri, recursive).files }
+                .onFailure { Log.w(TAG, "Skipping unreadable extra folder", it) }
+                .getOrDefault(emptyList())
+        }
+        return files.map { folder to it }
+    }
+
+    override suspend fun createCategoryByName(name: String): Result<Uri> {
+        val mainFolder = getFolderUri()
+            ?: return Result.failure(IllegalStateException("No folder selected"))
+        val extras = withContext(Dispatchers.IO) {
+            getExtraFolderUris().associateBy { folderNameOf(it) }
+        }
+        val (folderUri, fileName) = splitFolderPrefix(name.trim(), extras) ?: (mainFolder to name)
+        return createCategory(folderUri, fileName)
     }
 
     override suspend fun createCategory(folderUri: Uri, name: String): Result<Uri> {
@@ -391,6 +503,14 @@ class SafFileRepository(
             uris = listOf(documentUri),
             notifyDescendants = false,
         )
+    }
+
+    override fun observeAllMarkdownFilesChanges(): Flow<Unit> {
+        val folders = allFolderUris()
+        if (folders.isEmpty()) return emptyFlow()
+        return folders.map { folder ->
+            observeMarkdownFilesChanges(folder).catch { Log.w(TAG, "Cannot observe folder", it) }
+        }.merge()
     }
 
     override fun observeMarkdownFilesChanges(folderUri: Uri): Flow<Unit> {

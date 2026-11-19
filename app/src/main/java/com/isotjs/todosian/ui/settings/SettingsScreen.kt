@@ -40,9 +40,12 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ColorLens
+import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.FolderShared
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.RestartAlt
@@ -178,6 +181,12 @@ fun SettingsScreen(
     ) { uri ->
         if (uri != null) viewModel.changeFolder(uri)
     }
+    val extraFolderLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree(),
+    ) { uri ->
+        if (uri != null) viewModel.addExtraFolder(uri)
+    }
+    var removeExtraFolderTarget by remember { mutableStateOf<ExtraFolderUiState?>(null) }
 
     var showThemeDialog by remember { mutableStateOf(false) }
     var showSortDialog by remember { mutableStateOf(false) }
@@ -314,6 +323,29 @@ fun SettingsScreen(
         )
     }
 
+    removeExtraFolderTarget?.let { target ->
+        AlertDialog(
+            onDismissRequest = { removeExtraFolderTarget = null },
+            title = { Text(text = stringResource(R.string.settings_extra_folder_remove_title, target.displayName)) },
+            text = { Text(text = stringResource(R.string.settings_extra_folder_remove_body)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        removeExtraFolderTarget = null
+                        viewModel.removeExtraFolder(target.uri)
+                    },
+                ) {
+                    Text(text = stringResource(R.string.settings_extra_folder_remove))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { removeExtraFolderTarget = null }) {
+                    Text(text = stringResource(R.string.action_cancel))
+                }
+            },
+        )
+    }
+
     if (showResetDialog) {
         AlertDialog(
             onDismissRequest = { showResetDialog = false },
@@ -432,6 +464,38 @@ fun SettingsScreen(
                             title = stringResource(R.string.settings_change_folder),
                             subtitle = stringResource(R.string.settings_change_folder_subtitle),
                             onClick = { folderLauncher.launch(null) },
+                        )
+
+                        storageState.extraFolders.forEach { extra ->
+                            SettingsDivider()
+
+                            SettingsInfoRow(
+                                icon = Icons.Filled.FolderShared,
+                                title = extra.displayName,
+                                subtitle = if (extra.hasPersistedPermission) {
+                                    stringResource(R.string.settings_extra_folder_subtitle, extra.displayName)
+                                } else {
+                                    stringResource(R.string.settings_status_permission_lost)
+                                },
+                                trailing = {
+                                    IconButton(onClick = { removeExtraFolderTarget = extra }) {
+                                        Icon(
+                                            imageVector = Icons.Filled.Close,
+                                            contentDescription = stringResource(R.string.settings_extra_folder_remove),
+                                        )
+                                    }
+                                },
+                            )
+                        }
+
+                        SettingsDivider()
+
+                        SettingsNavRow(
+                            icon = Icons.Filled.CreateNewFolder,
+                            title = stringResource(R.string.settings_add_extra_folder),
+                            subtitle = stringResource(R.string.settings_add_extra_folder_subtitle),
+                            enabled = storageState.folderUri != null,
+                            onClick = { extraFolderLauncher.launch(null) },
                         )
 
                         SettingsDivider()
