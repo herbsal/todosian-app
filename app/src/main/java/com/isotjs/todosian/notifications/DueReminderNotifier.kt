@@ -52,10 +52,14 @@ object DueReminderNotifier {
 
         if (!canPostNotifications(appContext)) return false
 
-        val folderUri = PreferencesManager(appContext).getFolderUri()
+        val preferences = PreferencesManager(appContext)
+        val folderUri = preferences.getFolderUri()
             ?: return false
+        val extraFolderUris = preferences.getExtraFolderUris().filter { it != folderUri }
 
-        val dueSoon = runCatching { loadDueSoonTodos(appContext, folderUri, settings.toTaskMarkers(), settings.includeSubfolders) }
+        val dueSoon = runCatching {
+            loadDueSoonTodos(appContext, folderUri, extraFolderUris, settings.toTaskMarkers(), settings.includeSubfolders)
+        }
             .getOrElse { return false }
 
         if (dueSoon.isEmpty()) {
@@ -143,12 +147,17 @@ object DueReminderNotifier {
     private fun loadDueSoonTodos(
         context: Context,
         folderUri: Uri,
+        extraFolderUris: List<Uri>,
         markers: TaskMarkers,
         includeSubfolders: Boolean,
     ): List<DueTodo> {
         val today = LocalDate.now()
+        // An extra folder that went missing must not hide the reminders of the others.
+        val extraFiles = extraFolderUris.flatMap { uri ->
+            runCatching { scanMarkdownTree(context, uri, includeSubfolders).files }.getOrDefault(emptyList())
+        }
 
-        return scanMarkdownTree(context, folderUri, includeSubfolders).files
+        return (scanMarkdownTree(context, folderUri, includeSubfolders).files + extraFiles)
             .asSequence()
             .flatMap { file ->
                 parseDueTodosFromFile(context, file, today, markers).asSequence()

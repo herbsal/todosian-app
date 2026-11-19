@@ -64,10 +64,10 @@ class DailyFocusViewModel(
     }
 
     private fun observeExternalChanges() {
-        val folderUri = fileRepository.getFolderUri() ?: return
+        if (fileRepository.getFolderUri() == null) return
         @OptIn(FlowPreview::class)
         viewModelScope.launch {
-            fileRepository.observeMarkdownFilesChanges(folderUri)
+            fileRepository.observeAllMarkdownFilesChanges()
                 .debounce(350)
                 .catch { /* best-effort */ }
                 .collectLatest {

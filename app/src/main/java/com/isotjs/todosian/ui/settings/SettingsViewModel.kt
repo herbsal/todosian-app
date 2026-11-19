@@ -13,8 +13,15 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
+data class ExtraFolderUiState(
+    val uri: Uri,
+    val displayName: String,
+    val hasPersistedPermission: Boolean,
+)
+
 data class StorageUiState(
     val folderUri: Uri? = null,
+    val extraFolders: List<ExtraFolderUiState> = emptyList(),
     val folderDisplayName: String? = null,
     val hasPersistedPermission: Boolean = false,
     val markdownFileCount: Int? = null,
@@ -49,8 +56,16 @@ class SettingsViewModel(
             }
 
             val folderName = fileRepository.getFolderDisplayName(current).getOrNull()
+            val extraFolders = fileRepository.getExtraFolderUris().map { uri ->
+                ExtraFolderUiState(
+                    uri = uri,
+                    displayName = fileRepository.getFolderDisplayName(uri).getOrNull() ?: uri.toString(),
+                    hasPersistedPermission = fileRepository.hasPersistedReadWritePermission(uri),
+                )
+            }
             _storageState.value = _storageState.value.copy(
                 folderUri = current,
+                extraFolders = extraFolders,
                 folderDisplayName = folderName,
                 hasPersistedPermission = fileRepository.hasPersistedReadWritePermission(current),
                 isChecking = true,
@@ -90,6 +105,29 @@ class SettingsViewModel(
             }
 
             _events.emit(Event.ShowMessage(R.string.settings_folder_updated))
+            refreshStorageStatus()
+        }
+    }
+
+    fun addExtraFolder(uri: Uri) {
+        viewModelScope.launch {
+            if (uri == fileRepository.getFolderUri() || uri in fileRepository.getExtraFolderUris()) {
+                _events.emit(Event.ShowMessage(R.string.settings_extra_folder_already_added))
+                return@launch
+            }
+            val added = fileRepository.addExtraFolder(uri)
+            if (added.isFailure) {
+                _events.emit(Event.ShowMessage(R.string.error_folder_invalid))
+                return@launch
+            }
+            _events.emit(Event.ShowMessage(R.string.settings_extra_folder_added))
+            refreshStorageStatus()
+        }
+    }
+
+    fun removeExtraFolder(uri: Uri) {
+        viewModelScope.launch {
+            fileRepository.removeExtraFolder(uri)
             refreshStorageStatus()
         }
     }

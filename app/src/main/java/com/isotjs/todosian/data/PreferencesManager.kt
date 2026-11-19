@@ -39,6 +39,27 @@ class PreferencesManager(
         }
     }
 
+    /**
+     * Further folders whose notes are shown next to the main folder's, e.g. a shared folder that
+     * is synced separately. Kept in the order they were added.
+     */
+    fun getExtraFolderUris(): List<Uri> =
+        prefs.getString(KEY_EXTRA_FOLDER_URIS, null)
+            ?.split('\n')
+            ?.filter { it.isNotBlank() }
+            ?.mapNotNull { raw -> runCatching { raw.toUri() }.getOrNull() }
+            .orEmpty()
+
+    fun saveExtraFolderUris(uris: List<Uri>) {
+        prefs.edit {
+            if (uris.isEmpty()) {
+                remove(KEY_EXTRA_FOLDER_URIS)
+            } else {
+                putString(KEY_EXTRA_FOLDER_URIS, uris.distinct().joinToString(separator = "\n"))
+            }
+        }
+    }
+
     /** The note that the "Add task" widget opens directly, instead of asking for a file. */
     fun getDefaultAddTaskFileUri(): Uri? =
         prefs.getString(KEY_DEFAULT_ADD_TASK_FILE_URI, null)?.let { raw -> runCatching { raw.toUri() }.getOrNull() }
@@ -64,5 +85,6 @@ class PreferencesManager(
         private const val KEY_FOLDER_URI = "folder_uri"
         private const val KEY_LAST_SEEN_VERSION_CODE = "last_seen_version_code"
         private const val KEY_DEFAULT_ADD_TASK_FILE_URI = "default_add_task_file_uri"
+        private const val KEY_EXTRA_FOLDER_URIS = "extra_folder_uris"
     }
 }

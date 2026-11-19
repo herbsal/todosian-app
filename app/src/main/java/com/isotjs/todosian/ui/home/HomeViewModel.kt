@@ -92,12 +92,12 @@ class HomeViewModel(
 
     fun createCategory(name: String) {
         viewModelScope.launch {
-            val folderUri = fileRepository.getFolderUri() ?: run {
+            if (fileRepository.getFolderUri() == null) {
                 _events.emit(Event.RequireOnboarding)
                 return@launch
             }
 
-            val created = fileRepository.createCategory(folderUri, name)
+            val created = fileRepository.createCategoryByName(name)
             if (created.isFailure) {
                 _events.emit(Event.ShowMessage(R.string.error_write_failed))
                 return@launch
