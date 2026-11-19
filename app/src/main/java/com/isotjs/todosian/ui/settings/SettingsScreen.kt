@@ -1,6 +1,8 @@
 package com.isotjs.todosian.ui.settings
 
+import android.content.Intent
 import android.net.Uri
+import android.provider.Settings
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
@@ -50,6 +52,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.VerticalAlignTop
 import androidx.compose.material.icons.filled.ViewDay
 import androidx.compose.material3.AlertDialog
@@ -103,6 +106,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.isotjs.todosian.BuildConfig
@@ -113,7 +117,9 @@ import com.isotjs.todosian.data.model.Category
 import com.isotjs.todosian.data.settings.AppSettings
 import com.isotjs.todosian.data.settings.AppSettingsRepository
 import com.isotjs.todosian.data.settings.CategorySort
+import com.isotjs.todosian.data.settings.FolderWatchMode
 import com.isotjs.todosian.data.settings.ReminderRepeat
+import com.isotjs.todosian.sync.FolderWatchScheduler
 import com.isotjs.todosian.data.settings.DailyFocusMode
 import com.isotjs.todosian.data.settings.NewTodoFilePosition
 import com.isotjs.todosian.data.settings.ThemeMode
@@ -203,6 +209,14 @@ fun SettingsScreen(
     var showDailyFocusModeDialog by remember { mutableStateOf(false) }
     var showReminderTimeDialog by remember { mutableStateOf(false) }
     var showReminderRepeatDialog by remember { mutableStateOf(false) }
+    var showFolderWatchDialog by remember { mutableStateOf(false) }
+    var hasAllFilesAccess by remember { mutableStateOf(FolderWatchScheduler.hasAllFilesAccess()) }
+    LifecycleResumeEffect(settings.folderWatchMode) {
+        // Coming back from the "All files access" screen: start or stop instant watching.
+        hasAllFilesAccess = FolderWatchScheduler.hasAllFilesAccess()
+        FolderWatchScheduler.apply(context, settings.folderWatchMode)
+        onPauseOrDispose { }
+    }
     var showMarkersSheet by remember { mutableStateOf(false) }
 
     val reminderTimeLabel = remember(settings.reminderTimeHour, settings.reminderTimeMinute) {
@@ -278,6 +292,33 @@ fun SettingsScreen(
             selected = settings.reminderRepeat,
             onSelected = { appSettingsRepository.setReminderRepeat(it) },
             onDismiss = { showReminderRepeatDialog = false },
+        )
+    }
+
+    if (showFolderWatchDialog) {
+        SingleChoiceDialog(
+            title = stringResource(R.string.settings_folder_watch),
+            options = FolderWatchMode.entries.map { ChoiceOption(it, folderWatchLabel(it)) },
+            selected = settings.folderWatchMode,
+            onSelected = { mode ->
+                appSettingsRepository.setFolderWatchMode(mode)
+                if (mode == FolderWatchMode.INSTANT && !FolderWatchScheduler.hasAllFilesAccess()) {
+                    scope.launch {
+                        snackbarHostState.showSnackbar(resources.getString(R.string.settings_folder_watch_instant_hint))
+                    }
+                    val intent = Intent(
+                        Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                        Uri.fromParts("package", context.packageName, null),
+                    )
+                    runCatching { context.startActivity(intent) }
+                        .onFailure {
+                            runCatching {
+                                context.startActivity(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION))
+                            }
+                        }
+                }
+            },
+            onDismiss = { showFolderWatchDialog = false },
         )
     }
 
@@ -699,6 +740,22 @@ fun SettingsScreen(
                                 reminderRepeatLabel(settings.reminderRepeat),
                             ),
                             onClick = { showReminderRepeatDialog = true },
+                        )
+
+                        SettingsDivider()
+
+                        SettingsNavRow(
+                            icon = Icons.Filled.Sync,
+                            title = stringResource(R.string.settings_folder_watch),
+                            subtitle = stringResource(
+                                R.string.settings_folder_watch_subtitle,
+                                if (settings.folderWatchMode == FolderWatchMode.INSTANT && !hasAllFilesAccess) {
+                                    stringResource(R.string.settings_folder_watch_no_access)
+                                } else {
+                                    folderWatchLabel(settings.folderWatchMode)
+                                },
+                            ),
+                            onClick = { showFolderWatchDialog = true },
                         )
 
                         SettingsDivider()
@@ -1181,4 +1238,10 @@ private fun reminderRepeatLabel(repeat: ReminderRepeat): String = when (repeat) 
     ReminderRepeat.OFF -> stringResource(R.string.settings_reminder_repeat_off)
     ReminderRepeat.HOURLY -> stringResource(R.string.settings_reminder_repeat_hourly)
     ReminderRepeat.DAILY -> stringResource(R.string.settings_reminder_repeat_daily)
+}
+
+@Composable
+private fun folderWatchLabel(mode: FolderWatchMode): String = when (mode) {
+    FolderWatchMode.PERIODIC -> stringResource(R.string.settings_folder_watch_periodic)
+    FolderWatchMode.INSTANT -> stringResource(R.string.settings_folder_watch_instant)
 }

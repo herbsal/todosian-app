@@ -24,6 +24,7 @@ data class AppSettings(
     val reminderTimeHour: Int = 19,
     val reminderTimeMinute: Int = 0,
     val reminderRepeat: ReminderRepeat = ReminderRepeat.OFF,
+    val folderWatchMode: FolderWatchMode = FolderWatchMode.PERIODIC,
 ) {
     /** Resolves the configured markers, falling back to the emoji default when a field is blank. */
     fun toTaskMarkers(): TaskMarkers = TaskMarkers(
@@ -71,6 +72,15 @@ enum class NewTodoFilePosition {
 }
 
 /** How often a ⏰ reminder is shown again while its todo stays open. */
+/** How the app notices notes that other apps (Obsidian, Syncthing) changed while it is closed. */
+enum class FolderWatchMode {
+    /** WorkManager check every 15 minutes through the folder permission. */
+    PERIODIC,
+
+    /** Foreground service with file observers; needs "All files access". */
+    INSTANT,
+}
+
 enum class ReminderRepeat {
     OFF,
     HOURLY,

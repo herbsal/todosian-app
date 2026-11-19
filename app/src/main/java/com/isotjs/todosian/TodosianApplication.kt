@@ -8,6 +8,7 @@ import com.isotjs.todosian.data.settings.AppSettingsRepository
 import com.isotjs.todosian.data.settings.SharedPrefsAppSettingsRepository
 import com.isotjs.todosian.notifications.DueReminderScheduler
 import com.isotjs.todosian.notifications.TaskReminderScheduler
+import com.isotjs.todosian.sync.FolderWatchScheduler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -45,6 +46,14 @@ class TodosianApplication : Application() {
                 .map { Triple(it.reminderRepeat, it.includeSubfolders, it.toTaskMarkers()) }
                 .distinctUntilChanged()
                 .collect { TaskReminderScheduler.sync(applicationContext) }
+        }
+
+        appScope.launch {
+            // Notice notes changed by other apps: 15-minute check, plus the watch service if chosen.
+            appSettingsRepository.settings
+                .map { it.folderWatchMode to it.includeSubfolders }
+                .distinctUntilChanged()
+                .collect { (mode, _) -> FolderWatchScheduler.apply(applicationContext, mode) }
         }
 
         appScope.launch {

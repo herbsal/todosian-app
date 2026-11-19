@@ -32,6 +32,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import com.isotjs.todosian.notifications.TaskReminderScheduler
+import com.isotjs.todosian.sync.FolderWatchScheduler
 import com.isotjs.todosian.ui.widget.WidgetRefresher
 import java.io.FileNotFoundException
 import java.io.FileOutputStream
@@ -156,6 +157,16 @@ class SafFileRepository(
     @Volatile
     private var widgetUpdateJob: Job? = null
 
+    /** The set of folders changed: let the watch service observe the new set. */
+    private fun onFoldersChanged() {
+        widgetUpdateScope.launch {
+            runCatching {
+                val mode = appSettingsRepository.settings.first().folderWatchMode
+                FolderWatchScheduler.apply(appContext, mode)
+            }.onFailure { Log.w(TAG, "Folder watch update failed", it) }
+        }
+    }
+
     private fun scheduleWidgetUpdate() {
         // Every path that changes notes or folders ends here, so reminders are re-planned too.
         TaskReminderScheduler.requestSync(appContext)
@@ -201,6 +212,7 @@ class SafFileRepository(
                 preferencesManager.saveExtraFolderUris(preferencesManager.getExtraFolderUris() + uri)
             }.onSuccess {
                 scheduleWidgetUpdate()
+                onFoldersChanged()
             }
         }
     }
@@ -218,6 +230,7 @@ class SafFileRepository(
                 }
             }.onSuccess {
                 scheduleWidgetUpdate()
+                onFoldersChanged()
             }
         }
     }
@@ -257,6 +270,7 @@ class SafFileRepository(
     override fun clearFolderUri() {
         preferencesManager.clearFolderUri()
         scheduleWidgetUpdate()
+        onFoldersChanged()
     }
 
     override suspend fun persistFolderUri(uri: Uri): Result<Unit> {
@@ -267,6 +281,7 @@ class SafFileRepository(
                 preferencesManager.saveFolderUri(uri)
             }.onSuccess {
                 scheduleWidgetUpdate()
+                onFoldersChanged()
             }
         }
     }
