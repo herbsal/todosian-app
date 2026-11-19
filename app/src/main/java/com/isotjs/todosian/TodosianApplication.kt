@@ -7,6 +7,7 @@ import com.isotjs.todosian.data.SafFileRepository
 import com.isotjs.todosian.data.settings.AppSettingsRepository
 import com.isotjs.todosian.data.settings.SharedPrefsAppSettingsRepository
 import com.isotjs.todosian.notifications.DueReminderScheduler
+import com.isotjs.todosian.notifications.TaskReminderScheduler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -37,6 +38,14 @@ class TodosianApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+
+        appScope.launch {
+            // Re-plan ⏰ alarms on start and whenever a setting that affects them changes.
+            appSettingsRepository.settings
+                .map { Triple(it.reminderRepeat, it.includeSubfolders, it.toTaskMarkers()) }
+                .distinctUntilChanged()
+                .collect { TaskReminderScheduler.sync(applicationContext) }
+        }
 
         appScope.launch {
             appSettingsRepository.settings

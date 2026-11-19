@@ -119,4 +119,28 @@ class MarkdownParserReminderTest {
         assertNull(MarkdownParser.parseReminder("morgen"))
         assertNull(MarkdownParser.parseReminder(null))
     }
+
+    @Test
+    fun locateReminderTodo_finds_open_todo_by_text_and_time() {
+        val lines = listOf(
+            "# Liste",
+            "- [x] Arzt ⏰ 2026-11-24 08:30",
+            "- [ ] Neu von Syncthing",
+            "- [ ] Arzt ⏰ 2026-11-24 08:30",
+            "- [ ] Arzt ⏰ 2026-11-25 08:30",
+        )
+
+        assertEquals(3, MarkdownParser.locateReminderTodo(lines, "Arzt", "2026-11-24 08:30", lineIndexHint = 1))
+        assertNull(MarkdownParser.locateReminderTodo(lines, "Arzt", "2026-11-26 08:30"))
+    }
+
+    @Test
+    fun replaceReminder_changes_only_the_reminder() {
+        val lines = listOf("- [ ] Arzt ⏰ 2026-11-24 08:30 ⏫ 📅 2026-11-24")
+
+        val result = MarkdownParser.replaceReminder(lines, 0, LocalDateTime.of(2026, 11, 24, 9, 30))
+
+        assertEquals(listOf("- [ ] Arzt ⏰ 2026-11-24 09:30 ⏫ 📅 2026-11-24"), result)
+        assertNull(MarkdownParser.replaceReminder(listOf("- [ ] Ohne"), 0, LocalDateTime.of(2026, 1, 1, 0, 0)))
+    }
 }

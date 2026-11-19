@@ -53,6 +53,33 @@ object MarkdownParser {
 
     fun formatReminder(value: LocalDateTime): String = value.format(REMINDER_FORMAT)
 
+    /**
+     * Index of the open todo with this [text] and [reminder], as a reminder alarm remembers it.
+     * Matching by content instead of line number survives lines added or removed by other apps.
+     */
+    fun locateReminderTodo(
+        lines: List<String>,
+        text: String,
+        reminder: String,
+        lineIndexHint: Int = -1,
+        markers: TaskMarkers = TaskMarkers.Default,
+    ): Int? {
+        val matches = parse(lines, markers)
+            .filter { !it.isDone && it.text == text && it.reminder == reminder }
+            .map { it.lineIndex }
+        return matches.minByOrNull { abs(it - lineIndexHint) }
+    }
+
+    /** Replaces the reminder of the todo at [lineIndex] with [newReminder], leaving the rest of the line as it is. */
+    fun replaceReminder(lines: List<String>, lineIndex: Int, newReminder: LocalDateTime): List<String>? {
+        val line = lines.getOrNull(lineIndex) ?: return null
+        if (!isTodoLine(line)) return null
+        val match = reminderRegex.findAll(line).lastOrNull() ?: return null
+        val replacement = "${match.groupValues[1]}$REMINDER_MARKER ${formatReminder(newReminder)}"
+        val newLine = line.replaceRange(match.range, replacement)
+        return lines.toMutableList().apply { this[lineIndex] = newLine }
+    }
+
     private fun dateSuffixRegex(marker: String) =
         Regex("""\s${Regex.escape(marker)}\s*(\d{4}-\d{2}-\d{2})\s*$""")
 

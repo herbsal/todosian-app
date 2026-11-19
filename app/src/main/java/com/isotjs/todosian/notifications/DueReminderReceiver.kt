@@ -20,6 +20,8 @@ class DueReminderReceiver : BroadcastReceiver() {
                     DueReminderScheduler.ACTION_DUE_REMINDER -> {
                         DueReminderNotifier.checkAndNotify(context)
                         DueReminderScheduler.reschedule(context)
+                        // Daily safety net for notes changed by other apps while Todosian was closed.
+                        TaskReminderScheduler.sync(context)
                     }
                     Intent.ACTION_BOOT_COMPLETED -> DueReminderScheduler.reschedule(context)
                 }
