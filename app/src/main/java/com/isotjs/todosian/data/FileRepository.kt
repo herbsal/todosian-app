@@ -46,6 +46,13 @@ internal fun isDocumentWithinFolder(
     return !candidateDocumentId.isNullOrEmpty()
 }
 
+/** Joins [lines] using the line separator and final-newline style already present in [original]. */
+internal fun joinLinesLike(original: String, lines: List<String>): String {
+    val separator = if (original.contains("\r\n")) "\r\n" else "\n"
+    val finalNewline = if (lines.isNotEmpty() && original.endsWith('\n')) separator else ""
+    return lines.joinToString(separator) + finalNewline
+}
+
 /**
  * The todo line a change was meant for is no longer in the file, usually because another app
  * (Obsidian, Syncthing) changed it after Todosian last read the file. Nothing was written.
@@ -538,8 +545,12 @@ class SafFileRepository(
     }
 
     private fun writeLinesInternal(uri: Uri, lines: List<String>) {
+        // Re-read the file so CRLF and the final newline survive the round trip through readLines().
+        val original = appContext.contentResolver.openInputStream(uri)?.use { input ->
+            input.bufferedReader().readText()
+        }.orEmpty()
         // Encode everything before opening the file, so a failure cannot leave it half written.
-        val bytes = lines.joinToString(separator = "\n").toByteArray(Charsets.UTF_8)
+        val bytes = joinLinesLike(original, lines).toByteArray(Charsets.UTF_8)
         openTruncatingOutputStream(uri)?.use { out ->
             runCatching { (out as? FileOutputStream)?.channel?.truncate(0) }
             out.write(bytes)
