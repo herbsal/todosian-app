@@ -393,4 +393,7 @@
         <item quantity="one">%1$d line not understood</item>
         <item quantity="other">%1$d lines not understood</item>
     </plurals>
+    <string name="tag_filter">Filter by keyword</string>
+    <string name="tag_filter_clear">Clear filter</string>
+    <string name="tag_filter_empty">No tasks with these keywords.</string>
 </resources>

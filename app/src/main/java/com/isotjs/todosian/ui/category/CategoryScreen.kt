@@ -52,6 +52,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusEvent
@@ -74,7 +75,9 @@ import com.isotjs.todosian.data.settings.AppSettingsRepository
 import com.isotjs.todosian.data.settings.NewTodoFilePosition
 import com.isotjs.todosian.data.settings.TodoGrouping
 import com.isotjs.todosian.data.settings.TodoSort
+import com.isotjs.todosian.ui.components.TagFilterBar
 import com.isotjs.todosian.ui.components.TagQuickPicker
+import com.isotjs.todosian.utils.TagFilter
 import com.isotjs.todosian.ui.components.TasksMetaEditor
 import com.isotjs.todosian.ui.components.TodoRow
 import com.isotjs.todosian.ui.components.TodoSheetMode
@@ -502,6 +505,18 @@ fun CategoryScreen(
         modifier = modifier.fillMaxSize(),
     ) { padding ->
         val anyTodos = uiState.activeTodos.isNotEmpty() || uiState.completedTodos.isNotEmpty()
+        var tagFilterKeys by rememberSaveable { mutableStateOf("") }
+        val selectedTagKeys = remember(tagFilterKeys) { tagFilterKeys.split(TAG_FILTER_SEPARATOR).filter { it.isNotEmpty() }.toSet() }
+        val filterTerms = remember(uiState.activeTodos, uiState.completedTodos, uiState.tagDefinitions) {
+            TagFilter.termsFor((uiState.activeTodos + uiState.completedTodos).map { it.text to uiState.tagDefinitions })
+        }
+        val selectedTerms = remember(filterTerms, selectedTagKeys) { filterTerms.filter { it.key in selectedTagKeys } }
+        val filteredActiveTodos = remember(uiState.activeTodos, selectedTerms) {
+            uiState.activeTodos.filter { TagFilter.matches(it.text, selectedTerms) }
+        }
+        val filteredCompletedTodos = remember(uiState.completedTodos, selectedTerms) {
+            uiState.completedTodos.filter { TagFilter.matches(it.text, selectedTerms) }
+        }
         TodosianPullToRefreshBox(
             isRefreshing = uiState.isRefreshing,
             onRefresh = { viewModel.refreshFromDisk(pullRefresh = true) },
@@ -530,21 +545,44 @@ fun CategoryScreen(
                     }
                 }
             } else {
-                val sortedActiveTodos = remember(uiState.activeTodos, settings.todoSort) {
-                    sortTodos(uiState.activeTodos, settings.todoSort)
+                val sortedActiveTodos = remember(filteredActiveTodos, settings.todoSort) {
+                    sortTodos(filteredActiveTodos, settings.todoSort)
                 }
-                val sortedCompletedTodos = remember(uiState.completedTodos, settings.todoSort) {
-                    sortTodos(uiState.completedTodos, settings.todoSort)
+                val sortedCompletedTodos = remember(filteredCompletedTodos, settings.todoSort) {
+                    sortTodos(filteredCompletedTodos, settings.todoSort)
                 }
                 val sortedAllTodos = remember(
-                    uiState.activeTodos,
-                    uiState.completedTodos,
+                    filteredActiveTodos,
+                    filteredCompletedTodos,
                     settings.todoSort,
                 ) {
-                    sortTodos(uiState.activeTodos + uiState.completedTodos, settings.todoSort)
+                    sortTodos(filteredActiveTodos + filteredCompletedTodos, settings.todoSort)
                 }
 
                 LazyColumn(modifier = Modifier.fillMaxSize()) {
+                    if (filterTerms.isNotEmpty()) {
+                        item(key = "tag_filter") {
+                            TagFilterBar(
+                                terms = filterTerms,
+                                selectedKeys = selectedTagKeys,
+                                onToggle = { term ->
+                                    val keys = if (term.key in selectedTagKeys) selectedTagKeys - term.key else selectedTagKeys + term.key
+                                    tagFilterKeys = keys.joinToString(TAG_FILTER_SEPARATOR)
+                                },
+                                onClear = { tagFilterKeys = "" },
+                            )
+                        }
+                    }
+                    if (selectedTerms.isNotEmpty() && sortedAllTodos.isEmpty()) {
+                        item(key = "tag_filter_empty") {
+                            Text(
+                                text = stringResource(R.string.tag_filter_empty),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(vertical = 16.dp),
+                            )
+                        }
+                    }
                     if (settings.todoGrouping == TodoGrouping.FILE_ORDER) {
                         items(
                             items = sortedAllTodos,
@@ -795,3 +833,5 @@ private class CategoryViewModelFactory(
         throw IllegalArgumentException("Unknown ViewModel class")
     }
 }
+
+private const val TAG_FILTER_SEPARATOR = "\u001F"
