@@ -1,0 +1,319 @@
+<resources>
+    <string name="app_name">Todosian</string>
+
+    <!-- Onboarding -->
+    <string name="onboarding_title">Aufgabenordner verbinden</string>
+    <string name="onboarding_subtitle">Wähle den Obsidian-Ordner, in dem deine Markdown-Aufgabendateien liegen.</string>
+    <string name="onboarding_choose_folder">Ordner wählen</string>
+    <string name="onboarding_permission_hint">Todosian greift nur auf den gewählten Ordner zu. Du kannst ihn jederzeit in den Einstellungen ändern.</string>
+    <string name="onboarding_requirements">Der gewählte Ordner muss mindestens eine .md-Datei enthalten.</string>
+    <string name="onboarding_validating">Ordner wird geprüft…</string>
+
+    <!-- Home -->
+    <string name="home_title">Todosian</string>
+    <string name="home_daily_focus_title">Tagesfokus</string>
+    <plurals name="home_daily_focus_subtitle_today">
+        <item quantity="one">%1$d Aufgabe heute fällig</item>
+        <item quantity="other">%1$d Aufgaben heute fällig</item>
+    </plurals>
+    <plurals name="home_daily_focus_subtitle_overdue">
+        <item quantity="one">%1$d überfällige Aufgabe</item>
+        <item quantity="other">%1$d überfällige Aufgaben</item>
+    </plurals>
+    <plurals name="home_daily_focus_subtitle_today_overdue">
+        <item quantity="one">%1$d Aufgabe heute fällig oder überfällig</item>
+        <item quantity="other">%1$d Aufgaben heute fällig oder überfällig</item>
+    </plurals>
+    <string name="home_empty_title">Noch keine Listen</string>
+    <string name="home_empty_subtitle">Lege eine Liste an oder wähle einen anderen Ordner.</string>
+    <string name="home_create_category">Liste anlegen</string>
+    <string name="home_new_category_title">Neue Liste</string>
+    <string name="home_new_category_hint">Name der Liste</string>
+    <string name="home_category_action_rename">Umbenennen</string>
+    <string name="home_category_action_delete">Löschen</string>
+    <string name="home_rename_category_title">Liste umbenennen</string>
+    <string name="home_rename_category_hint">Neuer Name</string>
+    <string name="home_rename_category_error_empty">Der Name darf nicht leer sein.</string>
+    <string name="home_rename_category_error_invalid_chars">Der Name enthält ungültige Zeichen.</string>
+    <string name="home_rename_category_error_sync_conflict">Der Name darf nicht „sync-conflict“ enthalten.</string>
+    <string name="home_delete_category_title">Liste löschen?</string>
+    <string name="home_delete_category_body">Die Markdown-Datei wird aus deinem Ordner gelöscht.</string>
+    <string name="home_delete_category_confirm">Löschen</string>
+
+    <!-- Category -->
+    <string name="category_empty_title">Noch keine Aufgaben</string>
+    <string name="category_empty_subtitle">Füge eine Aufgabe hinzu, um loszulegen.</string>
+    <string name="category_active">Offen</string>
+    <string name="category_completed">Erledigt</string>
+    <string name="category_add_todo_title">Aufgabe hinzufügen</string>
+    <string name="category_add_todo_hint">Was ist zu tun?</string>
+    <string name="category_add_subtask_title">Unteraufgabe hinzufügen</string>
+    <string name="category_add_subtask_hint">Text der Unteraufgabe</string>
+    <string name="category_edit_todo_title">Aufgabe bearbeiten</string>
+    <string name="category_edit_todo_hint">Text der Aufgabe</string>
+    <string name="category_delete_todo_title">Aufgabe löschen?</string>
+    <string name="category_delete_todo_body">Die Aufgabe wird aus der Markdown-Datei entfernt.</string>
+    <string name="category_delete_todo_body_with_subtasks">Die Aufgabe und ihre Unteraufgaben werden aus der Markdown-Datei entfernt.</string>
+    <string name="category_delete_todo_confirm">Löschen</string>
+    <string name="category_move_title">Aufgabe verschieben</string>
+    <string name="category_move_body">Wähle die Liste, in die die Aufgabe verschoben wird.</string>
+    <string name="category_move_empty">Keine anderen Listen vorhanden.</string>
+    <string name="category_copy_show">Kopieroptionen zeigen</string>
+    <string name="category_copy_hide">Kopieroptionen ausblenden</string>
+    <string name="category_move_success">Aufgabe verschoben.</string>
+    <string name="category_copy_success">Aufgabe kopiert.</string>
+    <string name="category_move_subtask_disabled">Unteraufgaben können nicht verschoben werden.</string>
+
+    <string name="category_tasks_metadata_title">Tasks-Angaben</string>
+    <string name="category_tasks_created">➕ Erstellt</string>
+    <string name="category_tasks_due">📅 Fällig</string>
+    <string name="category_tasks_reminder">⏰ Erinnerung</string>
+    <string name="category_tasks_start">🛫 Beginn</string>
+    <string name="category_tasks_scheduled">⏳ Geplant</string>
+    <string name="category_tasks_done">✅ Erledigt</string>
+    <string name="category_tasks_priority">Priorität</string>
+    <string name="category_tasks_recurrence">🔁 Wiederholung</string>
+
+    <string name="category_tasks_created_label">Erstellt</string>
+    <string name="category_tasks_due_label">Fällig</string>
+    <string name="category_tasks_reminder_label">Erinnerung</string>
+    <string name="category_tasks_start_label">Beginn</string>
+    <string name="category_tasks_scheduled_label">Geplant</string>
+    <string name="category_tasks_done_label">Erledigt</string>
+    <string name="category_tasks_recurrence_label">Wiederholung</string>
+
+    <string name="category_tasks_priority_none">Keine</string>
+    <string name="category_tasks_priority_lowest">⏬ Sehr niedrig</string>
+    <string name="category_tasks_priority_low">🔽 Niedrig</string>
+    <string name="category_tasks_priority_medium">🔼 Mittel</string>
+    <string name="category_tasks_priority_high">⏫ Hoch</string>
+    <string name="category_tasks_priority_highest">🔺 Sehr hoch</string>
+
+    <string name="category_tasks_priority_lowest_label">Sehr niedrig</string>
+    <string name="category_tasks_priority_low_label">Niedrig</string>
+    <string name="category_tasks_priority_medium_label">Mittel</string>
+    <string name="category_tasks_priority_high_label">Hoch</string>
+    <string name="category_tasks_priority_highest_label">Sehr hoch</string>
+
+    <string name="category_tasks_chip_created">➕ %1$s</string>
+    <string name="category_tasks_chip_start">🛫 %1$s</string>
+    <string name="category_tasks_chip_scheduled">⏳ %1$s</string>
+    <string name="category_tasks_chip_due">📅 %1$s</string>
+    <string name="category_tasks_chip_reminder">⏰ %1$s</string>
+    <string name="category_tasks_chip_done">✅ %1$s</string>
+    <string name="category_tasks_chip_recurrence">🔁 %1$s</string>
+
+    <string name="category_tasks_chip_created_label">%1$s</string>
+    <string name="category_tasks_chip_start_label">%1$s</string>
+    <string name="category_tasks_chip_scheduled_label">%1$s</string>
+    <string name="category_tasks_chip_due_label">%1$s</string>
+    <string name="category_tasks_chip_reminder_label">%1$s</string>
+    <string name="category_tasks_chip_done_label">%1$s</string>
+    <string name="category_tasks_chip_recurrence_label">%1$s</string>
+
+    <!-- Common actions -->
+    <string name="action_save">Speichern</string>
+    <string name="action_cancel">Abbrechen</string>
+    <string name="action_set">Festlegen</string>
+    <string name="action_clear">Entfernen</string>
+
+    <!-- Content descriptions -->
+    <string name="cd_open_settings">Einstellungen öffnen</string>
+    <string name="cd_overflow_menu">Weitere Optionen</string>
+    <string name="cd_add_category">Liste hinzufügen</string>
+    <string name="cd_add_todo">Aufgabe hinzufügen</string>
+    <string name="cd_add_subtask">Unteraufgabe hinzufügen</string>
+    <string name="cd_navigate_back">Zurück</string>
+    <string name="cd_delete">Löschen</string>
+
+    <!-- Errors -->
+    <string name="error_folder_empty">Der gewählte Ordner enthält keine Markdown-Dateien (.md).</string>
+    <string name="error_folder_invalid">Auf den gewählten Ordner kann nicht zugegriffen werden.</string>
+    <string name="error_read_failed">Die Datei konnte nicht gelesen werden.</string>
+    <string name="error_write_failed">Deine Änderungen konnten nicht gespeichert werden.</string>
+    <string name="error_todo_changed_externally">Diese Aufgabe wurde in einer anderen App geändert, deshalb wurde deine Änderung nicht gespeichert. Die Liste wurde neu geladen.</string>
+
+    <!-- Settings -->
+    <string name="settings_title">Einstellungen</string>
+
+    <string name="settings_storage">Speicher</string>
+    <string name="settings_folder">Gewählter Ordner</string>
+    <string name="settings_no_folder">Kein Ordner gewählt</string>
+    <string name="settings_change_folder">Ordner ändern</string>
+    <string name="settings_change_folder_subtitle">Einen anderen Obsidian-Aufgabenordner wählen.</string>
+    <string name="settings_add_extra_folder">Weiteren Ordner hinzufügen</string>
+    <string name="settings_add_extra_folder_subtitle">Auch Notizen aus einem zweiten Ordner zeigen, zum Beispiel einem, der getrennt synchronisiert wird.</string>
+    <string name="settings_extra_folder_subtitle">Notizen erscheinen als „%1$s/…“. Neue Notizen landen hier, wenn sie „%1$s/Name“ heißen.</string>
+    <string name="settings_extra_folder_remove">Ordner entfernen</string>
+    <string name="settings_extra_folder_remove_title">„%1$s“ entfernen?</string>
+    <string name="settings_extra_folder_remove_body">Todosian zeigt die Notizen dieses Ordners nicht mehr an. Die Dateien bleiben, wo sie sind.</string>
+    <string name="settings_extra_folder_added">Ordner hinzugefügt.</string>
+    <string name="settings_extra_folder_already_added">Dieser Ordner wird bereits verwendet.</string>
+    <string name="settings_recheck_access">Zugriff erneut prüfen</string>
+    <string name="settings_recheck_access_subtitle">Prüfen, ob die App diesen Ordner noch lesen kann.</string>
+    <string name="settings_reset_folder">Ordner zurücksetzen</string>
+    <string name="settings_reset_folder_title">Ordnerauswahl zurücksetzen?</string>
+    <string name="settings_reset_folder_body">Du kommst zurück zur Einrichtung und musst erneut einen Ordner wählen.</string>
+    <string name="settings_reset_folder_confirm">Zurücksetzen</string>
+    <string name="settings_folder_updated">Ordner aktualisiert.</string>
+    <string name="settings_include_subfolders">Unterordner einbeziehen</string>
+    <string name="settings_include_subfolders_subtitle">Auch Notizen in Unterordnern zeigen. Versteckte Ordner wie .obsidian werden übersprungen.</string>
+
+    <string name="settings_status">Status</string>
+    <string name="settings_status_not_set">Nicht festgelegt</string>
+    <string name="settings_status_checking">Wird geprüft…</string>
+    <string name="settings_status_permission_lost">Berechtigung verloren</string>
+    <string name="settings_status_unknown">Unbekannt</string>
+    <string name="settings_status_empty">Keine .md-Dateien gefunden</string>
+    <plurals name="settings_status_ok">
+        <item quantity="one">%1$d Markdown-Datei</item>
+        <item quantity="other">%1$d Markdown-Dateien</item>
+    </plurals>
+
+    <string name="settings_appearance">Darstellung</string>
+    <string name="settings_theme_mode">Design</string>
+    <string name="settings_theme_system">System</string>
+    <string name="settings_theme_light">Hell</string>
+    <string name="settings_theme_dark">Dunkel</string>
+    <string name="settings_dynamic_color">Dynamische Farben</string>
+    <string name="settings_dynamic_color_subtitle">Farben aus dem System übernehmen (ab Android 12).</string>
+    <string name="settings_dynamic_color_unavailable">Nur ab Android 12 verfügbar.</string>
+
+    <string name="settings_behaviour">Verhalten</string>
+    <string name="settings_show_daily_focus">Tagesfokus-Banner</string>
+    <string name="settings_show_daily_focus_subtitle">Offene Aufgaben auf dem Startbildschirm zeigen.</string>
+    <string name="settings_daily_focus_mode">Inhalt des Tagesfokus</string>
+    <string name="settings_daily_focus_mode_today">Heute</string>
+    <string name="settings_daily_focus_mode_overdue">Überfällig</string>
+    <string name="settings_daily_focus_mode_today_overdue">Heute und überfällig</string>
+    <string name="settings_category_sort">Sortierung der Listen</string>
+    <string name="settings_sort_az">A–Z</string>
+    <string name="settings_sort_remaining">Meiste offene zuerst</string>
+    <string name="settings_todo_grouping">Anordnung der Aufgaben</string>
+    <string name="settings_grouping_grouped">Gruppiert (offen/erledigt)</string>
+    <string name="settings_grouping_file_order">Reihenfolge in der Datei</string>
+    <string name="settings_todo_sort">Sortierung der Aufgaben</string>
+    <string name="settings_todo_sort_file_order">Reihenfolge in der Datei</string>
+    <string name="settings_todo_sort_priority_desc">Priorität (hoch nach niedrig)</string>
+    <string name="settings_todo_sort_created_newest">Erstellt (neueste zuerst)</string>
+    <string name="settings_todo_sort_due_earliest">Fällig (früheste zuerst)</string>
+    <string name="settings_new_todo_file_position">Neue Aufgaben einfügen</string>
+    <string name="settings_new_todo_file_position_top">Am Anfang der Datei</string>
+    <string name="settings_new_todo_file_position_bottom">Am Ende der Datei</string>
+    <string name="settings_default_add_task_file">Widget „Aufgabe hinzufügen“ öffnet</string>
+    <string name="settings_default_add_task_file_ask">Jedes Mal fragen</string>
+
+    <string name="settings_enable_tasks_plugin_support">Tasks-Plugin unterstützen</string>
+    <string name="settings_enable_tasks_plugin_support_subtitle">Angaben des Obsidian-Tasks-Plugins lesen und bearbeiten (Daten, Priorität, Wiederholung).</string>
+
+    <string name="settings_tasks_plugin_ui_emojis">Emojis in der Oberfläche</string>
+    <string name="settings_tasks_plugin_ui_emojis_subtitle">Tasks-Angaben als Emojis statt als Symbole zeigen.</string>
+
+    <string name="settings_markers_title">Aufgaben-Markierungen</string>
+    <string name="settings_markers_subtitle">Text für die Tasks-Angaben anpassen. Leere Felder verwenden den Standard.</string>
+    <string name="settings_marker_created">Markierung für Erstellt</string>
+    <string name="settings_marker_start">Markierung für Beginn</string>
+    <string name="settings_marker_scheduled">Markierung für Geplant</string>
+    <string name="settings_marker_due">Markierung für Fällig</string>
+    <string name="settings_marker_done">Markierung für Erledigt</string>
+    <string name="settings_marker_recurrence">Markierung für Wiederholung</string>
+    <string name="settings_marker_default_hint">Standard: %1$s</string>
+    <string name="settings_marker_example_created">z. B. erstellt: 2026-05-20</string>
+    <string name="settings_marker_example_start">z. B. beginn: 2026-05-20</string>
+    <string name="settings_marker_example_scheduled">z. B. geplant: 2026-05-20</string>
+    <string name="settings_marker_example_due">z. B. fällig: 2026-05-20</string>
+    <string name="settings_marker_example_done">z. B. erledigt: 2026-05-20</string>
+    <string name="settings_marker_example_recurrence">z. B. wiederholen: every week</string>
+
+    <string name="settings_enable_subtasks">Unteraufgaben aktivieren</string>
+    <string name="settings_enable_subtasks_subtitle">Unteraufgaben zu Aufgaben hinzufügen können.</string>
+    <string name="settings_notification_permission_denied">Benachrichtigungen sind ausgeschaltet, deshalb können keine Erinnerungen erscheinen.</string>
+
+    <string name="settings_reminder_time">Uhrzeit der Fälligkeits-Erinnerung</string>
+    <string name="settings_reminder_time_subtitle">Täglich um %1$s an bald fällige Aufgaben erinnern (nicht immer pünktlich).</string>
+    <string name="action_ok">OK</string>
+
+    <!-- Notifications -->
+    <string name="notification_task_reminder_channel_name">Erinnerungen an Aufgaben</string>
+    <string name="notification_task_reminder_channel_description">Erinnert dich zu der Zeit, die mit ⏰ an einer Aufgabe steht.</string>
+    <string name="notification_task_reminder_body">Erinnerung an %1$s</string>
+    <string name="notification_task_reminder_untitled">Aufgabe ohne Titel</string>
+    <string name="notification_task_reminder_done">Erledigt</string>
+    <string name="notification_task_reminder_later">In 1 Stunde</string>
+    <string name="notification_task_reminder_tomorrow">Morgen</string>
+    <string name="settings_reminder_repeat">Erneut erinnern</string>
+    <string name="settings_reminder_repeat_subtitle">Solange eine Aufgabe mit ⏰ offen ist: %1$s</string>
+    <string name="settings_reminder_repeat_off">Nie</string>
+    <string name="settings_reminder_repeat_hourly">Stündlich</string>
+    <string name="settings_reminder_repeat_daily">Täglich</string>
+    <string name="settings_folder_watch">Änderungen anderer Apps erkennen</string>
+    <string name="settings_folder_watch_subtitle">Für Notizen, die Obsidian oder eine Sync-App ändert: %1$s</string>
+    <string name="settings_folder_watch_periodic">Alle 15 Minuten</string>
+    <string name="settings_folder_watch_instant">Sofort</string>
+    <string name="settings_folder_watch_instant_hint">„Sofort“ braucht „Zugriff auf alle Dateien“ und zeigt eine stumme Dauermeldung.</string>
+    <string name="settings_folder_watch_no_access">Sofort (Zugriff auf alle Dateien fehlt, Prüfung alle 15 Minuten)</string>
+    <string name="folder_watch_channel_name">Ordnerüberwachung</string>
+    <string name="folder_watch_channel_description">Erscheint, solange Todosian deine Notizordner auf Änderungen überwacht.</string>
+    <string name="folder_watch_notification_title">Notizen werden überwacht</string>
+    <string name="folder_watch_notification_text">Erinnerungen folgen Änderungen anderer Apps sofort.</string>
+    <string name="notification_due_channel_name">Fälligkeits-Erinnerungen</string>
+    <string name="notification_due_channel_description">Erinnert dich, wenn Aufgaben bald fällig sind.</string>
+    <plurals name="notification_due_title">
+        <item quantity="one">%1$d Aufgabe bald fällig</item>
+        <item quantity="other">%1$d Aufgaben bald fällig</item>
+    </plurals>
+    <string name="notification_due_body_single">%1$s ist %2$s fällig.</string>
+    <plurals name="notification_due_body_multi">
+        <item quantity="one">Nächste fällig %1$s. Tippen, um %2$d Aufgabe anzusehen.</item>
+        <item quantity="other">Nächste fällig %1$s. Tippen, um %2$d Aufgaben anzusehen.</item>
+    </plurals>
+    <string name="notification_due_when_overdue">überfällig</string>
+    <string name="notification_due_when_today">heute</string>
+    <string name="notification_due_when_tomorrow">morgen</string>
+    <plurals name="notification_due_when_in_days">
+        <item quantity="one">in %1$d Tag</item>
+        <item quantity="other">in %1$d Tagen</item>
+    </plurals>
+
+    <string name="settings_about">Über</string>
+    <string name="settings_version">App-Version</string>
+    <string name="settings_android_sdk">Android-SDK</string>
+
+    <!-- Daily Focus screen -->
+    <string name="daily_focus_screen_title">Tagesfokus</string>
+    <string name="daily_focus_empty_title">Gerade nichts fällig</string>
+    <string name="daily_focus_empty_subtitle">Aufgaben, die zu deinem Fokus passen, erscheinen hier.</string>
+
+    <!-- Changelog / What's new -->
+    <string name="changelog_title">Neu in Todosian</string>
+    <string name="changelog_subtitle">Version %1$s</string>
+    <string name="changelog_dismiss">Verstanden</string>
+    <string name="changelog_thanks_to_prefix">"Danke an "</string>
+    <string name="settings_whats_new">Neuigkeiten</string>
+    <string name="settings_whats_new_subtitle">Aktuelle Änderungen ansehen</string>
+
+    <!-- Widget -->
+    <string name="widget_name">Todosian</string>
+    <string name="widget_description">Zeigt deine Aufgaben und lässt dich sie direkt vom Startbildschirm aus verwalten.</string>
+    <string name="widget_no_tasks">Keine offenen Aufgaben</string>
+    <string name="widget_no_folder">App öffnen, um den Aufgabenordner zu wählen</string>
+    <string name="widget_add_task">Aufgabe hinzufügen</string>
+    <string name="widget_refresh">Aufgaben aktualisieren</string>
+    <string name="widget_add_task_name">Aufgabe hinzufügen</string>
+    <string name="widget_add_task_description">Schnell eine Aufgabe zu einer deiner Listen hinzufügen.</string>
+    <string name="widget_title_all_lists">Alle Listen</string>
+    <string name="widget_configure_title">Liste für dieses Widget wählen</string>
+    <string name="widget_configure_all_lists_hint">Zeigt Aufgaben aus allen Notizen</string>
+    <string name="widget_configure_show_completed">Erledigte Aufgaben zeigen</string>
+    <string name="widget_missing_list">Liste nicht verfügbar. Widget lange drücken und „Bearbeiten“ wählen, um eine andere zu wählen.</string>
+    <plurals name="widget_configure_task_count">
+        <item quantity="one">%d Aufgabe</item>
+        <item quantity="other">%d Aufgaben</item>
+    </plurals>
+
+    <!-- Add task flow -->
+    <string name="add_task_picker_title">Aufgabe hinzufügen</string>
+    <string name="add_task_picker_subtitle">Wähle die Liste für die Aufgabe</string>
+    <string name="add_task_picker_empty_title">Keine Listen gefunden</string>
+    <string name="add_task_picker_empty_subtitle">Öffne Todosian und lege zuerst eine Liste an.</string>
+</resources>
