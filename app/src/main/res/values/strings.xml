@@ -413,6 +413,9 @@
     <string name="settings_person_scope_group">Group with people</string>
     <string name="settings_person_scope_people">Remind about tasks of</string>
     <string name="widget_configure_view_hint">Quick view: open tasks with these keywords from all lists</string>
+    <string name="category_recognized_reminder">⏰ %1$s, %2$s</string>
+    <string name="category_recognized_due">📅 %1$s</string>
+    <string name="category_recognized_ignore">Keep the date as text</string>
     <string name="settings_new_task_alerts">New tasks</string>
     <string name="settings_new_task_alerts_off">Off: no message for tasks someone else adds</string>
     <plurals name="settings_new_task_alerts_lists">
