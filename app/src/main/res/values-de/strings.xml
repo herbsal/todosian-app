@@ -416,4 +416,7 @@
     <string name="category_recognized_reminder">⏰ %1$s, %2$s</string>
     <string name="category_recognized_due">📅 %1$s</string>
     <string name="category_recognized_ignore">Datum als Text behalten</string>
+    <string name="category_first_step_add">+ Erster Schritt</string>
+    <string name="category_first_step">Erster Schritt (optional)</string>
+    <string name="category_first_step_hint">z. B. heute 18 Uhr Unterlagen raussuchen</string>
 </resources>

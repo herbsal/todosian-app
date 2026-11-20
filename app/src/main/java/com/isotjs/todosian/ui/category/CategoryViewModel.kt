@@ -165,14 +165,17 @@ class CategoryViewModel(
         }
     }
 
+    /** Adds a todo; a non-blank [firstStep] becomes its first subtask (a small step to start with). */
     fun addTodo(
         text: String,
         meta: MarkdownParser.TasksMeta?,
         enableTasksPluginSupport: Boolean,
         addAtStart: Boolean = false,
+        firstStep: String? = null,
+        firstStepMeta: MarkdownParser.TasksMeta? = null,
     ) {
         editLines { lines, markers ->
-            MarkdownParser.addTodo(
+            val added = MarkdownParser.addTodo(
                 lines = lines,
                 text = text,
                 meta = meta,
@@ -180,6 +183,17 @@ class CategoryViewModel(
                 addAtStart = addAtStart,
                 markers = markers,
             )
+            if (firstStep.isNullOrBlank() || added == lines) return@editLines added
+            val parentIndex = added.indices.firstOrNull { it >= lines.size || added[it] != lines[it] }
+                ?: return@editLines added
+            MarkdownParser.addSubTodo(
+                lines = added,
+                parentLineIndex = parentIndex,
+                text = firstStep,
+                meta = firstStepMeta,
+                enableTasksPlugin = enableTasksPluginSupport,
+                markers = markers,
+            ) ?: added
         }
     }
 
