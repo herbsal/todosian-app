@@ -15,17 +15,13 @@ internal data class MarkdownTree<T>(val files: List<MarkdownEntry<T>>, val folde
 internal const val CONFIG_FOLDER_NAME = "Todosian"
 
 /** Accepted names of the folder inside [CONFIG_FOLDER_NAME] that holds reminder profiles. */
-internal val PROFILE_FOLDER_NAMES = listOf("Reminders", "Erinnerungen")
+internal val PROFILE_FOLDER_NAMES = listOf("Reminders")
 
 /** Accepted names of the keyword note inside [CONFIG_FOLDER_NAME]. */
-internal val TAG_NOTE_NAMES = listOf("Tags.md", "Schlagwoerter.md", "Schlagwörter.md")
-
-/** Earlier German name of the keyword note; renamed once to [TAG_NOTE_NAME_GERMAN] (no umlaut in file names). */
-internal const val TAG_NOTE_NAME_OLD = "Schlagwörter.md"
-internal const val TAG_NOTE_NAME_GERMAN = "Schlagwoerter.md"
+internal val TAG_NOTE_NAMES = listOf("Tags.md")
 
 /** Names of the note with saved views (keyword filters with a name) in `Todosian/`. */
-internal val VIEW_NOTE_NAMES = listOf("Views.md", "Ansichten.md")
+internal val VIEW_NOTE_NAMES = listOf("Views.md")
 
 /**
  * Picks the folder a document belongs to: the tree whose document id is the longest prefix of
@@ -95,28 +91,7 @@ internal fun scanMarkdownTree(context: Context, treeUri: Uri, recursive: Boolean
 }
 
 /** The keyword note of the folder [treeUri], or null if it has none. */
-internal fun findTagNote(context: Context, treeUri: Uri): Uri? {
-    renameOldTagNote(context, treeUri)
-    return findConfigNote(context, treeUri, TAG_NOTE_NAMES)
-}
-
-/** Renames `Todosian/Schlagwörter.md` to `Schlagwoerter.md` once, unless that name is taken. */
-private fun renameOldTagNote(context: Context, treeUri: Uri) {
-    runCatching {
-        val rootId = DocumentsContract.getTreeDocumentId(treeUri)
-        val configId = listChildren(context, treeUri, rootId)
-            .firstOrNull { it.isDirectory && it.name.equals(CONFIG_FOLDER_NAME, ignoreCase = true) }
-            ?.id ?: return
-        val children = listChildren(context, treeUri, configId).filter { !it.isDirectory }
-        val old = children.firstOrNull { sameName(it.name, TAG_NOTE_NAME_OLD) } ?: return
-        if (children.any { sameName(it.name, TAG_NOTE_NAME_GERMAN) || sameName(it.name, "Tags.md") }) return
-        DocumentsContract.renameDocument(
-            context.contentResolver,
-            DocumentsContract.buildDocumentUriUsingTree(treeUri, old.id),
-            TAG_NOTE_NAME_GERMAN,
-        )
-    }
-}
+internal fun findTagNote(context: Context, treeUri: Uri): Uri? = findConfigNote(context, treeUri, TAG_NOTE_NAMES)
 
 /** The first note in `Todosian/` of [treeUri] named like one of [names], or null. */
 internal fun findConfigNote(context: Context, treeUri: Uri, names: List<String>): Uri? {

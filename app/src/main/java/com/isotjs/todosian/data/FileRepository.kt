@@ -43,7 +43,6 @@ import java.io.FileNotFoundException
 import java.io.FileOutputStream
 import java.io.OutputStream
 import java.time.LocalDate
-import java.util.Locale
 
 private const val CONTENT_SCHEME = "content"
 
@@ -157,12 +156,12 @@ interface FileRepository {
     fun observeAllMarkdownFilesChanges(): Flow<Unit>
 
     /**
-     * The keywords defined in `Todosian/Tags.md` (or `Schlagwoerter.md`) of the folder that holds
+     * The keywords defined in `Todosian/Tags.md` of the folder that holds
      * [noteUri]; the main folder's when [noteUri] is null. Empty when there is no such note.
      */
     suspend fun getTagDefinitions(noteUri: Uri?): TagDefinitions
 
-    /** Names of the reminder profiles in `Todosian/Reminders/` (or `Erinnerungen/`) of [folderUri]. */
+    /** Names of the reminder profiles in `Todosian/Reminders/` of [folderUri]. */
     suspend fun getReminderProfileNames(folderUri: Uri): List<String>
 
     /** The lines of the keyword note of [folderUri] itself; empty when there is none. */
@@ -175,7 +174,7 @@ interface FileRepository {
      */
     suspend fun editTagNote(folderUri: Uri, title: String, edit: (List<String>) -> List<String>?): Result<List<String>>
 
-    /** The lines of the saved views note (`Todosian/Views.md` or `Ansichten.md`) of [folderUri]; empty when there is none. */
+    /** The lines of the saved views note (`Todosian/Views.md`) of [folderUri]; empty when there is none. */
     suspend fun readViewNote(folderUri: Uri): List<String>
 
     /** Like [editTagNote] for the saved views note. */
@@ -187,7 +186,7 @@ interface FileRepository {
     /** The lines of the profile note [name]; null when there is none. */
     suspend fun readReminderProfile(folderUri: Uri, name: String): List<String>?
 
-    /** Like [editTagNote] for the profile note `Todosian/Reminders/<name>.md` (or `Erinnerungen/`). */
+    /** Like [editTagNote] for the profile note `Todosian/Reminders/<name>.md`. */
     suspend fun editReminderProfile(folderUri: Uri, name: String, edit: (List<String>) -> List<String>?): Result<List<String>>
 
     suspend fun deleteReminderProfile(folderUri: Uri, name: String): Result<Unit>
@@ -613,7 +612,6 @@ class SafFileRepository(
             .getOrDefault(emptyList())
     }
 
-    private val germanLocale: Boolean get() = Locale.getDefault().language == "de"
 
     override suspend fun readTagNote(folderUri: Uri): List<String> = withContext(Dispatchers.IO) {
         runCatching { findTagNote(appContext, folderUri)?.let { readLinesInternal(it) } }.getOrNull().orEmpty()
@@ -624,7 +622,7 @@ class SafFileRepository(
             runCatching {
                 fileMutex.withLock {
                     val existing = findTagNote(appContext, folderUri)
-                    val names = if (germanLocale) listOf(TAG_NOTE_NAME_GERMAN) + (TAG_NOTE_NAMES - TAG_NOTE_NAME_GERMAN) else TAG_NOTE_NAMES
+                    val names = TAG_NOTE_NAMES
                     val (uri, created) = existing?.let { it to false }
                         ?: ensureConfigNote(appContext, folderUri, subfolderNames = null, fileNames = names)
                     editConfigNote(uri, created, "# $title", edit)
@@ -641,7 +639,7 @@ class SafFileRepository(
             runCatching {
                 fileMutex.withLock {
                     val existing = findConfigNote(appContext, folderUri, VIEW_NOTE_NAMES)
-                    val names = if (germanLocale) VIEW_NOTE_NAMES.reversed() else VIEW_NOTE_NAMES
+                    val names = VIEW_NOTE_NAMES
                     val (uri, created) = existing?.let { it to false }
                         ?: ensureConfigNote(appContext, folderUri, subfolderNames = null, fileNames = names)
                     editConfigNote(uri, created, "# $title", edit)
@@ -672,7 +670,7 @@ class SafFileRepository(
             runCatching {
                 fileMutex.withLock {
                     val existing = findReminderProfiles(appContext, folderUri).firstOrNull { it.first.equals(name, ignoreCase = true) }?.second
-                    val folders = if (germanLocale) PROFILE_FOLDER_NAMES.reversed() else PROFILE_FOLDER_NAMES
+                    val folders = PROFILE_FOLDER_NAMES
                     val (uri, created) = existing?.let { it to false }
                         ?: ensureConfigNote(appContext, folderUri, folders, listOf("$name.md"))
                     editConfigNote(uri, created, "# $name", edit)
