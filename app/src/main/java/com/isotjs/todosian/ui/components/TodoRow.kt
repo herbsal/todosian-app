@@ -711,6 +711,32 @@ internal fun priorityColorFor(priority: TasksPriority?): Color? {
     }
 }
 
+/** Keywords of a task as small pills, e.g. ⏱ 5 Min · 👤 Alex. */
+@Composable
+private fun TagBadgeRow(badges: List<TagBadge>) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
+    ) {
+        badges.forEach { badge ->
+            Surface(
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.secondaryContainer,
+                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+            ) {
+                Text(
+                    text = "${badge.icon} ${badge.label}",
+                    style = MaterialTheme.typography.labelMedium,
+                    maxLines = 1,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                )
+            }
+        }
+    }
+}
+
 @Composable
 internal fun buildTasksMetaChips(
     todo: Todo,
