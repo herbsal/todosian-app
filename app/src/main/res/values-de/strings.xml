@@ -451,4 +451,17 @@
     <string name="settings_tag_display_chip">Symbol</string>
     <string name="settings_tag_display_text">Text</string>
     <string name="settings_tag_display_hidden">Ausblenden</string>
+    <string name="settings_tag_recognition">Tags in neuen Aufgaben erkennen</string>
+    <string name="settings_tag_recognition_subtitle">Wörter wie „5 Minuten“, „wenig Energie“ oder ein Name werden zu Tags aus der Tags-Notiz. Auch mit ✨ am Textfeld.</string>
+    <string name="settings_tag_recognition_remove">Erkannte Wörter aus dem Titel entfernen</string>
+    <string name="settings_tag_recognition_remove_subtitle">Aus „Müll 5 Minuten“ wird „Müll #5min“. Namen von Personen bleiben immer im Titel.</string>
+    <string name="recognition_toggle_on">Tag-Erkennung an, tippen zum Ausschalten</string>
+    <string name="recognition_toggle_off">Tag-Erkennung aus, tippen zum Einschalten</string>
+    <string name="quick_add_title">Schnell erfassen</string>
+    <string name="quick_add_hint">z. B. Milch kaufen morgen 17 Uhr auf die Einkaufsliste</string>
+    <string name="quick_add_list_chip">📥 %1$s</string>
+    <string name="quick_add_list_not_recognized">Liste im Text ignorieren</string>
+    <string name="quick_add_saved">Gespeichert in %1$s</string>
+    <string name="quick_add_failed">Die Aufgabe konnte nicht gespeichert werden.</string>
+    <string name="cd_quick_add">Schnell erfassen</string>
 </resources>

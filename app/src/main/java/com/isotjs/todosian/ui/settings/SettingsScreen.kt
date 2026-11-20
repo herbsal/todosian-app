@@ -55,6 +55,7 @@ import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ColorLens
+import androidx.compose.material.icons.filled.ContentCut
 import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FiberNew
@@ -865,6 +866,25 @@ fun SettingsScreen(
                             title = stringResource(R.string.settings_tag_display),
                             subtitle = stringResource(R.string.settings_tag_display_subtitle),
                             onClick = { showTagDisplayDialog = true },
+                        )
+
+                        SettingsDivider()
+
+                        SettingsSwitchRow(
+                            icon = Icons.Filled.AutoAwesome,
+                            title = stringResource(R.string.settings_tag_recognition),
+                            subtitle = stringResource(R.string.settings_tag_recognition_subtitle),
+                            checked = settings.tagRecognition,
+                            onCheckedChange = { appSettingsRepository.setTagRecognition(it) },
+                        )
+
+                        SettingsSwitchRow(
+                            icon = Icons.Filled.ContentCut,
+                            title = stringResource(R.string.settings_tag_recognition_remove),
+                            subtitle = stringResource(R.string.settings_tag_recognition_remove_subtitle),
+                            checked = settings.tagRecognitionRemoveWords,
+                            onCheckedChange = { appSettingsRepository.setTagRecognitionRemoveWords(it) },
+                            enabled = settings.tagRecognition,
                         )
 
                         SettingsDivider()
