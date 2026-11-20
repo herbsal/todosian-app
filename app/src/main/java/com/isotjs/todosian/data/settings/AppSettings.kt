@@ -31,6 +31,10 @@ data class AppSettings(
     val profileRemindersEnabled: Boolean = true,
     /** Encoded [com.isotjs.todosian.utils.TagDisplaySettings]; empty = defaults. */
     val tagDisplay: String = "",
+    /** Find tags of the tag note in the words of a new task (✨ next to the text field). */
+    val tagRecognition: Boolean = true,
+    /** Take recognized words out of the title; people's names always stay. */
+    val tagRecognitionRemoveWords: Boolean = true,
 ) {
     /** Resolves the configured markers, falling back to the emoji default when a field is blank. */
     fun toTaskMarkers(): TaskMarkers = TaskMarkers(

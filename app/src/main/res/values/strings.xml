@@ -451,4 +451,17 @@
     <string name="settings_tag_display_chip">Symbol</string>
     <string name="settings_tag_display_text">Text</string>
     <string name="settings_tag_display_hidden">Hide</string>
+    <string name="settings_tag_recognition">Recognize tags in new tasks</string>
+    <string name="settings_tag_recognition_subtitle">Words like “5 minutes”, “low energy” or a person’s name become tags from the Tags note. Also with ✨ next to the text field.</string>
+    <string name="settings_tag_recognition_remove">Remove recognized words from the title</string>
+    <string name="settings_tag_recognition_remove_subtitle">“Trash 5 minutes” becomes “Trash #5min”. People’s names always stay in the title.</string>
+    <string name="recognition_toggle_on">Tag recognition on, tap to turn off</string>
+    <string name="recognition_toggle_off">Tag recognition off, tap to turn on</string>
+    <string name="quick_add_title">Quick capture</string>
+    <string name="quick_add_hint">e.g. Buy milk tomorrow 5 pm @Shopping</string>
+    <string name="quick_add_list_chip">📥 %1$s</string>
+    <string name="quick_add_list_not_recognized">Ignore the list in the text</string>
+    <string name="quick_add_saved">Saved in %1$s</string>
+    <string name="quick_add_failed">Could not save the task.</string>
+    <string name="cd_quick_add">Quick capture</string>
 </resources>

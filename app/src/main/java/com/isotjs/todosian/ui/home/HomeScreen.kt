@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -38,6 +39,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.CreateNewFolder
@@ -49,6 +51,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
+import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -170,6 +173,7 @@ fun HomeScreen(
     }
 
     var showNewCategorySheet by remember { mutableStateOf(false) }
+    var showQuickAdd by remember { mutableStateOf(false) }
     var newCategoryName by remember { mutableStateOf("") }
 
     var renameTarget by remember { mutableStateOf<Category?>(null) }
@@ -177,6 +181,24 @@ fun HomeScreen(
     var deleteTarget by remember { mutableStateOf<Category?>(null) }
 
     val scope = rememberCoroutineScope()
+    if (showQuickAdd) {
+        QuickAddSheet(
+            categories = uiState.categories,
+            settings = settings,
+            fileRepository = fileRepository,
+            appSettingsRepository = appSettingsRepository,
+            preferencesManager = preferencesManager,
+            onDismiss = { showQuickAdd = false },
+            onSaved = { listName ->
+                showQuickAdd = false
+                viewModel.refresh(showLoading = false)
+                scope.launch { snackbarHostState.showSnackbar(resources.getString(R.string.quick_add_saved, listName)) }
+            },
+            onFailed = {
+                scope.launch { snackbarHostState.showSnackbar(resources.getString(R.string.quick_add_failed)) }
+            },
+        )
+    }
     val newCategorySheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val renameCategorySheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     if (showNewCategorySheet) {
@@ -369,6 +391,23 @@ fun HomeScreen(
         },
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         floatingActionButton = {
+          Row(verticalAlignment = Alignment.CenterVertically) {
+            // ⚡ Quick capture, next to "new list": the list comes from the words, else the Inbox.
+            SmallFloatingActionButton(
+                onClick = { showQuickAdd = true },
+                elevation = FloatingActionButtonDefaults.elevation(
+                    defaultElevation = 0.dp,
+                    pressedElevation = 0.dp,
+                    focusedElevation = 0.dp,
+                    hoveredElevation = 0.dp,
+                ),
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Bolt,
+                    contentDescription = stringResource(R.string.cd_quick_add),
+                )
+            }
+            Spacer(modifier = Modifier.width(12.dp))
             FloatingActionButton(
                 onClick = { showNewCategorySheet = true },
                 shape = todosianFabShape(),
@@ -387,6 +426,7 @@ fun HomeScreen(
                     contentDescription = stringResource(R.string.cd_add_category),
                 )
             }
+          }
         },
         modifier = modifier.fillMaxSize(),
     ) { padding ->

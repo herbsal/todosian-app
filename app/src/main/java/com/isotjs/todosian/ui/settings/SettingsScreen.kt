@@ -869,6 +869,25 @@ fun SettingsScreen(
 
                         SettingsDivider()
 
+                        SettingsSwitchRow(
+                            icon = Icons.Filled.AutoAwesome,
+                            title = stringResource(R.string.settings_tag_recognition),
+                            subtitle = stringResource(R.string.settings_tag_recognition_subtitle),
+                            checked = settings.tagRecognition,
+                            onCheckedChange = { appSettingsRepository.setTagRecognition(it) },
+                        )
+
+                        SettingsSwitchRow(
+                            icon = Icons.Filled.ContentCut,
+                            title = stringResource(R.string.settings_tag_recognition_remove),
+                            subtitle = stringResource(R.string.settings_tag_recognition_remove_subtitle),
+                            checked = settings.tagRecognitionRemoveWords,
+                            onCheckedChange = { appSettingsRepository.setTagRecognitionRemoveWords(it) },
+                            enabled = settings.tagRecognition,
+                        )
+
+                        SettingsDivider()
+
                         SettingsNavRow(
                             icon = Icons.AutoMirrored.Filled.Sort,
                             title = stringResource(R.string.settings_category_sort),

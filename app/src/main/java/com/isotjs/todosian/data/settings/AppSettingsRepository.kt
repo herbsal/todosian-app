@@ -52,6 +52,10 @@ interface AppSettingsRepository {
     /** How keyword tags appear in task rows (encoded [com.isotjs.todosian.utils.TagDisplaySettings]). */
     fun setTagDisplay(encoded: String) {}
 
+    fun setTagRecognition(enabled: Boolean) {}
+
+    fun setTagRecognitionRemoveWords(enabled: Boolean) {}
+
     /** Keyword group (by name) for [TodoSort.TAG_GROUP]. */
     fun setTodoSortGroup(group: String) {}
 }
@@ -174,6 +178,14 @@ class SharedPrefsAppSettingsRepository(
         prefs.edit { putString(KEY_TAG_DISPLAY, encoded) }
     }
 
+    override fun setTagRecognition(enabled: Boolean) {
+        prefs.edit { putBoolean(KEY_TAG_RECOGNITION, enabled) }
+    }
+
+    override fun setTagRecognitionRemoveWords(enabled: Boolean) {
+        prefs.edit { putBoolean(KEY_TAG_RECOGNITION_REMOVE, enabled) }
+    }
+
     override fun setTodoSortGroup(group: String) {
         prefs.edit { putString(KEY_TODO_SORT_GROUP, group) }
     }
@@ -231,6 +243,8 @@ class SharedPrefsAppSettingsRepository(
             } ?: FolderWatchMode.PERIODIC,
             profileRemindersEnabled = prefs.getBoolean(KEY_PROFILE_REMINDERS, true),
             tagDisplay = prefs.getString(KEY_TAG_DISPLAY, null).orEmpty(),
+            tagRecognition = prefs.getBoolean(KEY_TAG_RECOGNITION, true),
+            tagRecognitionRemoveWords = prefs.getBoolean(KEY_TAG_RECOGNITION_REMOVE, true),
         )
     }
 
@@ -266,6 +280,8 @@ class SharedPrefsAppSettingsRepository(
         private const val KEY_FOLDER_WATCH_MODE = "folder_watch_mode"
         private const val KEY_PROFILE_REMINDERS = "profile_reminders_enabled"
         private const val KEY_TAG_DISPLAY = "tag_display"
+        private const val KEY_TAG_RECOGNITION = "tag_recognition"
+        private const val KEY_TAG_RECOGNITION_REMOVE = "tag_recognition_remove_words"
         private const val KEY_TODO_SORT_GROUP = "todo_sort_group"
     }
 }
