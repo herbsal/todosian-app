@@ -103,12 +103,14 @@ class WidgetConfigureActivity : ComponentActivity() {
 
         // Pre-fill the screen with the widget's current preferences (reconfigure case); the
         // state read is suspending, so it lands in the hoisted state asynchronously.
+        // Glance keeps the state's DataStore for the whole process, together with the context
+        // it was opened with, so only the application context may go in (an Activity would leak).
         lifecycleScope.launch {
             showCompleted.value = runCatching {
-                val glanceId = GlanceAppWidgetManager(this@WidgetConfigureActivity)
+                val glanceId = GlanceAppWidgetManager(applicationContext)
                     .getGlanceIdBy(appWidgetId)
                 getAppWidgetState(
-                    this@WidgetConfigureActivity,
+                    applicationContext,
                     PreferencesGlanceStateDefinition,
                     glanceId,
                 )[KEY_SHOW_COMPLETED] ?: true
@@ -162,7 +164,8 @@ class WidgetConfigureActivity : ComponentActivity() {
      * and the stored selection untouched.
      */
     private fun persistPreferences(appWidgetId: Int, selection: WidgetSelection?, showCompleted: Boolean) {
-        val context = this
+        // Application context: Glance caches the state's DataStore with it (see onCreate).
+        val context = applicationContext
         lifecycleScope.launch {
             val result = runCatching {
                 val glanceId = GlanceAppWidgetManager(context).getGlanceIdBy(appWidgetId) // validates the binding
