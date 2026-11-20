@@ -256,6 +256,13 @@
     <string name="folder_watch_channel_description">Shown while Todosian watches your note folders for changes.</string>
     <string name="folder_watch_notification_title">Watching your notes</string>
     <string name="folder_watch_notification_text">Reminders follow changes from other apps right away.</string>
+    <string name="settings_reminder_profiles">Reminder profiles</string>
+    <string name="settings_reminder_profiles_subtitle">Extra reminders by keyword, chosen per folder on this device</string>
+    <string name="settings_reminder_profiles_subtitle_off">Off</string>
+    <string name="settings_reminder_profiles_enabled">Reminders from profiles</string>
+    <string name="settings_reminder_profiles_enabled_subtitle">Reminders with ⏰ on a task always ring.</string>
+    <string name="settings_reminder_profiles_none">None</string>
+    <string name="settings_reminder_profiles_empty">No profiles yet. Add notes to Todosian/Reminders/ in this folder.</string>
     <string name="notification_due_channel_name">Due reminders</string>
     <string name="notification_due_channel_description">Reminds you when tasks are close to their due date.</string>
     <plurals name="notification_due_title">

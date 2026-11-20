@@ -25,6 +25,8 @@ data class AppSettings(
     val reminderTimeMinute: Int = 0,
     val reminderRepeat: ReminderRepeat = ReminderRepeat.OFF,
     val folderWatchMode: FolderWatchMode = FolderWatchMode.PERIODIC,
+    /** Main switch for reminders from reminder profiles; ⏰ in a line always rings. */
+    val profileRemindersEnabled: Boolean = true,
 ) {
     /** Resolves the configured markers, falling back to the emoji default when a field is blank. */
     fun toTaskMarkers(): TaskMarkers = TaskMarkers(

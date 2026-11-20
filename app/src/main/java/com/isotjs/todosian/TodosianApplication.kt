@@ -43,7 +43,7 @@ class TodosianApplication : Application() {
         appScope.launch {
             // Re-plan ⏰ alarms on start and whenever a setting that affects them changes.
             appSettingsRepository.settings
-                .map { Triple(it.reminderRepeat, it.includeSubfolders, it.toTaskMarkers()) }
+                .map { listOf(it.reminderRepeat, it.includeSubfolders, it.toTaskMarkers(), it.profileRemindersEnabled) }
                 .distinctUntilChanged()
                 .collect { TaskReminderScheduler.sync(applicationContext) }
         }

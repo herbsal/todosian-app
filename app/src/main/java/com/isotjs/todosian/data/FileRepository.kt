@@ -151,6 +151,9 @@ interface FileRepository {
      * [noteUri]; the main folder's when [noteUri] is null. Empty when there is no such note.
      */
     suspend fun getTagDefinitions(noteUri: Uri?): TagDefinitions
+
+    /** Names of the reminder profiles in `Todosian/Reminders/` (or `Erinnerungen/`) of [folderUri]. */
+    suspend fun getReminderProfileNames(folderUri: Uri): List<String>
 }
 
 class SafFileRepository(
@@ -546,6 +549,12 @@ class SafFileRepository(
             TagDefinitionParser.parse(readLinesInternal(note))
         }.onFailure { Log.w(TAG, "Reading the keyword note failed", it) }
             .getOrDefault(TagDefinitions.EMPTY)
+    }
+
+    override suspend fun getReminderProfileNames(folderUri: Uri): List<String> = withContext(Dispatchers.IO) {
+        runCatching { findReminderProfiles(appContext, folderUri).map { it.first } }
+            .onFailure { Log.w(TAG, "Listing reminder profiles failed", it) }
+            .getOrDefault(emptyList())
     }
 
     override fun observeAllMarkdownFilesChanges(): Flow<Unit> {

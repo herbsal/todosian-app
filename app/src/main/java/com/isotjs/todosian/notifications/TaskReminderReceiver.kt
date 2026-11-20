@@ -21,6 +21,7 @@ import com.isotjs.todosian.TodosianApplication
 import com.isotjs.todosian.data.settings.SharedPrefsAppSettingsRepository
 import com.isotjs.todosian.sync.FolderWatchScheduler
 import com.isotjs.todosian.utils.MarkdownParser
+import com.isotjs.todosian.utils.TaskMarkers
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -74,7 +75,7 @@ class TaskReminderReceiver : BroadcastReceiver() {
         val lines = app.fileRepository.readLines(target.fileUri.toUri()).getOrNull()
         // The todo may have been completed, edited or moved to another time since the alarm was set.
         val stillOpen = lines != null &&
-            MarkdownParser.locateReminderTodo(lines, target.text, target.reminderText, target.lineIndex, markers) != null
+            target.locate(lines, markers) != null
         if (stillOpen) {
             TaskReminderScheduler.markNotified(context, target.key)
             notify(context, target)
@@ -89,8 +90,7 @@ class TaskReminderReceiver : BroadcastReceiver() {
         val markers = settings.toTaskMarkers()
         cancelNotification(context, target.key)
         app.fileRepository.updateLines(target.fileUri.toUri()) { lines ->
-            val index = MarkdownParser.locateReminderTodo(lines, target.text, target.reminderText, target.lineIndex, markers)
-                ?: return@updateLines null
+            val index = target.locate(lines, markers) ?: return@updateLines null
             MarkdownParser.tryToggleLine(
                 lines = lines,
                 lineIndex = index,
@@ -113,9 +113,8 @@ class TaskReminderReceiver : BroadcastReceiver() {
         cancelNotification(context, target.key)
         // Written into the note, so the new time also reaches other devices.
         app.fileRepository.updateLines(target.fileUri.toUri()) { lines ->
-            val index = MarkdownParser.locateReminderTodo(lines, target.text, target.reminderText, target.lineIndex, markers)
-                ?: return@updateLines null
-            MarkdownParser.replaceReminder(lines, index, next)
+            val index = target.locate(lines, markers) ?: return@updateLines null
+            MarkdownParser.setReminder(lines, index, next, markers)
         }
         TaskReminderScheduler.sync(context)
     }
@@ -169,6 +168,7 @@ class TaskReminderReceiver : BroadcastReceiver() {
                     lineIndex = target.lineIndex,
                 ),
             )
+            putExtra(TaskReminderScheduler.EXTRA_FROM_PROFILE, target.fromProfile)
         }
         return PendingIntent.getBroadcast(
             context,
@@ -211,7 +211,13 @@ class TaskReminderReceiver : BroadcastReceiver() {
         val reminderText: String,
         val reminder: LocalDateTime,
         val lineIndex: Int,
+        val fromProfile: Boolean,
     ) {
+        /** Line of this reminder's todo; a profile reminder has no ⏰ in the line, so only the text counts. */
+        fun locate(lines: List<String>, markers: TaskMarkers): Int? =
+            if (fromProfile) MarkdownParser.locateOpenTodo(lines, text, lineIndex, markers)
+            else MarkdownParser.locateReminderTodo(lines, text, reminderText, lineIndex, markers)
+
         companion object {
             fun from(intent: Intent): Target? {
                 val reminderText = intent.getStringExtra(TaskReminderScheduler.EXTRA_REMINDER) ?: return null
@@ -222,6 +228,7 @@ class TaskReminderReceiver : BroadcastReceiver() {
                     reminderText = reminderText,
                     reminder = MarkdownParser.parseReminder(reminderText) ?: return null,
                     lineIndex = intent.getIntExtra(TaskReminderScheduler.EXTRA_LINE_INDEX, -1),
+                    fromProfile = intent.getBooleanExtra(TaskReminderScheduler.EXTRA_FROM_PROFILE, false),
                 )
             }
         }

@@ -9,9 +9,14 @@ import android.os.Build
 import android.util.Log
 import androidx.core.content.edit
 import com.isotjs.todosian.data.PreferencesManager
+import com.isotjs.todosian.data.findReminderProfiles
+import com.isotjs.todosian.data.findTagNote
 import com.isotjs.todosian.data.scanMarkdownTree
 import com.isotjs.todosian.data.settings.SharedPrefsAppSettingsRepository
 import com.isotjs.todosian.utils.MarkdownParser
+import com.isotjs.todosian.utils.TagDefinitionParser
+import com.isotjs.todosian.utils.TagDefinitions
+import com.isotjs.todosian.utils.TagText
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -22,6 +27,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
 
@@ -37,6 +43,7 @@ object TaskReminderScheduler {
     const val EXTRA_REMINDER = "reminder"
     const val EXTRA_LINE_INDEX = "line_index"
     const val EXTRA_KEY = "key"
+    const val EXTRA_FROM_PROFILE = "from_profile"
 
     private const val TAG = "TaskReminderScheduler"
     private const val STATE_PREFS = "task_reminder_state"
@@ -85,18 +92,38 @@ object TaskReminderScheduler {
         val folders = (listOfNotNull(preferences.getFolderUri()) + preferences.getExtraFolderUris()).distinct()
 
         val candidates = folders.flatMap { folder ->
-            runCatching { scanMarkdownTree(context, folder, settings.includeSubfolders).files }
+            val files = runCatching { scanMarkdownTree(context, folder, settings.includeSubfolders).files }
                 .getOrElse { emptyList() }
-        }.flatMap { file ->
-            val lines = runCatching {
-                context.contentResolver.openInputStream(file.ref)?.bufferedReader()?.use { it.readLines() }
-            }.getOrNull().orEmpty()
-            MarkdownParser.parse(lines, markers)
-                .filter { !it.isDone }
-                .mapNotNull { todo ->
+            val profile = if (settings.profileRemindersEnabled) loadProfile(context, preferences, folder) else null
+            val definitions = if (profile != null) loadTagDefinitions(context, folder) else TagDefinitions.EMPTY
+            files.flatMap { file ->
+                val lines = runCatching {
+                    context.contentResolver.openInputStream(file.ref)?.bufferedReader()?.use { it.readLines() }
+                }.getOrNull().orEmpty()
+                val open = MarkdownParser.parse(lines, markers).filter { !it.isDone }
+                val direct = open.mapNotNull { todo ->
                     val reminder = MarkdownParser.parseReminder(todo.reminder) ?: return@mapNotNull null
                     ReminderCandidate(file.ref.toString(), todo.text, reminder, todo.lineIndex)
                 }
+                val fromProfile = profile?.let {
+                    ProfileReminderPlanner.candidates(
+                        fileKey = file.ref.toString(),
+                        todos = open.map { todo ->
+                            ProfileTodo(
+                                text = todo.text,
+                                lineIndex = todo.lineIndex,
+                                tags = TagText.tagsIn(todo.text),
+                                date = (todo.dueDate ?: todo.scheduledDate ?: todo.startDate)
+                                    ?.let { raw -> runCatching { LocalDate.parse(raw) }.getOrNull() },
+                                hasOwnReminder = MarkdownParser.parseReminder(todo.reminder) != null,
+                            )
+                        },
+                        profile = it,
+                        definitions = definitions,
+                    )
+                }.orEmpty()
+                direct + fromProfile
+            }
         }
 
         val prefs = statePrefs(context)
@@ -116,6 +143,23 @@ object TaskReminderScheduler {
         }
         Log.d(TAG, "Scheduled ${plan.size} reminder(s)")
     }
+
+    /** The reminder profile chosen on this device for [folder], or null. */
+    private fun loadProfile(context: Context, preferences: PreferencesManager, folder: Uri): ReminderProfile? {
+        val name = preferences.getReminderProfile(folder) ?: return null
+        return runCatching {
+            val uri = findReminderProfiles(context, folder).firstOrNull { it.first.equals(name, ignoreCase = true) }?.second
+                ?: return@runCatching null
+            val lines = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readLines() }.orEmpty()
+            ReminderProfileParser.parse(name, lines)
+        }.onFailure { Log.w(TAG, "Reading reminder profile failed", it) }.getOrNull()
+    }
+
+    private fun loadTagDefinitions(context: Context, folder: Uri): TagDefinitions = runCatching {
+        val note = findTagNote(context, folder) ?: return@runCatching TagDefinitions.EMPTY
+        val lines = context.contentResolver.openInputStream(note)?.bufferedReader()?.use { it.readLines() }.orEmpty()
+        TagDefinitionParser.parse(lines)
+    }.getOrDefault(TagDefinitions.EMPTY)
 
     private fun setAlarm(context: Context, alarmManager: AlarmManager, planned: PlannedReminder) {
         val triggerMillis = planned.triggerAt.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
@@ -153,6 +197,7 @@ object TaskReminderScheduler {
             // The data URI makes each reminder's PendingIntent distinct; extras alone would not.
             data = alarmUri(key)
             putExtras(reminderExtras(key, candidate.fileKey, candidate.text, candidate.reminder, candidate.lineIndex))
+            putExtra(EXTRA_FROM_PROFILE, candidate.fromProfile)
         }
         return PendingIntent.getBroadcast(
             context,
