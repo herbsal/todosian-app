@@ -33,11 +33,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import com.isotjs.todosian.notifications.TaskReminderScheduler
 import com.isotjs.todosian.sync.FolderWatchScheduler
-import com.isotjs.todosian.notifications.ReminderProfile
-import com.isotjs.todosian.notifications.ReminderProfileParser
-import com.isotjs.todosian.notifications.ReminderProfileWriter
 import com.isotjs.todosian.utils.TagDefinitionParser
-import com.isotjs.todosian.utils.TagDefinitionWriter
 import com.isotjs.todosian.utils.TagDefinitions
 import com.isotjs.todosian.ui.widget.WidgetRefresher
 import java.io.FileNotFoundException
@@ -47,6 +43,9 @@ import java.time.LocalDate
 import java.util.Locale
 
 private const val CONTENT_SCHEME = "content"
+
+/** A config note changed since it was shown, so the line to edit was not found exactly once. */
+class NoteChangedException : IllegalStateException("The note changed in the meantime")
 
 internal fun isDocumentWithinFolder(
     folderAuthority: String?,
@@ -160,16 +159,21 @@ interface FileRepository {
     /** Names of the reminder profiles in `Todosian/Reminders/` (or `Erinnerungen/`) of [folderUri]. */
     suspend fun getReminderProfileNames(folderUri: Uri): List<String>
 
-    /** The keywords of the folder [folderUri] itself. */
-    suspend fun getFolderTagDefinitions(folderUri: Uri): TagDefinitions
+    /** The lines of the keyword note of [folderUri] itself; empty when there is none. */
+    suspend fun readTagNote(folderUri: Uri): List<String>
 
-    /** Writes the keyword note of [folderUri], creating it (and `Todosian/`) when needed. */
-    suspend fun saveTagDefinitions(folderUri: Uri, definitions: TagDefinitions, title: String): Result<Unit>
+    /**
+     * Changes the keyword note of [folderUri] with [edit] on its current lines, creating the note
+     * (and `Todosian/`) with [title] when needed. Fails with [NoteChangedException] when [edit]
+     * returns null. Returns the lines written.
+     */
+    suspend fun editTagNote(folderUri: Uri, title: String, edit: (List<String>) -> List<String>?): Result<List<String>>
 
-    suspend fun getReminderProfile(folderUri: Uri, name: String): ReminderProfile?
+    /** The lines of the profile note [name]; null when there is none. */
+    suspend fun readReminderProfile(folderUri: Uri, name: String): List<String>?
 
-    /** Writes the profile note `Todosian/Reminders/<name>.md` (or `Erinnerungen/`), creating it when needed. */
-    suspend fun saveReminderProfile(folderUri: Uri, profile: ReminderProfile): Result<Unit>
+    /** Like [editTagNote] for the profile note `Todosian/Reminders/<name>.md` (or `Erinnerungen/`). */
+    suspend fun editReminderProfile(folderUri: Uri, name: String, edit: (List<String>) -> List<String>?): Result<List<String>>
 
     suspend fun deleteReminderProfile(folderUri: Uri, name: String): Result<Unit>
 }
@@ -577,44 +581,52 @@ class SafFileRepository(
 
     private val germanLocale: Boolean get() = Locale.getDefault().language == "de"
 
-    override suspend fun getFolderTagDefinitions(folderUri: Uri): TagDefinitions = withContext(Dispatchers.IO) {
-        runCatching {
-            val note = findTagNote(appContext, folderUri) ?: return@runCatching TagDefinitions.EMPTY
-            TagDefinitionParser.parse(readLinesInternal(note))
-        }.getOrDefault(TagDefinitions.EMPTY)
+    override suspend fun readTagNote(folderUri: Uri): List<String> = withContext(Dispatchers.IO) {
+        runCatching { findTagNote(appContext, folderUri)?.let { readLinesInternal(it) } }.getOrNull().orEmpty()
     }
 
-    override suspend fun saveTagDefinitions(folderUri: Uri, definitions: TagDefinitions, title: String): Result<Unit> =
+    override suspend fun editTagNote(folderUri: Uri, title: String, edit: (List<String>) -> List<String>?): Result<List<String>> =
         withContext(Dispatchers.IO) {
             runCatching {
                 fileMutex.withLock {
+                    val existing = findTagNote(appContext, folderUri)
                     val names = if (germanLocale) TAG_NOTE_NAMES.sortedByDescending { it.startsWith("Schlag") } else TAG_NOTE_NAMES
-                    val (uri, created) = ensureConfigNote(appContext, folderUri, subfolderNames = null, fileNames = names)
-                    val lines = TagDefinitionWriter.write(definitions, title)
-                    writeLinesInternal(uri, if (created) lines + "" else lines)
+                    val (uri, created) = existing?.let { it to false }
+                        ?: ensureConfigNote(appContext, folderUri, subfolderNames = null, fileNames = names)
+                    editConfigNote(uri, created, "# $title", edit)
                 }
             }
         }
 
-    override suspend fun getReminderProfile(folderUri: Uri, name: String): ReminderProfile? = withContext(Dispatchers.IO) {
+    override suspend fun readReminderProfile(folderUri: Uri, name: String): List<String>? = withContext(Dispatchers.IO) {
         runCatching {
-            val uri = findReminderProfiles(appContext, folderUri).firstOrNull { it.first.equals(name, ignoreCase = true) }?.second
-                ?: return@runCatching null
-            ReminderProfileParser.parse(name, readLinesInternal(uri))
+            findReminderProfiles(appContext, folderUri).firstOrNull { it.first.equals(name, ignoreCase = true) }?.second
+                ?.let { readLinesInternal(it) }
         }.getOrNull()
     }
 
-    override suspend fun saveReminderProfile(folderUri: Uri, profile: ReminderProfile): Result<Unit> =
+    override suspend fun editReminderProfile(folderUri: Uri, name: String, edit: (List<String>) -> List<String>?): Result<List<String>> =
         withContext(Dispatchers.IO) {
             runCatching {
                 fileMutex.withLock {
+                    val existing = findReminderProfiles(appContext, folderUri).firstOrNull { it.first.equals(name, ignoreCase = true) }?.second
                     val folders = if (germanLocale) PROFILE_FOLDER_NAMES.reversed() else PROFILE_FOLDER_NAMES
-                    val (uri, created) = ensureConfigNote(appContext, folderUri, folders, listOf("${profile.name}.md"))
-                    val lines = ReminderProfileWriter.write(profile, germanLocale)
-                    writeLinesInternal(uri, if (created) lines + "" else lines)
+                    val (uri, created) = existing?.let { it to false }
+                        ?: ensureConfigNote(appContext, folderUri, folders, listOf("$name.md"))
+                    editConfigNote(uri, created, "# $name", edit)
                 }
             }
         }
+
+    /** Reads the note again right before the change, so edits made elsewhere in the meantime survive. */
+    private fun editConfigNote(uri: Uri, created: Boolean, title: String, edit: (List<String>) -> List<String>?): List<String> {
+        val current = if (created) emptyList() else readLinesInternal(uri)
+        val base = if (current.all { it.isBlank() }) listOf(title) else current
+        val updated = edit(base) ?: throw NoteChangedException()
+        // A new file gets a final newline; existing files keep theirs (see writeLinesInternal).
+        writeLinesInternal(uri, if (created) updated + "" else updated)
+        return updated
+    }
 
     override suspend fun deleteReminderProfile(folderUri: Uri, name: String): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {

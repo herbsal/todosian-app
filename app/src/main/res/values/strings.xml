@@ -333,7 +333,7 @@
     <string name="keyword_editor_help_1">A keyword is a tag like #5min in the task text. Pick it in the task sheet with one tap.</string>
     <string name="keyword_editor_help_2">Several tags can mean the same keyword (synonyms, e.g. #kurz, #5min). The app writes the first one.</string>
     <string name="keyword_editor_help_3">In a named group only one keyword is set at a time, e.g. Effort: 5 min or 2 h.</string>
-    <string name="keyword_editor_help_4">Everything is stored as notes in the Todosian folder of the vault, so it syncs and can also be edited in Obsidian.</string>
+    <string name="keyword_editor_help_4">Everything is stored as notes in the Todosian folder of the vault. Edit them here or in Obsidian: the app changes only the lines you edit.</string>
     <string name="keyword_editor_help_profile_1">A profile adds reminders to every open task with one of its keywords.</string>
     <string name="keyword_editor_help_profile_2">The task needs a date (due, else scheduled, else start). A ⏰ on the task always wins.</string>
     <string name="keyword_editor_help_profile_3">Each device picks its own profile per folder in Settings → Reminder profiles.</string>
@@ -379,5 +379,18 @@
     <plurals name="keyword_editor_days_before">
         <item quantity="one">%1$d day before</item>
         <item quantity="other">%1$d days before</item>
+    </plurals>
+    <string name="keyword_editor_note_changed">The note changed in the meantime. It was reloaded, please try again.</string>
+    <string name="keyword_editor_fix">Fix</string>
+    <string name="keyword_editor_fix_line">Fix line</string>
+    <string name="keyword_editor_line_number">Line %1$d</string>
+    <string name="keyword_editor_problem_no_tag">No tag found. Expected: - Name: #tag, #synonym</string>
+    <string name="keyword_editor_problem_unknown_text">Text that is not a tag is ignored. Tags start with # and contain a letter.</string>
+    <string name="keyword_editor_problem_no_time">No time found. Expected: - 09:00 or - 1 day before 18:00</string>
+    <string name="keyword_editor_problem_bad_repeat">Unknown value. Expected: - repeat: off, hourly or daily</string>
+    <string name="keyword_editor_problem_bad_heading">Heading without a tag, its rules are ignored. Expected: ## #tag</string>
+    <plurals name="keyword_editor_problems">
+        <item quantity="one">%1$d line not understood</item>
+        <item quantity="other">%1$d lines not understood</item>
     </plurals>
 </resources>
