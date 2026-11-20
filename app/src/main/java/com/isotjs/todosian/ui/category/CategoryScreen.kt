@@ -159,6 +159,7 @@ fun CategoryScreen(
     var sheetText by remember { mutableStateOf("") }
     var sheetMeta by remember { mutableStateOf(MarkdownParser.TasksMeta()) }
     var sheetParentTodo by remember { mutableStateOf<Todo?>(null) }
+    var sheetFirstStep by remember { mutableStateOf<String?>(null) }
     var deleteTodoTarget by remember { mutableStateOf<Todo?>(null) }
     var deleteTodoHasSubtasks by remember { mutableStateOf(false) }
     var moveTodoTarget by remember { mutableStateOf<Todo?>(null) }
@@ -185,6 +186,7 @@ fun CategoryScreen(
                 sheetText = ""
                 sheetMeta = MarkdownParser.TasksMeta()
                 sheetParentTodo = null
+                sheetFirstStep = null
             },
             sheetState = todoSheetState,
         ) {
@@ -246,6 +248,31 @@ fun CategoryScreen(
                     RecognizedDateChip(match = dateMatch, onIgnore = { ignoreDateInText = true })
                 }
 
+                // U1: an optional small first step, saved as a subtask with its own ⏰.
+                if (sheetMode == TodoSheetMode.Add) {
+                    val firstStep = sheetFirstStep
+                    if (firstStep == null) {
+                        TextButton(onClick = { sheetFirstStep = "" }) {
+                            Text(text = stringResource(R.string.category_first_step_add))
+                        }
+                    } else {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = firstStep,
+                            onValueChange = { sheetFirstStep = it },
+                            singleLine = true,
+                            label = { Text(text = stringResource(R.string.category_first_step)) },
+                            placeholder = { Text(text = stringResource(R.string.category_first_step_hint)) },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        val stepMatch = remember(firstStep) { NaturalDates.find(firstStep, LocalDateTime.now()) }
+                        if (stepMatch != null) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            RecognizedDateChip(match = stepMatch, onIgnore = null)
+                        }
+                    }
+                }
+
                 if (!uiState.tagDefinitions.isEmpty) {
                     Spacer(modifier = Modifier.height(8.dp))
                     TagQuickPicker(
@@ -284,6 +311,8 @@ fun CategoryScreen(
                                 sheetText = ""
                                 sheetMeta = MarkdownParser.TasksMeta()
                                 sheetParentTodo = null
+                                sheetFirstStep = null
+                sheetFirstStep = null
                             }
                         },
                     ) {
@@ -294,11 +323,23 @@ fun CategoryScreen(
                             when (val mode = sheetMode) {
                                 TodoSheetMode.Add -> {
                                     val (text, meta) = applyDate(sheetText, sheetMeta)
+                                    val step = sheetFirstStep?.trim()?.takeIf { it.isNotEmpty() }
+                                    val (stepText, stepMeta) = step?.let { raw ->
+                                        applyRecognizedDate(
+                                            NaturalDates.find(raw, LocalDateTime.now()),
+                                            raw,
+                                            MarkdownParser.TasksMeta(createdDate = meta.createdDate),
+                                            settings.enableTasksPluginSupport,
+                                            settings.toTaskMarkers(),
+                                        )
+                                    } ?: (null to null)
                                     viewModel.addTodo(
                                         text = text,
                                         meta = if (settings.enableTasksPluginSupport) meta else null,
                                         enableTasksPluginSupport = settings.enableTasksPluginSupport,
                                         addAtStart = settings.newTodoFilePosition == NewTodoFilePosition.TOP,
+                                        firstStep = stepText,
+                                        firstStepMeta = if (settings.enableTasksPluginSupport) stepMeta else null,
                                     )
                                 }
 
@@ -330,6 +371,8 @@ fun CategoryScreen(
                                 sheetText = ""
                                 sheetMeta = MarkdownParser.TasksMeta()
                                 sheetParentTodo = null
+                                sheetFirstStep = null
+                sheetFirstStep = null
                             }
                         },
                         enabled = sheetText.trim().isNotEmpty(),
@@ -888,7 +931,7 @@ private fun applyRecognizedDate(
 }
 
 @Composable
-private fun RecognizedDateChip(match: DateMatch, onIgnore: () -> Unit) {
+private fun RecognizedDateChip(match: DateMatch, onIgnore: (() -> Unit)?) {
     val locale = LocalConfiguration.current.locales[0]
     val dateText = match.date.format(DateTimeFormatter.ofPattern("EEE d. MMM", locale))
     val label = match.time?.let { time ->
@@ -896,14 +939,17 @@ private fun RecognizedDateChip(match: DateMatch, onIgnore: () -> Unit) {
     } ?: stringResource(R.string.category_recognized_due, dateText)
     InputChip(
         selected = true,
-        onClick = onIgnore,
+        onClick = { onIgnore?.invoke() },
+        enabled = true,
         label = { Text(text = label) },
-        trailingIcon = {
-            Icon(
-                Icons.Filled.Close,
-                contentDescription = stringResource(R.string.category_recognized_ignore),
-                modifier = Modifier.size(InputChipDefaults.IconSize),
-            )
+        trailingIcon = if (onIgnore == null) null else {
+            {
+                Icon(
+                    Icons.Filled.Close,
+                    contentDescription = stringResource(R.string.category_recognized_ignore),
+                    modifier = Modifier.size(InputChipDefaults.IconSize),
+                )
+            }
         },
     )
 }
