@@ -35,6 +35,8 @@ import com.isotjs.todosian.notifications.TaskReminderScheduler
 import com.isotjs.todosian.sync.FolderWatchScheduler
 import com.isotjs.todosian.utils.TagDefinitionParser
 import com.isotjs.todosian.utils.TagDefinitions
+import com.isotjs.todosian.utils.SavedView
+import com.isotjs.todosian.utils.SavedViews
 import com.isotjs.todosian.ui.widget.WidgetRefresher
 import java.io.FileNotFoundException
 import java.io.FileOutputStream
@@ -168,6 +170,15 @@ interface FileRepository {
      * returns null. Returns the lines written.
      */
     suspend fun editTagNote(folderUri: Uri, title: String, edit: (List<String>) -> List<String>?): Result<List<String>>
+
+    /** The lines of the saved views note (`Todosian/Views.md` or `Ansichten.md`) of [folderUri]; empty when there is none. */
+    suspend fun readViewNote(folderUri: Uri): List<String>
+
+    /** Like [editTagNote] for the saved views note. */
+    suspend fun editViewNote(folderUri: Uri, title: String, edit: (List<String>) -> List<String>?): Result<List<String>>
+
+    /** The saved views of all folders, in folder order. */
+    suspend fun getSavedViews(): List<SavedView>
 
     /** The lines of the profile note [name]; null when there is none. */
     suspend fun readReminderProfile(folderUri: Uri, name: String): List<String>?
@@ -597,6 +608,34 @@ class SafFileRepository(
                 }
             }
         }
+
+    override suspend fun readViewNote(folderUri: Uri): List<String> = withContext(Dispatchers.IO) {
+        runCatching { findConfigNote(appContext, folderUri, VIEW_NOTE_NAMES)?.let { readLinesInternal(it) } }.getOrNull().orEmpty()
+    }
+
+    override suspend fun editViewNote(folderUri: Uri, title: String, edit: (List<String>) -> List<String>?): Result<List<String>> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                fileMutex.withLock {
+                    val existing = findConfigNote(appContext, folderUri, VIEW_NOTE_NAMES)
+                    val names = if (germanLocale) VIEW_NOTE_NAMES.reversed() else VIEW_NOTE_NAMES
+                    val (uri, created) = existing?.let { it to false }
+                        ?: ensureConfigNote(appContext, folderUri, subfolderNames = null, fileNames = names)
+                    editConfigNote(uri, created, "# $title", edit)
+                }
+            }
+        }
+
+    override suspend fun getSavedViews(): List<SavedView> = withContext(Dispatchers.IO) {
+        allFolderUris().flatMap { folder ->
+            runCatching {
+                val note = findConfigNote(appContext, folder, VIEW_NOTE_NAMES) ?: return@runCatching emptyList()
+                val definitions = findTagNote(appContext, folder)?.let { TagDefinitionParser.parse(readLinesInternal(it)) }
+                    ?: TagDefinitions.EMPTY
+                SavedViews.parse(readLinesInternal(note), definitions, folder.toString())
+            }.getOrDefault(emptyList())
+        }
+    }
 
     override suspend fun readReminderProfile(folderUri: Uri, name: String): List<String>? = withContext(Dispatchers.IO) {
         runCatching {

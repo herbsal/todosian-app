@@ -43,6 +43,18 @@ object TagFilter {
         return defined.values.toList() + others.values.toList()
     }
 
+    /** Filter terms for [tags] as written in a saved view, with synonyms and groups from [definitions]. */
+    fun termsForTags(tags: List<String>, definitions: TagDefinitions): List<FilterTerm> =
+        tags.map { tag ->
+            val group = definitions.groups.firstOrNull { g -> g.terms.any { it.matches(tag) } }
+            val term = group?.terms?.first { it.matches(tag) }
+            if (term != null) {
+                FilterTerm(term.primaryTag.lowercase(), term.label, group.name, term.tags)
+            } else {
+                FilterTerm(tag.lowercase(), tag.removePrefix("#"), null, listOf(tag))
+            }
+        }.distinctBy { it.key }
+
     fun matches(text: String, selected: List<FilterTerm>): Boolean {
         if (selected.isEmpty()) return true
         val tags = TagText.tagsIn(text)

@@ -396,4 +396,9 @@
     <string name="tag_filter">Filter by keyword</string>
     <string name="tag_filter_clear">Clear filter</string>
     <string name="tag_filter_empty">No tasks with these keywords.</string>
+    <string name="keyword_editor_views">Quick views</string>
+    <string name="keyword_editor_views_hint">Named keyword filters, shown on the home screen. They list open tasks from all folders, e.g. Small tasks = #5min.</string>
+    <string name="keyword_editor_add_view">Quick view</string>
+    <string name="keyword_editor_edit_view">Edit quick view</string>
+    <string name="keyword_editor_view_tags_hint">Same group = either one, different groups = all must apply</string>
 </resources>

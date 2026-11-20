@@ -396,4 +396,9 @@
     <string name="tag_filter">Nach Schlagwort filtern</string>
     <string name="tag_filter_clear">Filter aufheben</string>
     <string name="tag_filter_empty">Keine Aufgaben mit diesen Schlagwörtern.</string>
+    <string name="keyword_editor_views">Schnellansichten</string>
+    <string name="keyword_editor_views_hint">Benannte Schlagwort-Filter auf der Startseite. Sie zeigen offene Aufgaben aus allen Ordnern, z. B. Kleine Aufgaben = #5min.</string>
+    <string name="keyword_editor_add_view">Schnellansicht</string>
+    <string name="keyword_editor_edit_view">Schnellansicht bearbeiten</string>
+    <string name="keyword_editor_view_tags_hint">Gleiche Gruppe = eins davon, verschiedene Gruppen = alle müssen passen</string>
 </resources>

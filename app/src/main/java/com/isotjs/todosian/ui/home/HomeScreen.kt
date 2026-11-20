@@ -1,5 +1,13 @@
 package com.isotjs.todosian.ui.home
 
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
+import androidx.compose.runtime.produceState
+import androidx.compose.foundation.layout.size
+import com.isotjs.todosian.utils.SavedView
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
@@ -106,6 +114,7 @@ fun HomeScreen(
     onOpenCategory: (android.net.Uri) -> Unit,
     onOpenSettings: () -> Unit,
     onOpenDailyFocus: () -> Unit,
+    onOpenView: (SavedView) -> Unit,
     refreshSignal: Long,
     onRequireOnboarding: () -> Unit,
     modifier: Modifier = Modifier,
@@ -114,6 +123,10 @@ fun HomeScreen(
         factory = HomeViewModelFactory(fileRepository, appSettingsRepository),
     )
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    // Saved views from the views notes; read again whenever the home data refreshes.
+    val savedViews by produceState(emptyList<SavedView>(), uiState, refreshSignal) {
+        value = fileRepository.getSavedViews()
+    }
 
     var showChangelogSheet by remember { mutableStateOf(false) }
 
@@ -473,6 +486,11 @@ fun HomeScreen(
                                 }
                             }
 
+                            if (savedViews.isNotEmpty()) {
+                                SavedViewsRow(views = savedViews, onOpen = onOpenView)
+                                Spacer(modifier = Modifier.height(12.dp))
+                            }
+
                             LazyVerticalGrid(
                                 columns = GridCells.Fixed(2),
                                 contentPadding = PaddingValues(bottom = 96.dp),
@@ -703,5 +721,25 @@ private class HomeViewModelFactory(
             return HomeViewModel(fileRepository, appSettingsRepository) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")
+    }
+}
+
+/** One chip per saved view, e.g. "Small tasks"; tapping opens its tasks from all folders. */
+@Composable
+private fun SavedViewsRow(views: List<SavedView>, onOpen: (SavedView) -> Unit) {
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        items(views, key = { "${it.folder}\u001F${it.name}" }) { view ->
+            AssistChip(
+                onClick = { onOpen(view) },
+                label = { Text(text = view.name) },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Filled.FilterList,
+                        contentDescription = null,
+                        modifier = Modifier.size(AssistChipDefaults.IconSize),
+                    )
+                },
+            )
+        }
     }
 }

@@ -64,6 +64,7 @@ import com.isotjs.todosian.data.settings.AppSettingsRepository
 import com.isotjs.todosian.data.settings.DailyFocusMode
 import com.isotjs.todosian.ui.components.TagFilterBar
 import com.isotjs.todosian.ui.components.TagQuickPicker
+import com.isotjs.todosian.utils.SavedView
 import com.isotjs.todosian.utils.TagFilter
 import com.isotjs.todosian.ui.components.TasksMetaEditor
 import com.isotjs.todosian.utils.TagDefinitions
@@ -86,19 +87,26 @@ fun DailyFocusScreen(
     appSettingsRepository: AppSettingsRepository,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    viewFolder: String? = null,
+    viewName: String? = null,
 ) {
+    val isView = viewName != null
+    val savedView by produceState<SavedView?>(null, viewFolder, viewName) {
+        value = viewName?.let { name -> fileRepository.getSavedViews().firstOrNull { it.folder == viewFolder && it.name == name } }
+    }
     // Collect settings once to seed the ViewModel factory
     val settings by appSettingsRepository.settings.collectAsStateWithLifecycle(
         initialValue = AppSettings(),
     )
 
     val viewModel: DailyFocusViewModel = viewModel(
-        key = "daily_focus_${settings.dailyFocusMode.name}_${settings.enableTasksPluginSupport}",
+        key = "daily_focus_${settings.dailyFocusMode.name}_${settings.enableTasksPluginSupport}_$isView",
         factory = DailyFocusViewModelFactory(
             fileRepository = fileRepository,
             mode = settings.dailyFocusMode,
             enableTasksPluginSupport = settings.enableTasksPluginSupport,
             appSettingsRepository = appSettingsRepository,
+            showAllOpen = isView,
         ),
     )
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -133,8 +141,17 @@ fun DailyFocusScreen(
     val tagDefinitionsByCategory by produceState(emptyMap<Uri, TagDefinitions>(), categoryUris) {
         value = categoryUris.associateWith { fileRepository.getTagDefinitions(it) }
     }
-    val filterTerms = remember(uiState.tasks, tagDefinitionsByCategory) {
-        TagFilter.termsFor(uiState.tasks.map { it.todo.text to (tagDefinitionsByCategory[it.categoryUri] ?: TagDefinitions.EMPTY) })
+    // A saved view shows only its keywords; until it is loaded, nothing.
+    val viewTasks = remember(uiState.tasks, isView, savedView) {
+        val view = savedView
+        when {
+            !isView -> uiState.tasks
+            view == null -> emptyList()
+            else -> uiState.tasks.filter { TagFilter.matches(it.todo.text, view.terms) }
+        }
+    }
+    val filterTerms = remember(viewTasks, tagDefinitionsByCategory) {
+        TagFilter.termsFor(viewTasks.map { it.todo.text to (tagDefinitionsByCategory[it.categoryUri] ?: TagDefinitions.EMPTY) })
     }
     val selectedTerms = remember(filterTerms, selectedTagKeys) { filterTerms.filter { it.key in selectedTagKeys } }
 
@@ -274,7 +291,7 @@ fun DailyFocusScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(text = stringResource(R.string.daily_focus_screen_title)) },
+                title = { Text(text = viewName ?: stringResource(R.string.daily_focus_screen_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(
@@ -314,8 +331,8 @@ fun DailyFocusScreen(
         }
 
         // Group tasks by category name
-        val grouped = remember(uiState.tasks, selectedTerms) {
-            uiState.tasks.filter { TagFilter.matches(it.todo.text, selectedTerms) }.groupBy { it.categoryName }
+        val grouped = remember(viewTasks, selectedTerms) {
+            viewTasks.filter { TagFilter.matches(it.todo.text, selectedTerms) }.groupBy { it.categoryName }
         }
 
         LazyColumn(
@@ -400,6 +417,7 @@ private class DailyFocusViewModelFactory(
     private val mode: DailyFocusMode,
     private val enableTasksPluginSupport: Boolean,
     private val appSettingsRepository: AppSettingsRepository,
+    private val showAllOpen: Boolean = false,
 ) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(DailyFocusViewModel::class.java)) {
@@ -409,6 +427,7 @@ private class DailyFocusViewModelFactory(
                 mode = mode,
                 enableTasksPluginSupport = enableTasksPluginSupport,
                 appSettingsRepository = appSettingsRepository,
+                showAllOpen = showAllOpen,
             ) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")

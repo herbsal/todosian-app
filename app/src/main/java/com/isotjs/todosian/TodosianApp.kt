@@ -140,6 +140,9 @@ fun TodosianApp(
                 onOpenDailyFocus = {
                     navController.navigate(Routes.DailyFocus)
                 },
+                onOpenView = { view ->
+                    navController.navigate(Routes.savedView(view.folder, view.name))
+                },
                 refreshSignal = refreshSignal,
                 onRequireOnboarding = {
                     navController.navigate(Routes.Onboarding) {
@@ -222,6 +225,30 @@ fun TodosianApp(
                 onBack = { navController.popBackStack() },
             )
         }
+
+        composable(
+            route = Routes.SavedView,
+            arguments = listOf(
+                navArgument(Routes.ARG_VIEW_FOLDER) {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
+                navArgument(Routes.ARG_VIEW_NAME) {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
+            ),
+        ) { backStackEntry ->
+            DailyFocusScreen(
+                fileRepository = fileRepository,
+                appSettingsRepository = appSettingsRepository,
+                onBack = { navController.popBackStack() },
+                viewFolder = backStackEntry.arguments?.getString(Routes.ARG_VIEW_FOLDER),
+                viewName = backStackEntry.arguments?.getString(Routes.ARG_VIEW_NAME),
+            )
+        }
     }
 }
 
@@ -237,6 +264,13 @@ object Routes {
     const val ARG_CATEGORY_URI = "categoryUri"
     const val ARG_CATEGORY_ADD = "add"
     const val Category = "category/{$ARG_CATEGORY_URI}?$ARG_CATEGORY_ADD={$ARG_CATEGORY_ADD}"
+
+    const val ARG_VIEW_FOLDER = "folder"
+    const val ARG_VIEW_NAME = "name"
+    const val SavedView = "view?$ARG_VIEW_FOLDER={$ARG_VIEW_FOLDER}&$ARG_VIEW_NAME={$ARG_VIEW_NAME}"
+
+    fun savedView(folder: String, name: String): String =
+        "view?$ARG_VIEW_FOLDER=${Uri.encode(folder)}&$ARG_VIEW_NAME=${Uri.encode(name)}"
 
     fun category(uri: Uri, addTodo: Boolean = false): String =
         "category/${Uri.encode(uri.toString())}?$ARG_CATEGORY_ADD=$addTodo"
