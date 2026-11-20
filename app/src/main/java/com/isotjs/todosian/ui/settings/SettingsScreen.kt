@@ -49,6 +49,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderShared
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Schedule
@@ -120,6 +121,7 @@ import com.isotjs.todosian.data.settings.CategorySort
 import com.isotjs.todosian.data.settings.FolderWatchMode
 import com.isotjs.todosian.data.settings.ReminderRepeat
 import com.isotjs.todosian.sync.FolderWatchScheduler
+import com.isotjs.todosian.notifications.TaskReminderScheduler
 import com.isotjs.todosian.data.settings.DailyFocusMode
 import com.isotjs.todosian.data.settings.NewTodoFilePosition
 import com.isotjs.todosian.data.settings.ThemeMode
@@ -210,6 +212,7 @@ fun SettingsScreen(
     var showReminderTimeDialog by remember { mutableStateOf(false) }
     var showReminderRepeatDialog by remember { mutableStateOf(false) }
     var showFolderWatchDialog by remember { mutableStateOf(false) }
+    var showReminderProfilesDialog by remember { mutableStateOf(false) }
     var hasAllFilesAccess by remember { mutableStateOf(FolderWatchScheduler.hasAllFilesAccess()) }
     LifecycleResumeEffect(settings.folderWatchMode) {
         // Coming back from the "All files access" screen: start or stop instant watching.
@@ -319,6 +322,16 @@ fun SettingsScreen(
                 }
             },
             onDismiss = { showFolderWatchDialog = false },
+        )
+    }
+
+    if (showReminderProfilesDialog) {
+        ReminderProfilesDialog(
+            enabled = settings.profileRemindersEnabled,
+            onEnabledChange = { appSettingsRepository.setProfileRemindersEnabled(it) },
+            fileRepository = fileRepository,
+            preferencesManager = preferencesManager,
+            onDismiss = { showReminderProfilesDialog = false },
         )
     }
 
@@ -756,6 +769,19 @@ fun SettingsScreen(
                                 },
                             ),
                             onClick = { showFolderWatchDialog = true },
+                        )
+
+                        SettingsDivider()
+
+                        SettingsNavRow(
+                            icon = Icons.Filled.NotificationsActive,
+                            title = stringResource(R.string.settings_reminder_profiles),
+                            subtitle = if (settings.profileRemindersEnabled) {
+                                stringResource(R.string.settings_reminder_profiles_subtitle)
+                            } else {
+                                stringResource(R.string.settings_reminder_profiles_subtitle_off)
+                            },
+                            onClick = { showReminderProfilesDialog = true },
                         )
 
                         SettingsDivider()
@@ -1244,4 +1270,102 @@ private fun reminderRepeatLabel(repeat: ReminderRepeat): String = when (repeat) 
 private fun folderWatchLabel(mode: FolderWatchMode): String = when (mode) {
     FolderWatchMode.PERIODIC -> stringResource(R.string.settings_folder_watch_periodic)
     FolderWatchMode.INSTANT -> stringResource(R.string.settings_folder_watch_instant)
+}
+
+private data class FolderProfiles(val uri: Uri, val name: String, val profiles: List<String>)
+
+/**
+ * Main switch for profile reminders, and the profile per folder. The choice is stored on this
+ * device only, so people who share a folder can each pick their own profile.
+ */
+@Composable
+private fun ReminderProfilesDialog(
+    enabled: Boolean,
+    onEnabledChange: (Boolean) -> Unit,
+    fileRepository: FileRepository,
+    preferencesManager: PreferencesManager,
+    onDismiss: () -> Unit,
+) {
+    val context = LocalContext.current
+    val folders by produceState<List<FolderProfiles>?>(initialValue = null) {
+        value = (listOfNotNull(fileRepository.getFolderUri()) + fileRepository.getExtraFolderUris()).distinct().map { uri ->
+            FolderProfiles(
+                uri = uri,
+                name = fileRepository.getFolderDisplayName(uri).getOrNull() ?: uri.toString(),
+                profiles = fileRepository.getReminderProfileNames(uri),
+            )
+        }
+    }
+    var selection by remember { mutableStateOf<Map<Uri, String?>>(emptyMap()) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(text = stringResource(R.string.settings_reminder_profiles)) },
+        text = {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(text = stringResource(R.string.settings_reminder_profiles_enabled))
+                        Text(
+                            text = stringResource(R.string.settings_reminder_profiles_enabled_subtitle),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(checked = enabled, onCheckedChange = onEnabledChange)
+                }
+                val loaded = folders
+                if (loaded == null) {
+                    CircularProgressIndicator(modifier = Modifier.padding(top = 16.dp).size(24.dp))
+                }
+                loaded.orEmpty().forEach { folder ->
+                    Text(
+                        text = folder.name,
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(top = 16.dp, bottom = 4.dp),
+                    )
+                    if (folder.profiles.isEmpty()) {
+                        Text(
+                            text = stringResource(R.string.settings_reminder_profiles_empty),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        return@forEach
+                    }
+                    val current = if (folder.uri in selection) selection[folder.uri] else preferencesManager.getReminderProfile(folder.uri)
+                    (listOf<String?>(null) + folder.profiles).forEach { option ->
+                        val isSelected = option.equals(current, ignoreCase = true) || (option == null && current == null)
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .selectable(
+                                    selected = isSelected,
+                                    enabled = enabled,
+                                    role = Role.RadioButton,
+                                    onClick = {
+                                        preferencesManager.saveReminderProfile(folder.uri, option)
+                                        selection = selection + (folder.uri to option)
+                                        TaskReminderScheduler.requestSync(context)
+                                    },
+                                ),
+                        ) {
+                            RadioButton(selected = isSelected, onClick = null, enabled = enabled)
+                            Text(
+                                text = option ?: stringResource(R.string.settings_reminder_profiles_none),
+                                modifier = Modifier.padding(start = 8.dp),
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text(text = stringResource(R.string.action_ok)) }
+        },
+    )
 }

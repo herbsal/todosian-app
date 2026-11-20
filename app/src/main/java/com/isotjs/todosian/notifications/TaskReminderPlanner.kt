@@ -10,6 +10,10 @@ data class ReminderCandidate(
     val text: String,
     val reminder: LocalDateTime,
     val lineIndex: Int,
+    /** True when the reminder comes from a reminder profile rather than a ⏰ in the line. */
+    val fromProfile: Boolean = false,
+    /** Overrides the "Remind again" setting, set by a profile rule. */
+    val repeat: ReminderRepeat? = null,
 )
 
 data class PlannedReminder(
@@ -42,7 +46,8 @@ object TaskReminderPlanner {
             .distinctBy { keyOf(it) }
             .mapNotNull { candidate ->
                 val key = keyOf(candidate)
-                val trigger = triggerFor(candidate.reminder, lastNotified[key], now, repeat) ?: return@mapNotNull null
+                val trigger = triggerFor(candidate.reminder, lastNotified[key], now, candidate.repeat ?: repeat)
+                    ?: return@mapNotNull null
                 PlannedReminder(key, candidate, trigger)
             }
             .sortedBy { it.triggerAt }

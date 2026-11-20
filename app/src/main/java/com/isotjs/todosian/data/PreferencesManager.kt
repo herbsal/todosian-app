@@ -72,6 +72,20 @@ class PreferencesManager(
         prefs.edit { remove(KEY_DEFAULT_ADD_TASK_FILE_URI) }
     }
 
+    /**
+     * The reminder profile chosen for [folderUri] on this device, by note name; null for none.
+     * Not synced on purpose: everyone sharing a folder picks their own profile.
+     */
+    fun getReminderProfile(folderUri: Uri): String? =
+        prefs.getString(KEY_REMINDER_PROFILE_PREFIX + folderUri.toString(), null)
+
+    fun saveReminderProfile(folderUri: Uri, name: String?) {
+        prefs.edit {
+            if (name == null) remove(KEY_REMINDER_PROFILE_PREFIX + folderUri.toString())
+            else putString(KEY_REMINDER_PROFILE_PREFIX + folderUri.toString(), name)
+        }
+    }
+
     fun getLastSeenVersionCode(): Int {
         return prefs.getInt(KEY_LAST_SEEN_VERSION_CODE, 0)
     }
@@ -83,6 +97,7 @@ class PreferencesManager(
     private companion object {
         private const val PREFS_NAME = "todosian_prefs"
         private const val KEY_FOLDER_URI = "folder_uri"
+        private const val KEY_REMINDER_PROFILE_PREFIX = "reminder_profile:"
         private const val KEY_LAST_SEEN_VERSION_CODE = "last_seen_version_code"
         private const val KEY_DEFAULT_ADD_TASK_FILE_URI = "default_add_task_file_uri"
         private const val KEY_EXTRA_FOLDER_URIS = "extra_folder_uris"

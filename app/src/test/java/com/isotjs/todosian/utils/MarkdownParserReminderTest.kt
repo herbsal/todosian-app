@@ -143,4 +143,30 @@ class MarkdownParserReminderTest {
         assertEquals(listOf("- [ ] Arzt ⏰ 2026-11-24 09:30 ⏫ 📅 2026-11-24"), result)
         assertNull(MarkdownParser.replaceReminder(listOf("- [ ] Ohne"), 0, LocalDateTime.of(2026, 1, 1, 0, 0)))
     }
+
+    @Test
+    fun `setReminder inserts the reminder before the Tasks fields`() {
+        val lines = listOf("- [ ] Tidy up #energie/niedrig 📅 2026-11-24")
+        val result = MarkdownParser.setReminder(lines, 0, LocalDateTime.of(2026, 11, 24, 9, 0))
+        assertEquals(listOf("- [ ] Tidy up #energie/niedrig ⏰ 2026-11-24 09:00 📅 2026-11-24"), result)
+        val todo = MarkdownParser.parse(result!!).single()
+        assertEquals("2026-11-24", todo.dueDate)
+        assertEquals("2026-11-24 09:00", todo.reminder)
+    }
+
+    @Test
+    fun `setReminder replaces an existing reminder`() {
+        val lines = listOf("  - [ ] Call ⏰ 2026-11-24 09:00 📅 2026-11-24")
+        assertEquals(
+            listOf("  - [ ] Call ⏰ 2026-11-25 10:30 📅 2026-11-24"),
+            MarkdownParser.setReminder(lines, 0, LocalDateTime.of(2026, 11, 25, 10, 30)),
+        )
+    }
+
+    @Test
+    fun `locateOpenTodo finds the open todo by text only`() {
+        val lines = listOf("- [x] Call", "- [ ] Other", "- [ ] Call 📅 2026-11-24")
+        assertEquals(2, MarkdownParser.locateOpenTodo(lines, "Call", lineIndexHint = 0))
+        assertNull(MarkdownParser.locateOpenTodo(lines, "Missing"))
+    }
 }

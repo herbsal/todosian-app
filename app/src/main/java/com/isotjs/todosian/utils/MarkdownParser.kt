@@ -80,6 +80,40 @@ object MarkdownParser {
         return lines.toMutableList().apply { this[lineIndex] = newLine }
     }
 
+    /**
+     * Gives the todo at [lineIndex] the reminder [newReminder]: replaces its ⏰ or, if it has none,
+     * inserts one right after the text, before the Tasks fields.
+     */
+    fun setReminder(
+        lines: List<String>,
+        lineIndex: Int,
+        newReminder: LocalDateTime,
+        markers: TaskMarkers = TaskMarkers.Default,
+    ): List<String>? {
+        val line = lines.getOrNull(lineIndex) ?: return null
+        val match = todoRegex.matchEntire(line) ?: return null
+        if (reminderRegex.containsMatchIn(line)) return replaceReminder(lines, lineIndex, newReminder)
+        val parsed = parseRemainder(match.groupValues[3], markers)
+        val newRemainder = buildString {
+            append(parsed.mainText.trimEnd())
+            append(" $REMINDER_MARKER ${formatReminder(newReminder)}")
+            if (parsed.suffixRaw.isNotEmpty()) append(parsed.suffixRaw)
+        }
+        val newLine = "${match.groupValues[1]}- [${match.groupValues[2]}] ${newRemainder.trim()}"
+        return lines.toMutableList().apply { this[lineIndex] = newLine }
+    }
+
+    /** Line of the open todo with [text], nearest to [lineIndexHint]; for reminders that come from a profile. */
+    fun locateOpenTodo(
+        lines: List<String>,
+        text: String,
+        lineIndexHint: Int = -1,
+        markers: TaskMarkers = TaskMarkers.Default,
+    ): Int? = parse(lines, markers)
+        .filter { !it.isDone && it.text == text }
+        .map { it.lineIndex }
+        .minByOrNull { abs(it - lineIndexHint) }
+
     private fun dateSuffixRegex(marker: String) =
         Regex("""\s${Regex.escape(marker)}\s*(\d{4}-\d{2}-\d{2})\s*$""")
 

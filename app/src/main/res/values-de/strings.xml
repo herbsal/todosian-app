@@ -256,6 +256,13 @@
     <string name="folder_watch_channel_description">Erscheint, solange Todosian deine Notizordner auf Änderungen überwacht.</string>
     <string name="folder_watch_notification_title">Notizen werden überwacht</string>
     <string name="folder_watch_notification_text">Erinnerungen folgen Änderungen anderer Apps sofort.</string>
+    <string name="settings_reminder_profiles">Erinnerungsprofile</string>
+    <string name="settings_reminder_profiles_subtitle">Zusätzliche Erinnerungen je Schlagwort, pro Ordner auf diesem Gerät gewählt</string>
+    <string name="settings_reminder_profiles_subtitle_off">Aus</string>
+    <string name="settings_reminder_profiles_enabled">Erinnerungen aus Profilen</string>
+    <string name="settings_reminder_profiles_enabled_subtitle">Erinnerungen mit ⏰ an einer Aufgabe melden sich immer.</string>
+    <string name="settings_reminder_profiles_none">Keines</string>
+    <string name="settings_reminder_profiles_empty">Noch keine Profile. Lege Notizen in Todosian/Erinnerungen/ in diesem Ordner an.</string>
     <string name="notification_due_channel_name">Fälligkeits-Erinnerungen</string>
     <string name="notification_due_channel_description">Erinnert dich, wenn Aufgaben bald fällig sind.</string>
     <plurals name="notification_due_title">

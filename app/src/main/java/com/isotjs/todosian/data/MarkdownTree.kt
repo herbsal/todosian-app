@@ -14,6 +14,9 @@ internal data class MarkdownTree<T>(val files: List<MarkdownEntry<T>>, val folde
 /** Folder at the root of a notes folder that holds Todosian's own notes (keywords, reminder profiles). */
 internal const val CONFIG_FOLDER_NAME = "Todosian"
 
+/** Accepted names of the folder inside [CONFIG_FOLDER_NAME] that holds reminder profiles. */
+internal val PROFILE_FOLDER_NAMES = listOf("Reminders", "Erinnerungen")
+
 /** Accepted names of the keyword note inside [CONFIG_FOLDER_NAME]. */
 internal val TAG_NOTE_NAMES = listOf("Tags.md", "Schlagwörter.md", "Schlagwoerter.md")
 
@@ -95,6 +98,22 @@ internal fun findTagNote(context: Context, treeUri: Uri): Uri? {
         children.firstOrNull { it.name.equals(wanted, ignoreCase = true) }
     } ?: return null
     return DocumentsContract.buildDocumentUriUsingTree(treeUri, note.id)
+}
+
+/** The reminder profiles of the folder [treeUri]: note name without `.md` to its URI, sorted by name. */
+internal fun findReminderProfiles(context: Context, treeUri: Uri): List<Pair<String, Uri>> {
+    val rootId = DocumentsContract.getTreeDocumentId(treeUri)
+    val configId = listChildren(context, treeUri, rootId)
+        .firstOrNull { it.isDirectory && it.name.equals(CONFIG_FOLDER_NAME, ignoreCase = true) }
+        ?.id ?: return emptyList()
+    val configChildren = listChildren(context, treeUri, configId)
+    val profilesId = PROFILE_FOLDER_NAMES.firstNotNullOfOrNull { wanted ->
+        configChildren.firstOrNull { it.isDirectory && it.name.equals(wanted, ignoreCase = true) }
+    }?.id ?: return emptyList()
+    return listChildren(context, treeUri, profilesId)
+        .filter { !it.isDirectory && isMarkdownNoteName(it.name) }
+        .map { it.name.dropLast(MD_SUFFIX_LENGTH) to DocumentsContract.buildDocumentUriUsingTree(treeUri, it.id) }
+        .sortedBy { it.first.lowercase() }
 }
 
 private fun listChildren(context: Context, treeUri: Uri, folderId: String): List<DocumentEntry> {
