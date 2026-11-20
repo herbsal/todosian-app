@@ -143,7 +143,7 @@ class TaskReminderReceiver : BroadcastReceiver() {
 
         val notification = NotificationCompat.Builder(appContext, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle(target.text.ifBlank { appContext.getString(R.string.notification_task_reminder_untitled) })
+            .setContentTitle((target.displayText ?: target.text).ifBlank { appContext.getString(R.string.notification_task_reminder_untitled) })
             .setContentText(appContext.getString(R.string.notification_task_reminder_body, time))
             .setContentIntent(openApp)
             .setAutoCancel(true)
@@ -233,6 +233,8 @@ class TaskReminderReceiver : BroadcastReceiver() {
         val reminder: LocalDateTime,
         val lineIndex: Int,
         val fromProfile: Boolean,
+        /** The task with tags as symbols, only for showing it. */
+        val displayText: String? = null,
     ) {
         /** Line of this reminder's todo; a profile reminder has no ⏰ in the line, so only the text counts. */
         fun locate(lines: List<String>, markers: TaskMarkers): Int? =
@@ -250,6 +252,7 @@ class TaskReminderReceiver : BroadcastReceiver() {
                     reminder = MarkdownParser.parseReminder(reminderText) ?: return null,
                     lineIndex = intent.getIntExtra(TaskReminderScheduler.EXTRA_LINE_INDEX, -1),
                     fromProfile = intent.getBooleanExtra(TaskReminderScheduler.EXTRA_FROM_PROFILE, false),
+                    displayText = intent.getStringExtra(TaskReminderScheduler.EXTRA_DISPLAY_TEXT),
                 )
             }
         }

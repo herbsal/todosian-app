@@ -14,6 +14,8 @@ data class ReminderCandidate(
     val fromProfile: Boolean = false,
     /** Overrides the "Remind again" setting, set by a profile rule. */
     val repeat: ReminderRepeat? = null,
+    /** The task as the notification shows it, tags as symbols per the display setting. */
+    val displayText: String? = null,
 )
 
 data class PlannedReminder(

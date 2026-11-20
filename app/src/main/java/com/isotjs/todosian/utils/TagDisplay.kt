@@ -63,6 +63,16 @@ object TagDisplay {
         }
     }
 
+    /**
+     * One line for places without badges, such as notifications: the title as in the app, then
+     * the badges as plain text, e.g. "Altglas wegbringen · ⏱ 5 Min · 🔋 Niedrig".
+     */
+    fun plainText(text: String, definitions: TagDefinitions, settings: TagDisplaySettings): String {
+        val result = split(text, definitions, settings)
+        if (result.badges.isEmpty()) return result.title
+        return (listOf(result.title) + result.badges.map { "${it.icon} ${it.label}" }).joinToString(" · ")
+    }
+
     fun split(text: String, definitions: TagDefinitions, settings: TagDisplaySettings): TagDisplayResult {
         val badges = mutableListOf<TagBadge>()
         val title = tagRegex.replace(text) { match ->

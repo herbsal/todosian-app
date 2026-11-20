@@ -22,6 +22,8 @@ import com.isotjs.todosian.data.scanMarkdownTree
 import com.isotjs.todosian.data.model.Todo
 import com.isotjs.todosian.data.settings.SharedPrefsAppSettingsRepository
 import com.isotjs.todosian.utils.MarkdownParser
+import com.isotjs.todosian.utils.TagDisplay
+import com.isotjs.todosian.utils.TagDisplaySettings
 import com.isotjs.todosian.utils.TaskMarkers
 import kotlinx.coroutines.flow.first
 import java.time.LocalDate
@@ -58,7 +60,14 @@ object DueReminderNotifier {
         val extraFolderUris = preferences.getExtraFolderUris().filter { it != folderUri }
 
         val dueSoon = runCatching {
-            loadDueSoonTodos(appContext, folderUri, extraFolderUris, settings.toTaskMarkers(), settings.includeSubfolders)
+            loadDueSoonTodos(
+                appContext,
+                folderUri,
+                extraFolderUris,
+                settings.toTaskMarkers(),
+                settings.includeSubfolders,
+                TagDisplaySettings.decode(settings.tagDisplay),
+            )
         }
             .getOrElse { return false }
 
@@ -79,7 +88,7 @@ object DueReminderNotifier {
             payload = Payload(
                 totalCount = dueSoon.size,
                 nextDueDate = first.dueDate,
-                topTodoText = first.text,
+                topTodoText = first.displayText ?: first.text,
             ),
         )
         saveSentToday(appContext, signature)
@@ -150,18 +159,22 @@ object DueReminderNotifier {
         extraFolderUris: List<Uri>,
         markers: TaskMarkers,
         includeSubfolders: Boolean,
+        tagDisplay: TagDisplaySettings,
     ): List<DueTodo> {
         val today = LocalDate.now()
+        fun todosIn(uri: Uri, files: List<MarkdownEntry<Uri>>): List<DueTodo> {
+            if (files.isEmpty()) return emptyList()
+            val definitions = TaskReminderScheduler.loadTagDefinitions(context, uri)
+            return files.flatMap { file -> parseDueTodosFromFile(context, file, today, markers) }
+                .map { it.copy(displayText = TagDisplay.plainText(it.text, definitions, tagDisplay)) }
+        }
         // An extra folder that went missing must not hide the reminders of the others.
-        val extraFiles = extraFolderUris.flatMap { uri ->
-            runCatching { scanMarkdownTree(context, uri, includeSubfolders).files }.getOrDefault(emptyList())
+        val extraTodos = extraFolderUris.flatMap { uri ->
+            todosIn(uri, runCatching { scanMarkdownTree(context, uri, includeSubfolders).files }.getOrDefault(emptyList()))
         }
 
-        return (scanMarkdownTree(context, folderUri, includeSubfolders).files + extraFiles)
+        return (todosIn(folderUri, scanMarkdownTree(context, folderUri, includeSubfolders).files) + extraTodos)
             .asSequence()
-            .flatMap { file ->
-                parseDueTodosFromFile(context, file, today, markers).asSequence()
-            }
             .sortedWith(compareBy<DueTodo> { it.dueDate }.thenBy { it.text.lowercase() })
             .toList()
     }
@@ -227,6 +240,7 @@ object DueReminderNotifier {
         val lineIndex: Int,
         val text: String,
         val dueDate: LocalDate,
+        val displayText: String? = null,
     )
 
     private fun dueLabel(context: Context, dueDate: LocalDate): String {
