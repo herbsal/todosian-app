@@ -333,7 +333,7 @@
     <string name="keyword_editor_help_1">Ein Schlagwort ist ein Tag wie #5min im Aufgabentext. Du setzt es in der Aufgabe mit einem Tipp.</string>
     <string name="keyword_editor_help_2">Mehrere Tags können dasselbe Schlagwort meinen (Synonyme, z. B. #kurz, #5min). Die App schreibt das erste.</string>
     <string name="keyword_editor_help_3">In einer benannten Gruppe ist immer nur ein Schlagwort gesetzt, z. B. Aufwand: 5 Min oder 2 Std.</string>
-    <string name="keyword_editor_help_4">Alles liegt als Notiz im Ordner Todosian des Vaults. So wird es synchronisiert und lässt sich auch in Obsidian ändern.</string>
+    <string name="keyword_editor_help_4">Alles liegt als Notiz im Ordner Todosian des Vaults. Du kannst sie hier oder in Obsidian ändern: Die App ändert nur die Zeilen, die du bearbeitest.</string>
     <string name="keyword_editor_help_profile_1">Ein Profil ergänzt Erinnerungen für jede offene Aufgabe mit einem seiner Schlagwörter.</string>
     <string name="keyword_editor_help_profile_2">Die Aufgabe braucht ein Datum (fällig, sonst geplant, sonst Start). Ein ⏰ an der Aufgabe hat immer Vorrang.</string>
     <string name="keyword_editor_help_profile_3">Jedes Gerät wählt sein Profil pro Ordner selbst unter Einstellungen → Erinnerungsprofile.</string>
@@ -379,5 +379,18 @@
     <plurals name="keyword_editor_days_before">
         <item quantity="one">%1$d Tag vorher</item>
         <item quantity="other">%1$d Tage vorher</item>
+    </plurals>
+    <string name="keyword_editor_note_changed">Die Notiz wurde inzwischen geändert und neu geladen. Bitte noch einmal versuchen.</string>
+    <string name="keyword_editor_fix">Korrigieren</string>
+    <string name="keyword_editor_fix_line">Zeile korrigieren</string>
+    <string name="keyword_editor_line_number">Zeile %1$d</string>
+    <string name="keyword_editor_problem_no_tag">Kein Tag gefunden. Erwartet: - Name: #tag, #synonym</string>
+    <string name="keyword_editor_problem_unknown_text">Text ohne # wird ignoriert. Tags beginnen mit # und enthalten einen Buchstaben.</string>
+    <string name="keyword_editor_problem_no_time">Keine Uhrzeit erkannt. Erwartet: - 09:00 oder - 1 Tag vorher 18:00</string>
+    <string name="keyword_editor_problem_bad_repeat">Unbekannter Wert. Erwartet: - erneut: nie, stündlich oder täglich</string>
+    <string name="keyword_editor_problem_bad_heading">Überschrift ohne Tag, die Regeln darunter werden ignoriert. Erwartet: ## #tag</string>
+    <plurals name="keyword_editor_problems">
+        <item quantity="one">%1$d Zeile nicht verstanden</item>
+        <item quantity="other">%1$d Zeilen nicht verstanden</item>
     </plurals>
 </resources>

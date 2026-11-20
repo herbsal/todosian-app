@@ -24,7 +24,10 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -53,6 +56,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -62,13 +66,22 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.isotjs.todosian.R
 import com.isotjs.todosian.data.FileRepository
+import com.isotjs.todosian.data.NoteChangedException
 import com.isotjs.todosian.data.settings.ReminderRepeat
-import com.isotjs.todosian.notifications.KeywordRules
+import com.isotjs.todosian.notifications.ProfileNote
+import com.isotjs.todosian.notifications.ProfileNoteEdits
+import com.isotjs.todosian.notifications.ProfileNoteKeyword
 import com.isotjs.todosian.notifications.ProfileRule
-import com.isotjs.todosian.notifications.ReminderProfile
-import com.isotjs.todosian.utils.TagDefinitionWriter
+import com.isotjs.todosian.notifications.ReminderProfileParser
+import com.isotjs.todosian.utils.NoteLines
+import com.isotjs.todosian.utils.NoteProblem
+import com.isotjs.todosian.utils.NoteProblemKind
+import com.isotjs.todosian.utils.TagDefinitionParser
 import com.isotjs.todosian.utils.TagDefinitions
-import com.isotjs.todosian.utils.TagGroup
+import com.isotjs.todosian.utils.TagNote
+import com.isotjs.todosian.utils.TagNoteEdits
+import com.isotjs.todosian.utils.TagNoteGroup
+import com.isotjs.todosian.utils.TagNoteTerm
 import com.isotjs.todosian.utils.TagTerm
 import java.time.LocalTime
 import java.util.Locale
@@ -76,20 +89,22 @@ import kotlinx.coroutines.launch
 
 private data class EditorFolder(val uri: Uri, val name: String)
 
-/** Which small dialog of the editor is open. */
+/** Which small dialog of the editor is open. Each one keeps the note it was opened on. */
 private sealed interface EditorPrompt {
     data object NewGroup : EditorPrompt
-    data class RenameGroup(val index: Int) : EditorPrompt
-    data class Term(val groupIndex: Int, val termIndex: Int?) : EditorPrompt
+    data class RenameGroup(val note: TagNote, val group: TagNoteGroup) : EditorPrompt
+    data class Term(val note: TagNote, val group: TagNoteGroup?, val term: TagNoteTerm?) : EditorPrompt
     data object NewProfile : EditorPrompt
     data object AddKeyword : EditorPrompt
-    data class AddRule(val keywordIndex: Int) : EditorPrompt
+    data class AddRule(val note: ProfileNote, val keyword: ProfileNoteKeyword) : EditorPrompt
     data object DeleteProfile : EditorPrompt
+    data class FixProblem(val problem: NoteProblem, val inProfile: Boolean) : EditorPrompt
 }
 
 /**
- * Edits the keyword note and the reminder profiles of a folder. Every change is written to the
- * folder at once, so the notes stay the single source and sync to other devices.
+ * Edits the keyword note and the reminder profiles of a folder. Each change touches only the
+ * lines it concerns and is written at once, so the notes can also be edited in other apps and
+ * sync to other devices. Lines the app does not understand are listed in a warning.
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -100,7 +115,9 @@ internal fun KeywordEditorDialog(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val saveFailed = stringResource(R.string.keyword_editor_save_failed)
+    val noteChanged = stringResource(R.string.keyword_editor_note_changed)
     val noteTitle = stringResource(R.string.keyword_editor_note_title)
+    val german = LocalConfiguration.current.locales[0].language == "de"
 
     val folders by produceState<List<EditorFolder>?>(initialValue = null) {
         value = (listOfNotNull(fileRepository.getFolderUri()) + fileRepository.getExtraFolderUris()).distinct().map { uri ->
@@ -112,57 +129,77 @@ internal fun KeywordEditorDialog(
         if (folderUri == null) folderUri = folders?.firstOrNull()?.uri
     }
 
-    var definitions by remember { mutableStateOf<TagDefinitions?>(null) }
+    var tagLines by remember { mutableStateOf<List<String>?>(null) }
     var profileNames by remember { mutableStateOf<List<String>>(emptyList()) }
-    var openProfile by remember { mutableStateOf<ReminderProfile?>(null) }
+    var profileName by remember { mutableStateOf<String?>(null) }
+    var profileLines by remember { mutableStateOf<List<String>>(emptyList()) }
     var prompt by remember { mutableStateOf<EditorPrompt?>(null) }
     var showHelp by remember { mutableStateOf(false) }
 
+    val tagNote = remember(tagLines) { tagLines?.let { TagDefinitionParser.parseNote(it) } }
+    val profileNote = remember(profileName, profileLines) {
+        profileName?.let { ReminderProfileParser.parseNote(it, profileLines) }
+    }
+
     LaunchedEffect(folderUri) {
         val uri = folderUri ?: return@LaunchedEffect
-        definitions = null
-        openProfile = null
-        val loaded = fileRepository.getFolderTagDefinitions(uri)
-        definitions = loaded
+        tagLines = null
+        profileName = null
+        val lines = fileRepository.readTagNote(uri)
+        tagLines = lines
         profileNames = fileRepository.getReminderProfileNames(uri)
-        if (loaded.isEmpty) showHelp = true
+        if (TagDefinitionParser.parseNote(lines).definitions.isEmpty) showHelp = true
     }
 
-    fun reportFailure(result: Result<Unit>) {
-        if (result.isFailure) Toast.makeText(context, saveFailed, Toast.LENGTH_LONG).show()
+    fun report(error: Throwable) {
+        val message = if (error is NoteChangedException) noteChanged else saveFailed
+        Toast.makeText(context, message, Toast.LENGTH_LONG).show()
     }
 
-    fun saveDefinitions(updated: TagDefinitions) {
+    fun editTags(edit: (List<String>) -> List<String>?) {
         val uri = folderUri ?: return
-        definitions = updated
-        scope.launch { reportFailure(fileRepository.saveTagDefinitions(uri, updated, noteTitle)) }
-    }
-
-    fun saveProfile(updated: ReminderProfile) {
-        val uri = folderUri ?: return
-        openProfile = updated
         scope.launch {
-            val result = fileRepository.saveReminderProfile(uri, updated)
-            reportFailure(result)
-            if (result.isSuccess) profileNames = fileRepository.getReminderProfileNames(uri)
+            fileRepository.editTagNote(uri, noteTitle, edit)
+                .onSuccess { tagLines = it }
+                .onFailure {
+                    report(it)
+                    tagLines = fileRepository.readTagNote(uri)
+                }
         }
     }
 
-    val labelFor: (String) -> String = { tag -> definitions?.termFor(tag)?.label?.let { "$it ($tag)" } ?: tag }
+    fun editProfile(name: String, edit: (List<String>) -> List<String>?) {
+        val uri = folderUri ?: return
+        scope.launch {
+            fileRepository.editReminderProfile(uri, name, edit)
+                .onSuccess {
+                    profileName = name
+                    profileLines = it
+                    profileNames = fileRepository.getReminderProfileNames(uri)
+                }
+                .onFailure {
+                    report(it)
+                    fileRepository.readReminderProfile(uri, name)?.let { lines -> profileLines = lines }
+                }
+        }
+    }
+
+    val definitions = tagNote?.definitions ?: TagDefinitions.EMPTY
+    val labelFor: (String) -> String = { tag -> definitions.termFor(tag)?.label?.let { "$it ($tag)" } ?: tag }
 
     Dialog(
-        onDismissRequest = { if (openProfile != null) openProfile = null else onDismiss() },
+        onDismissRequest = { if (profileName != null) profileName = null else onDismiss() },
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
         Scaffold(
             topBar = {
                 TopAppBar(
                     title = {
-                        Text(text = openProfile?.name ?: stringResource(R.string.keyword_editor_title))
+                        Text(text = profileName ?: stringResource(R.string.keyword_editor_title))
                     },
                     navigationIcon = {
-                        if (openProfile != null) {
-                            IconButton(onClick = { openProfile = null }) {
+                        if (profileName != null) {
+                            IconButton(onClick = { profileName = null }) {
                                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.keyword_editor_back))
                             }
                         } else {
@@ -172,7 +209,7 @@ internal fun KeywordEditorDialog(
                         }
                     },
                     actions = {
-                        if (openProfile != null) {
+                        if (profileName != null) {
                             IconButton(onClick = { prompt = EditorPrompt.DeleteProfile }) {
                                 Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.keyword_editor_delete_profile))
                             }
@@ -194,11 +231,11 @@ internal fun KeywordEditorDialog(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 if (showHelp) {
-                    HelpCard(profileHelp = openProfile != null)
+                    HelpCard(profileHelp = profileName != null)
                 }
 
                 val loadedFolders = folders
-                if (loadedFolders != null && loadedFolders.size > 1 && openProfile == null) {
+                if (loadedFolders != null && loadedFolders.size > 1 && profileName == null) {
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         loadedFolders.forEach { folder ->
                             FilterChip(
@@ -213,23 +250,39 @@ internal fun KeywordEditorDialog(
                     Text(text = stringResource(R.string.keyword_editor_no_folder))
                 }
 
-                val defs = definitions
-                val profile = openProfile
+                val note = tagNote
+                val profile = profileNote
                 when {
-                    folderUri != null && defs == null -> CircularProgressIndicator(modifier = Modifier.size(24.dp))
-                    defs == null -> Unit
-                    profile != null -> ProfileSection(
-                        profile = profile,
-                        labelFor = labelFor,
-                        onChange = ::saveProfile,
-                        onAddKeyword = { prompt = EditorPrompt.AddKeyword },
-                        onAddRule = { index -> prompt = EditorPrompt.AddRule(index) },
-                    )
+                    folderUri != null && note == null -> CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                    note == null -> Unit
+                    profile != null -> {
+                        ProblemCard(
+                            problems = profile.problems,
+                            onFix = { prompt = EditorPrompt.FixProblem(it, inProfile = true) },
+                            onDelete = { problem -> editProfile(profile.name) { NoteLines.remove(it, listOf(problem.line to problem.text)) } },
+                        )
+                        ProfileSection(
+                            note = profile,
+                            labelFor = labelFor,
+                            onRemoveKeyword = { keyword -> editProfile(profile.name) { ProfileNoteEdits.removeKeyword(it, profile, keyword) } },
+                            onRemoveRule = { rule -> editProfile(profile.name) { ProfileNoteEdits.removeRule(it, profile, rule) } },
+                            onSetRepeat = { keyword, repeat ->
+                                editProfile(profile.name) { ProfileNoteEdits.setRepeat(it, profile, keyword, repeat, german) }
+                            },
+                            onAddKeyword = { prompt = EditorPrompt.AddKeyword },
+                            onAddRule = { keyword -> prompt = EditorPrompt.AddRule(profile, keyword) },
+                        )
+                    }
                     else -> {
+                        ProblemCard(
+                            problems = note.problems,
+                            onFix = { prompt = EditorPrompt.FixProblem(it, inProfile = false) },
+                            onDelete = { problem -> editTags { NoteLines.remove(it, listOf(problem.line to problem.text)) } },
+                        )
                         KeywordSection(
-                            definitions = defs,
-                            onEditGroup = { prompt = EditorPrompt.RenameGroup(it) },
-                            onEditTerm = { group, term -> prompt = EditorPrompt.Term(group, term) },
+                            note = note,
+                            onEditGroup = { prompt = EditorPrompt.RenameGroup(note, it) },
+                            onEditTerm = { group, term -> prompt = EditorPrompt.Term(note, group, term) },
                             onAddGroup = { prompt = EditorPrompt.NewGroup },
                         )
                         HorizontalDivider()
@@ -249,7 +302,8 @@ internal fun KeywordEditorDialog(
                                 modifier = Modifier.clickable {
                                     val uri = folderUri ?: return@clickable
                                     scope.launch {
-                                        openProfile = fileRepository.getReminderProfile(uri, name) ?: ReminderProfile(name, emptyList())
+                                        profileLines = fileRepository.readReminderProfile(uri, name).orEmpty()
+                                        profileName = name
                                     }
                                 },
                             )
@@ -264,7 +318,6 @@ internal fun KeywordEditorDialog(
         }
     }
 
-    val defs = definitions ?: TagDefinitions.EMPTY
     when (val current = prompt) {
         null -> Unit
         EditorPrompt.NewGroup -> TextPrompt(
@@ -274,55 +327,42 @@ internal fun KeywordEditorDialog(
             onDismiss = { prompt = null },
             onConfirm = { name ->
                 prompt = null
-                saveDefinitions(TagDefinitions(defs.groups + TagGroup(name, emptyList())))
+                editTags { TagNoteEdits.addGroup(it, name.trim()) }
             },
         )
-        is EditorPrompt.RenameGroup -> {
-            val group = defs.groups.getOrNull(current.index)
-            TextPrompt(
-                title = stringResource(R.string.keyword_editor_edit_group),
-                label = stringResource(R.string.keyword_editor_group_name),
-                initial = group?.name.orEmpty(),
-                onDismiss = { prompt = null },
-                onConfirm = { name ->
-                    prompt = null
-                    saveDefinitions(TagDefinitions(defs.groups.mapIndexed { i, g -> if (i == current.index) g.copy(name = name) else g }))
-                },
-                onDelete = {
-                    prompt = null
-                    saveDefinitions(TagDefinitions(defs.groups.filterIndexed { i, _ -> i != current.index }))
-                },
-            )
-        }
-        is EditorPrompt.Term -> {
-            val group = defs.groups.getOrNull(current.groupIndex)
-            val term = current.termIndex?.let { group?.terms?.getOrNull(it) }
-            TermPrompt(
-                term = term,
-                onDismiss = { prompt = null },
-                onConfirm = { updated ->
-                    prompt = null
-                    val groups = defs.groups.toMutableList()
-                    if (group == null) {
-                        groups.add(0, TagGroup(null, listOf(updated)))
-                    } else {
-                        val terms = group.terms.toMutableList()
-                        if (current.termIndex == null) terms.add(updated) else terms[current.termIndex] = updated
-                        groups[current.groupIndex] = group.copy(terms = terms)
-                    }
-                    saveDefinitions(TagDefinitions(groups))
-                },
-                onDelete = if (term != null && group != null) {
-                    {
-                        prompt = null
-                        val terms = group.terms.filterIndexed { i, _ -> i != current.termIndex }
-                        saveDefinitions(TagDefinitions(defs.groups.mapIndexed { i, g -> if (i == current.groupIndex) g.copy(terms = terms) else g }))
-                    }
+        is EditorPrompt.RenameGroup -> TextPrompt(
+            title = stringResource(R.string.keyword_editor_edit_group),
+            label = stringResource(R.string.keyword_editor_group_name),
+            initial = current.group.name.orEmpty(),
+            onDismiss = { prompt = null },
+            onConfirm = { name ->
+                prompt = null
+                editTags { TagNoteEdits.renameGroup(it, current.note, current.group, name.trim()) }
+            },
+            onDelete = {
+                prompt = null
+                editTags { TagNoteEdits.removeGroup(it, current.note, current.group) }
+            },
+        )
+        is EditorPrompt.Term -> TermPrompt(
+            term = current.term?.term,
+            onDismiss = { prompt = null },
+            onConfirm = { updated ->
+                prompt = null
+                val term = current.term
+                if (term == null) {
+                    editTags { TagNoteEdits.addTerm(it, current.note, current.group, updated) }
                 } else {
-                    null
-                },
-            )
-        }
+                    editTags { TagNoteEdits.replaceTerm(it, current.note, term, updated) }
+                }
+            },
+            onDelete = current.term?.let { term ->
+                {
+                    prompt = null
+                    editTags { TagNoteEdits.removeTerm(it, current.note, term) }
+                }
+            },
+        )
         EditorPrompt.NewProfile -> TextPrompt(
             title = stringResource(R.string.keyword_editor_add_profile),
             label = stringResource(R.string.keyword_editor_profile_name),
@@ -331,18 +371,18 @@ internal fun KeywordEditorDialog(
             onConfirm = { input ->
                 prompt = null
                 val name = input.replace(Regex("""[\\/:*?"<>|#]"""), "").trim()
-                if (name.isNotEmpty()) saveProfile(ReminderProfile(name, emptyList()))
+                if (name.isNotEmpty()) editProfile(name) { it }
             },
         )
         EditorPrompt.AddKeyword -> {
-            val profile = openProfile
+            val profile = profileNote
             KeywordPrompt(
-                definitions = defs,
+                definitions = definitions,
                 used = profile?.keywords?.map { it.tag }.orEmpty(),
                 onDismiss = { prompt = null },
                 onPick = { tag ->
                     prompt = null
-                    if (profile != null) saveProfile(profile.copy(keywords = profile.keywords + KeywordRules(tag, emptyList(), null)))
+                    if (profile != null) editProfile(profile.name) { ProfileNoteEdits.addKeyword(it, tag) }
                 },
             )
         }
@@ -353,13 +393,8 @@ internal fun KeywordEditorDialog(
                 TimePickerDialog(
                     context,
                     { _, hour, minute ->
-                        val latest = openProfile
-                        if (latest != null) {
-                            val keywords = latest.keywords.mapIndexed { i, k ->
-                                if (i == current.keywordIndex) k.copy(rules = (k.rules + ProfileRule(days, LocalTime.of(hour, minute))).distinct()) else k
-                            }
-                            saveProfile(latest.copy(keywords = keywords))
-                        }
+                        val rule = ProfileRule(days, LocalTime.of(hour, minute))
+                        editProfile(current.note.name) { ProfileNoteEdits.addRule(it, current.note, current.keyword, rule, german) }
                     },
                     if (days == 0) 9 else 18,
                     0,
@@ -367,19 +402,36 @@ internal fun KeywordEditorDialog(
                 ).show()
             },
         )
+        is EditorPrompt.FixProblem -> TextPrompt(
+            title = stringResource(R.string.keyword_editor_fix_line),
+            label = stringResource(R.string.keyword_editor_line_number, current.problem.line + 1),
+            initial = current.problem.text,
+            onDismiss = { prompt = null },
+            onConfirm = { text ->
+                prompt = null
+                val problem = current.problem
+                val profile = profileNote
+                if (current.inProfile && profile != null) {
+                    editProfile(profile.name) { NoteLines.replace(it, problem.line, problem.text, text) }
+                } else {
+                    editTags { NoteLines.replace(it, problem.line, problem.text, text) }
+                }
+            },
+            supportingText = problemHint(current.problem.kind),
+        )
         EditorPrompt.DeleteProfile -> AlertDialog(
             onDismissRequest = { prompt = null },
             title = { Text(text = stringResource(R.string.keyword_editor_delete_profile)) },
-            text = { Text(text = stringResource(R.string.keyword_editor_delete_profile_text, openProfile?.name.orEmpty())) },
+            text = { Text(text = stringResource(R.string.keyword_editor_delete_profile_text, profileName.orEmpty())) },
             confirmButton = {
                 TextButton(onClick = {
                     prompt = null
                     val uri = folderUri
-                    val name = openProfile?.name
-                    openProfile = null
+                    val name = profileName
+                    profileName = null
                     if (uri != null && name != null) {
                         scope.launch {
-                            reportFailure(fileRepository.deleteReminderProfile(uri, name))
+                            fileRepository.deleteReminderProfile(uri, name).onFailure { report(it) }
                             profileNames = fileRepository.getReminderProfileNames(uri)
                         }
                     }
@@ -418,23 +470,76 @@ private fun HelpCard(profileHelp: Boolean) {
     }
 }
 
+/** Lists the lines the app did not understand, each with Fix and Delete. */
+@Composable
+private fun ProblemCard(
+    problems: List<NoteProblem>,
+    onFix: (NoteProblem) -> Unit,
+    onDelete: (NoteProblem) -> Unit,
+) {
+    if (problems.isEmpty()) return
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.errorContainer,
+            contentColor = MaterialTheme.colorScheme.onErrorContainer,
+        ),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Filled.Warning, contentDescription = null)
+                Text(
+                    text = pluralStringResource(R.plurals.keyword_editor_problems, problems.size, problems.size),
+                    style = MaterialTheme.typography.titleSmall,
+                    modifier = Modifier.padding(start = 8.dp),
+                )
+            }
+            problems.forEach { problem ->
+                Column {
+                    Text(
+                        text = stringResource(R.string.keyword_editor_line_number, problem.line + 1) + ": " + problem.text.trim(),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Text(text = problemHint(problem.kind), style = MaterialTheme.typography.bodySmall)
+                    Row {
+                        TextButton(onClick = { onFix(problem) }) { Text(text = stringResource(R.string.keyword_editor_fix)) }
+                        TextButton(onClick = { onDelete(problem) }) { Text(text = stringResource(R.string.keyword_editor_delete)) }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun problemHint(kind: NoteProblemKind): String = stringResource(
+    when (kind) {
+        NoteProblemKind.NO_TAG -> R.string.keyword_editor_problem_no_tag
+        NoteProblemKind.UNKNOWN_TEXT -> R.string.keyword_editor_problem_unknown_text
+        NoteProblemKind.NO_TIME -> R.string.keyword_editor_problem_no_time
+        NoteProblemKind.BAD_REPEAT -> R.string.keyword_editor_problem_bad_repeat
+        NoteProblemKind.BAD_HEADING -> R.string.keyword_editor_problem_bad_heading
+    },
+)
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun KeywordSection(
-    definitions: TagDefinitions,
-    onEditGroup: (Int) -> Unit,
-    onEditTerm: (groupIndex: Int, termIndex: Int?) -> Unit,
+    note: TagNote,
+    onEditGroup: (TagNoteGroup) -> Unit,
+    onEditTerm: (group: TagNoteGroup?, term: TagNoteTerm?) -> Unit,
     onAddGroup: () -> Unit,
 ) {
     Text(text = stringResource(R.string.keyword_editor_keywords), style = MaterialTheme.typography.titleMedium)
-    if (definitions.groups.none { it.name == null }) {
-        // Keywords without a group: add one to a fresh ungrouped block.
-        TextButton(onClick = { onEditTerm(-1, null) }) {
+    val groups = note.editableGroups
+    if (groups.none { it.name == null }) {
+        // No ungrouped keywords yet: the first one goes below the note's title.
+        TextButton(onClick = { onEditTerm(null, null) }) {
             Icon(Icons.Filled.Add, contentDescription = null)
             Text(text = stringResource(R.string.keyword_editor_add_keyword), modifier = Modifier.padding(start = 8.dp))
         }
     }
-    definitions.groups.forEachIndexed { groupIndex, group ->
+    groups.forEach { group ->
         ElevatedCard(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -445,29 +550,29 @@ private fun KeywordSection(
                         )
                         Text(
                             text = stringResource(
-                                if (group.exclusive) R.string.keyword_editor_group_exclusive else R.string.keyword_editor_group_free,
+                                if (group.name != null) R.string.keyword_editor_group_exclusive else R.string.keyword_editor_group_free,
                             ),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                     if (group.name != null) {
-                        IconButton(onClick = { onEditGroup(groupIndex) }) {
+                        IconButton(onClick = { onEditGroup(group) }) {
                             Icon(Icons.Filled.Edit, contentDescription = stringResource(R.string.keyword_editor_edit_group))
                         }
                     }
                 }
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    group.terms.forEachIndexed { termIndex, term ->
+                    group.terms.forEach { term ->
                         InputChip(
                             selected = false,
-                            onClick = { onEditTerm(groupIndex, termIndex) },
-                            label = { Text(term.label) },
+                            onClick = { onEditTerm(group, term) },
+                            label = { Text(term.term.label) },
                         )
                     }
                     InputChip(
                         selected = false,
-                        onClick = { onEditTerm(groupIndex, null) },
+                        onClick = { onEditTerm(group, null) },
                         label = { Text(stringResource(R.string.keyword_editor_add_keyword)) },
                         leadingIcon = { Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(InputChipDefaults.IconSize)) },
                     )
@@ -484,50 +589,49 @@ private fun KeywordSection(
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ProfileSection(
-    profile: ReminderProfile,
+    note: ProfileNote,
     labelFor: (String) -> String,
-    onChange: (ReminderProfile) -> Unit,
+    onRemoveKeyword: (ProfileNoteKeyword) -> Unit,
+    onRemoveRule: (com.isotjs.todosian.notifications.ProfileNoteRule) -> Unit,
+    onSetRepeat: (ProfileNoteKeyword, ReminderRepeat?) -> Unit,
     onAddKeyword: () -> Unit,
-    onAddRule: (Int) -> Unit,
+    onAddRule: (ProfileNoteKeyword) -> Unit,
 ) {
-    if (profile.keywords.isEmpty()) {
+    if (note.keywords.isEmpty()) {
         Text(
             text = stringResource(R.string.keyword_editor_profile_empty),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
-    profile.keywords.forEachIndexed { index, keyword ->
-        fun update(transform: (KeywordRules) -> KeywordRules?) {
-            val keywords = profile.keywords.mapIndexedNotNull { i, k -> if (i == index) transform(k) else k }
-            onChange(profile.copy(keywords = keywords))
-        }
+    note.keywords.forEach { keyword ->
         ElevatedCard(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(text = labelFor(keyword.tag), style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
-                    IconButton(onClick = { update { null } }) {
+                    IconButton(onClick = { onRemoveKeyword(keyword) }) {
                         Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.keyword_editor_remove_keyword))
                     }
                 }
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    keyword.rules.sortedWith(compareByDescending<ProfileRule> { it.daysBefore }.thenBy { it.time }).forEach { rule ->
-                        InputChip(
-                            selected = false,
-                            onClick = { update { k -> k.copy(rules = k.rules - rule) } },
-                            label = { Text(ruleLabel(rule)) },
-                            trailingIcon = {
-                                Icon(
-                                    Icons.Filled.Close,
-                                    contentDescription = stringResource(R.string.keyword_editor_remove_rule),
-                                    modifier = Modifier.size(InputChipDefaults.IconSize),
-                                )
-                            },
-                        )
-                    }
+                    keyword.rules.sortedWith(compareByDescending<com.isotjs.todosian.notifications.ProfileNoteRule> { it.rule.daysBefore }.thenBy { it.rule.time })
+                        .forEach { rule ->
+                            InputChip(
+                                selected = false,
+                                onClick = { onRemoveRule(rule) },
+                                label = { Text(ruleLabel(rule.rule)) },
+                                trailingIcon = {
+                                    Icon(
+                                        Icons.Filled.Close,
+                                        contentDescription = stringResource(R.string.keyword_editor_remove_rule),
+                                        modifier = Modifier.size(InputChipDefaults.IconSize),
+                                    )
+                                },
+                            )
+                        }
                     InputChip(
                         selected = false,
-                        onClick = { onAddRule(index) },
+                        onClick = { onAddRule(keyword) },
                         label = { Text(stringResource(R.string.keyword_editor_add_rule)) },
                         leadingIcon = { Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(InputChipDefaults.IconSize)) },
                     )
@@ -541,7 +645,7 @@ private fun ProfileSection(
                     listOf<ReminderRepeat?>(null, ReminderRepeat.OFF, ReminderRepeat.HOURLY, ReminderRepeat.DAILY).forEach { option ->
                         FilterChip(
                             selected = keyword.repeat == option,
-                            onClick = { update { k -> k.copy(repeat = option) } },
+                            onClick = { if (keyword.repeat != option) onSetRepeat(keyword, option) },
                             label = { Text(repeatLabel(option)) },
                         )
                     }
@@ -580,16 +684,23 @@ private fun TextPrompt(
     onDismiss: () -> Unit,
     onConfirm: (String) -> Unit,
     onDelete: (() -> Unit)? = null,
+    supportingText: String? = null,
 ) {
     var text by remember { mutableStateOf(initial) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(text = title) },
         text = {
-            OutlinedTextField(value = text, onValueChange = { text = it }, label = { Text(label) }, singleLine = true)
+            OutlinedTextField(
+                value = text,
+                onValueChange = { text = it },
+                label = { Text(label) },
+                singleLine = true,
+                supportingText = supportingText?.let { hint -> { Text(hint) } },
+            )
         },
         confirmButton = {
-            TextButton(onClick = { onConfirm(text.trim()) }, enabled = text.isNotBlank()) {
+            TextButton(onClick = { onConfirm(text.trimEnd()) }, enabled = text.isNotBlank()) {
                 Text(text = stringResource(R.string.action_ok))
             }
         },
@@ -613,7 +724,7 @@ private fun TermPrompt(
 ) {
     var label by remember { mutableStateOf(term?.label.orEmpty()) }
     var tags by remember { mutableStateOf(term?.tags?.joinToString(", ").orEmpty()) }
-    val parsed = TagDefinitionWriter.parseTagInput(tags)
+    val parsed = TagNoteEdits.parseTagInput(tags)
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
@@ -665,7 +776,7 @@ private fun KeywordPrompt(
 ) {
     val terms = definitions.groups.flatMap { it.terms }.filter { term -> used.none { term.matches(it) } }
     var custom by remember { mutableStateOf("") }
-    val customTag = TagDefinitionWriter.parseTagInput(custom).firstOrNull()
+    val customTag = TagNoteEdits.parseTagInput(custom).firstOrNull()
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(text = stringResource(R.string.keyword_editor_add_profile_keyword)) },
