@@ -50,6 +50,14 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".notifications.SnoozeActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:taskAffinity=""
+            android:theme="@style/Theme.Todosian.Translucent" />
+
         <receiver
             android:name=".notifications.DueReminderReceiver"
             android:enabled="true"

@@ -45,8 +45,14 @@ class TaskReminderReceiver : BroadcastReceiver() {
                 when (intent.action) {
                     TaskReminderScheduler.ACTION_FIRE -> showReminder(context, intent)
                     ACTION_DONE -> completeTodo(context, intent)
+                    ACTION_SNOOZE_15 -> postpone(context, intent) { now, _ ->
+                        now.plusMinutes(15).truncatedTo(ChronoUnit.MINUTES)
+                    }
                     ACTION_LATER -> postpone(context, intent) { now, _ ->
                         now.plusHours(1).truncatedTo(ChronoUnit.MINUTES)
+                    }
+                    ACTION_TOMORROW_MORNING -> postpone(context, intent) { _, _ ->
+                        LocalDate.now().plusDays(1).atTime(MORNING)
                     }
                     ACTION_TOMORROW -> postpone(context, intent) { _, reminder ->
                         LocalDate.now().plusDays(1).atTime(reminder.toLocalTime())
@@ -144,8 +150,9 @@ class TaskReminderReceiver : BroadcastReceiver() {
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .addAction(0, appContext.getString(R.string.notification_task_reminder_done), actionIntent(appContext, ACTION_DONE, target))
-            .addAction(0, appContext.getString(R.string.notification_task_reminder_later), actionIntent(appContext, ACTION_LATER, target))
-            .addAction(0, appContext.getString(R.string.notification_task_reminder_tomorrow), actionIntent(appContext, ACTION_TOMORROW, target))
+            .addAction(0, appContext.getString(R.string.notification_task_reminder_snooze_15), actionIntent(appContext, ACTION_SNOOZE_15, target))
+            // Android shows at most three actions, so the other choices open a small dialog.
+            .addAction(0, appContext.getString(R.string.notification_task_reminder_later_choice), laterChoiceIntent(appContext, target))
             .build()
 
         runCatching {
@@ -155,20 +162,34 @@ class TaskReminderReceiver : BroadcastReceiver() {
         }
     }
 
+    private fun targetExtras(target: Target): android.os.Bundle =
+        TaskReminderScheduler.reminderExtras(
+            key = target.key,
+            fileUri = target.fileUri,
+            text = target.text,
+            reminder = target.reminder,
+            lineIndex = target.lineIndex,
+        ).apply { putBoolean(TaskReminderScheduler.EXTRA_FROM_PROFILE, target.fromProfile) }
+
+    private fun laterChoiceIntent(context: Context, target: Target): PendingIntent {
+        val intent = Intent(context, SnoozeActivity::class.java).apply {
+            data = TaskReminderScheduler.alarmUri(target.key)
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_HISTORY
+            putExtras(targetExtras(target))
+        }
+        return PendingIntent.getActivity(
+            context,
+            0,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+    }
+
     private fun actionIntent(context: Context, action: String, target: Target): PendingIntent {
         val intent = Intent(context, TaskReminderReceiver::class.java).apply {
             this.action = action
             data = TaskReminderScheduler.alarmUri(target.key)
-            putExtras(
-                TaskReminderScheduler.reminderExtras(
-                    key = target.key,
-                    fileUri = target.fileUri,
-                    text = target.text,
-                    reminder = target.reminder,
-                    lineIndex = target.lineIndex,
-                ),
-            )
-            putExtra(TaskReminderScheduler.EXTRA_FROM_PROFILE, target.fromProfile)
+            putExtras(targetExtras(target))
         }
         return PendingIntent.getBroadcast(
             context,
@@ -241,5 +262,10 @@ class TaskReminderReceiver : BroadcastReceiver() {
         const val ACTION_DONE = "com.isotjs.todosian.action.TASK_REMINDER_DONE"
         const val ACTION_LATER = "com.isotjs.todosian.action.TASK_REMINDER_LATER"
         const val ACTION_TOMORROW = "com.isotjs.todosian.action.TASK_REMINDER_TOMORROW"
+        const val ACTION_SNOOZE_15 = "com.isotjs.todosian.action.TASK_REMINDER_SNOOZE_15"
+        const val ACTION_TOMORROW_MORNING = "com.isotjs.todosian.action.TASK_REMINDER_TOMORROW_MORNING"
+
+        /** "Tomorrow morning" in the Later choice. */
+        val MORNING: java.time.LocalTime = java.time.LocalTime.of(8, 0)
     }
 }
