@@ -1,0 +1,56 @@
+package com.isotjs.todosian.ui.components
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import com.isotjs.todosian.utils.TagDefinitions
+import com.isotjs.todosian.utils.TagText
+
+/**
+ * One chip per keyword of the folder's keyword note. Tapping sets or clears the keyword's tag in
+ * [text]; in a named group (e.g. "Effort") only one keyword is set at a time.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun TagQuickPicker(
+    definitions: TagDefinitions,
+    text: String,
+    onTextChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    if (definitions.isEmpty) return
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        definitions.groups.forEach { group ->
+            if (group.terms.isEmpty()) return@forEach
+            group.name?.let { name ->
+                Text(
+                    text = name,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                group.terms.forEach { term ->
+                    FilterChip(
+                        selected = TagText.hasTerm(text, term),
+                        onClick = { onTextChange(TagText.toggle(text, group, term)) },
+                        label = { Text(text = term.label) },
+                    )
+                }
+            }
+        }
+    }
+}

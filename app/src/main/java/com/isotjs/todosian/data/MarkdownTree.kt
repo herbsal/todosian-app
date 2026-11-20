@@ -11,6 +11,23 @@ internal data class MarkdownEntry<T>(val ref: T, val relativePath: String)
 
 internal data class MarkdownTree<T>(val files: List<MarkdownEntry<T>>, val folderIds: List<String>)
 
+/** Folder at the root of a notes folder that holds Todosian's own notes (keywords, reminder profiles). */
+internal const val CONFIG_FOLDER_NAME = "Todosian"
+
+/** Accepted names of the keyword note inside [CONFIG_FOLDER_NAME]. */
+internal val TAG_NOTE_NAMES = listOf("Tags.md", "Schlagwörter.md", "Schlagwoerter.md")
+
+/**
+ * Picks the folder a document belongs to: the tree whose document id is the longest prefix of
+ * [documentId] (`primary:Vault` holds `primary:Vault/Inbox.md`). Null when none does.
+ */
+internal fun treeIdForDocument(documentId: String, treeIds: List<String>): String? =
+    treeIds.filter { treeId ->
+        documentId == treeId ||
+            (treeId.endsWith(":") || treeId.endsWith("/")) && documentId.startsWith(treeId) ||
+            documentId.startsWith("$treeId/")
+    }.maxByOrNull { it.length }
+
 internal fun isMarkdownNoteName(name: String): Boolean =
     name.endsWith(".md", ignoreCase = true) && !name.contains("sync-conflict", ignoreCase = true)
 
@@ -31,7 +48,8 @@ internal fun walkMarkdownTree(
         folderIds.add(folderId)
         for (child in listChildren(folderId)) {
             if (child.isDirectory) {
-                if (recursive && !child.name.startsWith('.')) pending.add(child.id to "$prefix${child.name}/")
+                val isConfig = prefix.isEmpty() && child.name.equals(CONFIG_FOLDER_NAME, ignoreCase = true)
+                if (recursive && !child.name.startsWith('.') && !isConfig) pending.add(child.id to "$prefix${child.name}/")
             } else if (isMarkdownNoteName(child.name)) {
                 files.add(MarkdownEntry(child.id, prefix + child.name.dropLast(MD_SUFFIX_LENGTH)))
             }
@@ -64,6 +82,37 @@ internal fun scanMarkdownTree(context: Context, treeUri: Uri, recursive: Boolean
         files = tree.files.map { MarkdownEntry(DocumentsContract.buildDocumentUriUsingTree(treeUri, it.ref), it.relativePath) },
         folderIds = tree.folderIds,
     )
+}
+
+/** The keyword note of the folder [treeUri], or null if it has none. */
+internal fun findTagNote(context: Context, treeUri: Uri): Uri? {
+    val rootId = DocumentsContract.getTreeDocumentId(treeUri)
+    val configId = listChildren(context, treeUri, rootId)
+        .firstOrNull { it.isDirectory && it.name.equals(CONFIG_FOLDER_NAME, ignoreCase = true) }
+        ?.id ?: return null
+    val children = listChildren(context, treeUri, configId).filter { !it.isDirectory }
+    val note = TAG_NOTE_NAMES.firstNotNullOfOrNull { wanted ->
+        children.firstOrNull { it.name.equals(wanted, ignoreCase = true) }
+    } ?: return null
+    return DocumentsContract.buildDocumentUriUsingTree(treeUri, note.id)
+}
+
+private fun listChildren(context: Context, treeUri: Uri, folderId: String): List<DocumentEntry> {
+    val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, folderId)
+    return context.contentResolver.query(childrenUri, PROJECTION, null, null, null)?.use { cursor ->
+        buildList {
+            while (cursor.moveToNext()) {
+                val name = cursor.getString(1) ?: continue
+                add(
+                    DocumentEntry(
+                        id = cursor.getString(0),
+                        name = name,
+                        isDirectory = cursor.getString(2) == DocumentsContract.Document.MIME_TYPE_DIR,
+                    ),
+                )
+            }
+        }
+    }.orEmpty()
 }
 
 private const val MD_SUFFIX_LENGTH = 3

@@ -41,6 +41,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -59,7 +60,9 @@ import com.isotjs.todosian.data.FileRepository
 import com.isotjs.todosian.data.settings.AppSettings
 import com.isotjs.todosian.data.settings.AppSettingsRepository
 import com.isotjs.todosian.data.settings.DailyFocusMode
+import com.isotjs.todosian.ui.components.TagQuickPicker
 import com.isotjs.todosian.ui.components.TasksMetaEditor
+import com.isotjs.todosian.utils.TagDefinitions
 import com.isotjs.todosian.ui.components.TodoRow
 import com.isotjs.todosian.ui.components.TodoSheetMode
 import com.isotjs.todosian.ui.components.TodosianDimens
@@ -115,6 +118,9 @@ fun DailyFocusScreen(
     var sheetText by remember { mutableStateOf("") }
     var sheetMeta by remember { mutableStateOf(MarkdownParser.TasksMeta()) }
     var sheetTask by remember { mutableStateOf<DailyFocusTask?>(null) }
+    val sheetTagDefinitions by produceState(TagDefinitions.EMPTY, sheetTask?.categoryUri) {
+        value = sheetTask?.categoryUri?.let { fileRepository.getTagDefinitions(it) } ?: TagDefinitions.EMPTY
+    }
     var deleteTodoTarget by remember { mutableStateOf<DailyFocusTask?>(null) }
 
     fun dismissSheet() {
@@ -160,6 +166,15 @@ fun DailyFocusScreen(
                             }
                         },
                 )
+
+                if (!sheetTagDefinitions.isEmpty) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    TagQuickPicker(
+                        definitions = sheetTagDefinitions,
+                        text = sheetText,
+                        onTextChange = { sheetText = it },
+                    )
+                }
 
                 if (settings.enableTasksPluginSupport) {
                     Spacer(modifier = Modifier.height(12.dp))

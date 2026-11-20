@@ -33,6 +33,8 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import com.isotjs.todosian.notifications.TaskReminderScheduler
 import com.isotjs.todosian.sync.FolderWatchScheduler
+import com.isotjs.todosian.utils.TagDefinitionParser
+import com.isotjs.todosian.utils.TagDefinitions
 import com.isotjs.todosian.ui.widget.WidgetRefresher
 import java.io.FileNotFoundException
 import java.io.FileOutputStream
@@ -143,6 +145,12 @@ interface FileRepository {
 
     /** Changes to the notes of the main folder and every extra folder. */
     fun observeAllMarkdownFilesChanges(): Flow<Unit>
+
+    /**
+     * The keywords defined in `Todosian/Tags.md` (or `Schlagwörter.md`) of the folder that holds
+     * [noteUri]; the main folder's when [noteUri] is null. Empty when there is no such note.
+     */
+    suspend fun getTagDefinitions(noteUri: Uri?): TagDefinitions
 }
 
 class SafFileRepository(
@@ -521,6 +529,23 @@ class SafFileRepository(
             uris = listOf(documentUri),
             notifyDescendants = false,
         )
+    }
+
+    override suspend fun getTagDefinitions(noteUri: Uri?): TagDefinitions = withContext(Dispatchers.IO) {
+        val folders = allFolderUris()
+        val folder = noteUri
+            ?.let { uri -> runCatching { DocumentsContract.getDocumentId(uri) }.getOrNull() }
+            ?.let { documentId ->
+                val byTreeId = folders.associateBy { runCatching { DocumentsContract.getTreeDocumentId(it) }.getOrNull().orEmpty() }
+                treeIdForDocument(documentId, byTreeId.keys.filter { it.isNotEmpty() }.toList())?.let(byTreeId::get)
+            }
+            ?: getFolderUri()
+            ?: return@withContext TagDefinitions.EMPTY
+        runCatching {
+            val note = findTagNote(appContext, folder) ?: return@runCatching TagDefinitions.EMPTY
+            TagDefinitionParser.parse(readLinesInternal(note))
+        }.onFailure { Log.w(TAG, "Reading the keyword note failed", it) }
+            .getOrDefault(TagDefinitions.EMPTY)
     }
 
     override fun observeAllMarkdownFilesChanges(): Flow<Unit> {

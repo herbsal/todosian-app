@@ -14,10 +14,12 @@ import com.isotjs.todosian.ui.components.awaitMinimumPullRefreshDuration
 import com.isotjs.todosian.utils.MarkdownParser
 import com.isotjs.todosian.utils.TaskMarkers
 import kotlinx.coroutines.flow.MutableSharedFlow
+import com.isotjs.todosian.utils.TagDefinitions
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.debounce
@@ -36,6 +38,7 @@ data class CategoryUiState(
     val lines: List<String> = emptyList(),
     val moveTargets: List<MoveTarget>? = null,
     val isLoadingMoveTargets: Boolean = false,
+    val tagDefinitions: TagDefinitions = TagDefinitions.EMPTY,
 )
 
 data class MoveTarget(
@@ -82,6 +85,11 @@ class CategoryViewModel(
 
     fun refreshFromDisk(showLoading: Boolean = false, pullRefresh: Boolean = false) {
         if (pullRefresh && _uiState.value.isRefreshing) return
+        viewModelScope.launch {
+            // The keyword note may have changed too (edited in Obsidian or synced).
+            val tags = fileRepository.getTagDefinitions(categoryUri)
+            _uiState.update { it.copy(tagDefinitions = tags) }
+        }
         viewModelScope.launch {
             val startedAt = SystemClock.elapsedRealtime()
             if (pullRefresh) {
