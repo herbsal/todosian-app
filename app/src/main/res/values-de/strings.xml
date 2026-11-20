@@ -240,7 +240,10 @@
     <string name="notification_task_reminder_untitled">Aufgabe ohne Titel</string>
     <string name="notification_task_reminder_done">Erledigt</string>
     <string name="notification_task_reminder_later">In 1 Stunde</string>
-    <string name="notification_task_reminder_tomorrow">Morgen</string>
+    <string name="notification_task_reminder_tomorrow_same_time">Morgen, gleiche Uhrzeit</string>
+    <string name="notification_task_reminder_snooze_15">In 15 Min.</string>
+    <string name="notification_task_reminder_later_choice">Später …</string>
+    <string name="notification_task_reminder_tomorrow_morning">Morgen früh (8:00)</string>
     <string name="settings_reminder_repeat">Erneut erinnern</string>
     <string name="settings_reminder_repeat_subtitle">Solange eine Aufgabe mit ⏰ offen ist: %1$s</string>
     <string name="settings_reminder_repeat_off">Nie</string>
