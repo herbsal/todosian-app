@@ -236,7 +236,10 @@ object WidgetRefresher {
      * Reloads the task snapshots from the files and updates all placed [TodosianWidget] instances.
      * Concurrent calls are serialized so overlapping triggers cannot interleave state writes.
      */
-    suspend fun refreshWidgets(context: Context) {
+    suspend fun refreshWidgets(callerContext: Context) {
+        // Glance keeps each widget state's DataStore, and the context it was opened with, for the
+        // whole process. Callers may pass an Activity, which must not end up there.
+        val context = callerContext.applicationContext
         val manager = GlanceAppWidgetManager(context)
         val glanceIds = runCatching { manager.getGlanceIds(TodosianWidget::class.java) }
             .getOrElse {
@@ -307,7 +310,7 @@ object WidgetRefresher {
     /** True once a snapshot has been written for [id] (used for freshly placed widgets). */
     internal suspend fun hasSnapshot(context: Context, id: GlanceId): Boolean =
         runCatching {
-            getAppWidgetState(context, PreferencesGlanceStateDefinition, id)
+            getAppWidgetState(context.applicationContext, PreferencesGlanceStateDefinition, id)
                 .contains(KEY_WIDGET_HAS_FOLDER)
         }.getOrDefault(false)
 
