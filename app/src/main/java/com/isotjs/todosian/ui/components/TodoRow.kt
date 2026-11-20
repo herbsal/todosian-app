@@ -1,5 +1,11 @@
 package com.isotjs.todosian.ui.components
 
+import com.isotjs.todosian.utils.TagDisplaySettings
+import com.isotjs.todosian.utils.TagDisplay
+import com.isotjs.todosian.utils.TagDefinitions
+import com.isotjs.todosian.utils.TagBadge
+import androidx.compose.runtime.remember
+import androidx.compose.material3.Surface
 import android.Manifest
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
@@ -91,7 +97,11 @@ fun TodoRow(
     modifier: Modifier = Modifier,
     allowMove: Boolean = onRequestMove != null,
     showSubtaskButton: Boolean = true,
+    tagDefinitions: TagDefinitions = TagDefinitions.EMPTY,
+    tagDisplay: TagDisplaySettings = TagDisplaySettings(),
 ) {
+    // Keywords appear as small badges below the title instead of #tags in the text.
+    val display = remember(todo.text, tagDefinitions, tagDisplay) { TagDisplay.split(todo.text, tagDefinitions, tagDisplay) }
     val indentPadding = (todo.indentLevel * 12).coerceAtMost(48).dp
     val dismissState = rememberSwipeToDismissBoxState(
         confirmValueChange = { value ->
@@ -163,11 +173,16 @@ fun TodoRow(
                             )
                         }
                         Text(
-                            text = todo.text,
+                            text = display.title,
                             style = MaterialTheme.typography.bodyLarge,
                             textDecoration = if (todo.isDone) TextDecoration.LineThrough else TextDecoration.None,
                             color = textColor,
                         )
+                    }
+
+                    if (display.badges.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        TagBadgeRow(badges = display.badges)
                     }
 
                     if (enableTasksPluginSupport) {
@@ -693,6 +708,32 @@ internal fun priorityColorFor(priority: TasksPriority?): Color? {
         TasksPriority.HIGH -> colorResource(R.color.priority_high)
         TasksPriority.HIGHEST -> colorResource(R.color.priority_highest)
         TasksPriority.NONE, null -> null
+    }
+}
+
+/** Keywords of a task as small pills, e.g. ⏱ 5 Min · 👤 Alex. */
+@Composable
+private fun TagBadgeRow(badges: List<TagBadge>) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
+    ) {
+        badges.forEach { badge ->
+            Surface(
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.secondaryContainer,
+                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+            ) {
+                Text(
+                    text = "${badge.icon} ${badge.label}",
+                    style = MaterialTheme.typography.labelMedium,
+                    maxLines = 1,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                )
+            }
+        }
     }
 }
 

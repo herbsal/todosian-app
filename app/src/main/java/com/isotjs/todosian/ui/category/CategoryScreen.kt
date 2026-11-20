@@ -1,5 +1,6 @@
 package com.isotjs.todosian.ui.category
 
+import com.isotjs.todosian.utils.TagDisplaySettings
 import androidx.compose.material3.InputChip
 import androidx.compose.material3.InputChipDefaults
 import androidx.compose.material.icons.filled.Close
@@ -138,6 +139,8 @@ fun CategoryScreen(
     val settings by appSettingsRepository.settings.collectAsStateWithLifecycle(
         initialValue = com.isotjs.todosian.data.settings.AppSettings(),
     )
+
+    val tagDisplay = remember(settings.tagDisplay) { TagDisplaySettings.decode(settings.tagDisplay) }
 
     val resources = LocalResources.current
     val snackbarHostState = remember { SnackbarHostState() }
@@ -666,6 +669,8 @@ fun CategoryScreen(
                                 enableTasksPluginSupport = settings.enableTasksPluginSupport,
                                 useEmojisInUi = settings.tasksPluginUseEmojisInUi,
                                 showSubtaskButton = settings.enableSubtasks,
+                                tagDefinitions = uiState.tagDefinitions,
+                                tagDisplay = tagDisplay,
                                 onToggle = { viewModel.toggleTodo(todo, settings.enableTasksPluginSupport) },
                                 onEdit = {
                                     sheetMode = TodoSheetMode.Edit(todo)
@@ -722,6 +727,8 @@ fun CategoryScreen(
                                 enableTasksPluginSupport = settings.enableTasksPluginSupport,
                                 useEmojisInUi = settings.tasksPluginUseEmojisInUi,
                                 showSubtaskButton = settings.enableSubtasks,
+                                tagDefinitions = uiState.tagDefinitions,
+                                tagDisplay = tagDisplay,
                                 onToggle = { viewModel.toggleTodo(todo, settings.enableTasksPluginSupport) },
                                 onEdit = {
                                     sheetMode = TodoSheetMode.Edit(todo)
@@ -776,6 +783,8 @@ fun CategoryScreen(
                                 enableTasksPluginSupport = settings.enableTasksPluginSupport,
                                 useEmojisInUi = settings.tasksPluginUseEmojisInUi,
                                 showSubtaskButton = settings.enableSubtasks,
+                                tagDefinitions = uiState.tagDefinitions,
+                                tagDisplay = tagDisplay,
                                 onToggle = { viewModel.toggleTodo(todo, settings.enableTasksPluginSupport) },
                                 onEdit = {
                                     sheetMode = TodoSheetMode.Edit(todo)

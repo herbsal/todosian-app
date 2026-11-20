@@ -1,5 +1,11 @@
 package com.isotjs.todosian.ui.settings
 
+import com.isotjs.todosian.utils.TagGroup
+import com.isotjs.todosian.utils.TagDisplaySettings
+import com.isotjs.todosian.utils.TagDisplayMode
+import com.isotjs.todosian.utils.TagDisplay
+import androidx.compose.material.icons.automirrored.filled.Label
+import androidx.compose.material3.FilterChip
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.Checkbox
 import com.isotjs.todosian.utils.PersonScope
@@ -223,6 +229,7 @@ fun SettingsScreen(
     var showNewTaskAlertDialog by remember { mutableStateOf(false) }
     var newTaskAlertFiles by remember { mutableStateOf(preferencesManager.getNewTaskAlertFiles()) }
     var showKeywordEditor by remember { mutableStateOf(false) }
+    var showTagDisplayDialog by remember { mutableStateOf(false) }
     var hasAllFilesAccess by remember { mutableStateOf(FolderWatchScheduler.hasAllFilesAccess()) }
     LifecycleResumeEffect(settings.folderWatchMode) {
         // Coming back from the "All files access" screen: start or stop instant watching.
@@ -356,6 +363,15 @@ fun SettingsScreen(
                 TaskReminderScheduler.requestSync(context)
             },
             onDismiss = { showNewTaskAlertDialog = false },
+        )
+    }
+
+    if (showTagDisplayDialog) {
+        TagDisplayDialog(
+            fileRepository = fileRepository,
+            current = TagDisplaySettings.decode(settings.tagDisplay),
+            onChange = { appSettingsRepository.setTagDisplay(it.encode()) },
+            onDismiss = { showTagDisplayDialog = false },
         )
     }
 
@@ -835,6 +851,15 @@ fun SettingsScreen(
                             title = stringResource(R.string.settings_keyword_editor),
                             subtitle = stringResource(R.string.settings_keyword_editor_subtitle),
                             onClick = { showKeywordEditor = true },
+                        )
+
+                        SettingsDivider()
+
+                        SettingsNavRow(
+                            icon = Icons.AutoMirrored.Filled.Label,
+                            title = stringResource(R.string.settings_tag_display),
+                            subtitle = stringResource(R.string.settings_tag_display_subtitle),
+                            onClick = { showTagDisplayDialog = true },
                         )
 
                         SettingsDivider()
@@ -1382,6 +1407,83 @@ private fun NewTaskAlertDialog(
             TextButton(onClick = onDismiss) { Text(text = stringResource(R.string.action_cancel)) }
         },
     )
+}
+
+/**
+ * Per device: how the tags of each keyword group appear in task rows (symbol badge, text or
+ * hidden), and tags that are not in a keyword note.
+ */
+@Composable
+private fun TagDisplayDialog(
+    fileRepository: FileRepository,
+    current: TagDisplaySettings,
+    onChange: (TagDisplaySettings) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val groups by produceState<List<TagGroup>?>(initialValue = null) {
+        value = (listOfNotNull(fileRepository.getFolderUri()) + fileRepository.getExtraFolderUris()).distinct()
+            .flatMap { uri -> TagDefinitionParser.parse(fileRepository.readTagNote(uri)).groups }
+            .distinctBy { TagDisplaySettings.keyOf(it) }
+    }
+    var settings by remember { mutableStateOf(current) }
+    fun update(next: TagDisplaySettings) {
+        settings = next
+        onChange(next)
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(text = stringResource(R.string.settings_tag_display)) },
+        text = {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                Text(
+                    text = stringResource(R.string.settings_tag_display_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                val loaded = groups
+                if (loaded == null) {
+                    CircularProgressIndicator(modifier = Modifier.padding(top = 16.dp).size(24.dp))
+                }
+                loaded.orEmpty().forEach { group ->
+                    TagDisplayModeRow(
+                        title = "${TagDisplay.iconFor(group)} ${group.name ?: stringResource(R.string.settings_tag_display_ungrouped)}",
+                        mode = settings.modeFor(group),
+                        onModeChange = { update(settings.withGroup(group, it)) },
+                    )
+                }
+                TagDisplayModeRow(
+                    title = stringResource(R.string.settings_tag_display_other),
+                    mode = settings.otherTags,
+                    onModeChange = { update(settings.copy(otherTags = it)) },
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text(text = stringResource(R.string.action_ok)) }
+        },
+    )
+}
+
+@Composable
+private fun TagDisplayModeRow(title: String, mode: TagDisplayMode, onModeChange: (TagDisplayMode) -> Unit) {
+    Text(
+        text = title,
+        style = MaterialTheme.typography.titleSmall,
+        modifier = Modifier.padding(top = 16.dp, bottom = 4.dp),
+    )
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        listOf(
+            TagDisplayMode.CHIP to R.string.settings_tag_display_chip,
+            TagDisplayMode.TEXT to R.string.settings_tag_display_text,
+            TagDisplayMode.HIDDEN to R.string.settings_tag_display_hidden,
+        ).forEach { (option, label) ->
+            FilterChip(
+                selected = mode == option,
+                onClick = { onModeChange(option) },
+                label = { Text(text = stringResource(label)) },
+            )
+        }
+    }
 }
 
 private data class FolderProfiles(val uri: Uri, val name: String, val profiles: List<String>, val definitions: TagDefinitions)

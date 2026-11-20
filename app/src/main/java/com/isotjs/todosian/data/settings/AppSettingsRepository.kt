@@ -48,6 +48,9 @@ interface AppSettingsRepository {
     fun setFolderWatchMode(mode: FolderWatchMode)
 
     fun setProfileRemindersEnabled(enabled: Boolean)
+
+    /** How keyword tags appear in task rows (encoded [com.isotjs.todosian.utils.TagDisplaySettings]). */
+    fun setTagDisplay(encoded: String) {}
 }
 
 class SharedPrefsAppSettingsRepository(
@@ -164,6 +167,10 @@ class SharedPrefsAppSettingsRepository(
         prefs.edit { putBoolean(KEY_PROFILE_REMINDERS, enabled) }
     }
 
+    override fun setTagDisplay(encoded: String) {
+        prefs.edit { putString(KEY_TAG_DISPLAY, encoded) }
+    }
+
     private fun readSettings(): AppSettings {
         val themeMode = prefs.getString(KEY_THEME_MODE, null)?.let { raw ->
             runCatching { ThemeMode.valueOf(raw) }.getOrNull()
@@ -215,6 +222,7 @@ class SharedPrefsAppSettingsRepository(
                 runCatching { FolderWatchMode.valueOf(raw) }.getOrNull()
             } ?: FolderWatchMode.PERIODIC,
             profileRemindersEnabled = prefs.getBoolean(KEY_PROFILE_REMINDERS, true),
+            tagDisplay = prefs.getString(KEY_TAG_DISPLAY, null).orEmpty(),
         )
     }
 
@@ -249,5 +257,6 @@ class SharedPrefsAppSettingsRepository(
         private const val KEY_REMINDER_REPEAT = "reminder_repeat"
         private const val KEY_FOLDER_WATCH_MODE = "folder_watch_mode"
         private const val KEY_PROFILE_REMINDERS = "profile_reminders_enabled"
+        private const val KEY_TAG_DISPLAY = "tag_display"
     }
 }

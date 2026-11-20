@@ -433,4 +433,13 @@
         <item quantity="one">%1$d neue Aufgabe für dich in %2$s</item>
         <item quantity="other">%1$d neue Aufgaben für dich in %2$s</item>
     </plurals>
+    <string name="keyword_editor_help_icon">Ein Symbol vor dem Gruppennamen, z. B. „⏱ Aufwand“, erscheint an den Aufgaben. Ohne Symbol wählt die App eines passend zum Namen.</string>
+    <string name="settings_tag_display">Schlagwörter anzeigen</string>
+    <string name="settings_tag_display_subtitle">Symbole statt #Tags, pro Gruppe</string>
+    <string name="settings_tag_display_hint">Gilt nur auf diesem Gerät. Symbol: Das Schlagwort erscheint als kleines Abzeichen unter der Aufgabe, z. B. ⏱ 5 Min. Text: Der #Tag bleibt im Titel. Ausblenden: wird nicht angezeigt. Die Notiz selbst wird nie geändert.</string>
+    <string name="settings_tag_display_ungrouped">Ohne Gruppe</string>
+    <string name="settings_tag_display_other">🏷 Andere Tags (nicht in der Schlagwort-Notiz)</string>
+    <string name="settings_tag_display_chip">Symbol</string>
+    <string name="settings_tag_display_text">Text</string>
+    <string name="settings_tag_display_hidden">Ausblenden</string>
 </resources>

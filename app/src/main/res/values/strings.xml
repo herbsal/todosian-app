@@ -433,4 +433,13 @@
         <item quantity="one">%1$d new task for you in %2$s</item>
         <item quantity="other">%1$d new tasks for you in %2$s</item>
     </plurals>
+    <string name="keyword_editor_help_icon">A symbol before a group name, e.g. “⏱ Effort”, is shown on the tasks. Without one, the app picks a symbol that fits the name.</string>
+    <string name="settings_tag_display">Show keywords</string>
+    <string name="settings_tag_display_subtitle">Symbols instead of #tags, per group</string>
+    <string name="settings_tag_display_hint">Applies to this device only. Symbol: the keyword appears as a small badge below the task, e.g. ⏱ 5 min. Text: the #tag stays in the title. Hide: not shown. The note itself is never changed.</string>
+    <string name="settings_tag_display_ungrouped">Without group</string>
+    <string name="settings_tag_display_other">🏷 Other tags (not in the keyword note)</string>
+    <string name="settings_tag_display_chip">Symbol</string>
+    <string name="settings_tag_display_text">Text</string>
+    <string name="settings_tag_display_hidden">Hide</string>
 </resources>
