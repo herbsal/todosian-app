@@ -17,6 +17,8 @@ import com.isotjs.todosian.utils.MarkdownParser
 import com.isotjs.todosian.utils.SeenTask
 import com.isotjs.todosian.utils.TagDefinitionParser
 import com.isotjs.todosian.utils.TagDefinitions
+import com.isotjs.todosian.utils.TagDisplay
+import com.isotjs.todosian.utils.TagDisplaySettings
 import com.isotjs.todosian.utils.TagText
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -45,6 +47,7 @@ object TaskReminderScheduler {
     const val EXTRA_LINE_INDEX = "line_index"
     const val EXTRA_KEY = "key"
     const val EXTRA_FROM_PROFILE = "from_profile"
+    const val EXTRA_DISPLAY_TEXT = "display_text"
 
     private const val TAG = "TaskReminderScheduler"
     private const val STATE_PREFS = "task_reminder_state"
@@ -92,13 +95,16 @@ object TaskReminderScheduler {
         val markers = settings.toTaskMarkers()
         val folders = (listOfNotNull(preferences.getFolderUri()) + preferences.getExtraFolderUris()).distinct()
         val alertFiles = preferences.getNewTaskAlertFiles()
+        val tagDisplay = TagDisplaySettings.decode(settings.tagDisplay)
 
         val candidates = folders.flatMap { folder ->
             val files = runCatching { scanMarkdownTree(context, folder, settings.includeSubfolders).files }
                 .getOrElse { emptyList() }
             val profile = if (settings.profileRemindersEnabled) loadProfile(context, preferences, folder) else null
             val personScope = preferences.getPersonScope(folder)
-            val definitions = if (profile != null || personScope != null) loadTagDefinitions(context, folder) else TagDefinitions.EMPTY
+            // Always read: notifications show the tags as symbols, as in the app.
+            val definitions = loadTagDefinitions(context, folder)
+            val display = { text: String -> TagDisplay.plainText(text, definitions, tagDisplay) }
             files.flatMap { file ->
                 val readLines = runCatching {
                     context.contentResolver.openInputStream(file.ref)?.bufferedReader()?.use { it.readLines() }
@@ -115,6 +121,7 @@ object TaskReminderScheduler {
                             fileKey = file.ref.toString(),
                             listName = file.relativePath.substringAfterLast('/').removeSuffix(".md"),
                             open = open.map { todo -> SeenTask(todo.text, lines.getOrElse(todo.lineIndex) { todo.text }) },
+                            display = display,
                         )
                     }.onFailure { Log.w(TAG, "Checking for new tasks failed", it) }
                 }
@@ -139,7 +146,7 @@ object TaskReminderScheduler {
                         definitions = definitions,
                     )
                 }.orEmpty()
-                direct + fromProfile
+                (direct + fromProfile).map { it.copy(displayText = display(it.text)) }
             }
         }
 
@@ -173,7 +180,7 @@ object TaskReminderScheduler {
         }.onFailure { Log.w(TAG, "Reading reminder profile failed", it) }.getOrNull()
     }
 
-    private fun loadTagDefinitions(context: Context, folder: Uri): TagDefinitions = runCatching {
+    internal fun loadTagDefinitions(context: Context, folder: Uri): TagDefinitions = runCatching {
         val note = findTagNote(context, folder) ?: return@runCatching TagDefinitions.EMPTY
         val lines = context.contentResolver.openInputStream(note)?.bufferedReader()?.use { it.readLines() }.orEmpty()
         TagDefinitionParser.parse(lines)
@@ -216,6 +223,7 @@ object TaskReminderScheduler {
             data = alarmUri(key)
             putExtras(reminderExtras(key, candidate.fileKey, candidate.text, candidate.reminder, candidate.lineIndex))
             putExtra(EXTRA_FROM_PROFILE, candidate.fromProfile)
+            putExtra(EXTRA_DISPLAY_TEXT, candidate.displayText)
         }
         return PendingIntent.getBroadcast(
             context,

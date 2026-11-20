@@ -47,6 +47,15 @@ class TagDisplayTest {
     }
 
     @Test
+    fun plainTextForNotifications() {
+        assertEquals(
+            "Müll rausbringen · ⏱ 5 Min · 🧠 Niedrig",
+            TagDisplay.plainText("Müll rausbringen #kurz #energie/niedrig", definitions, TagDisplaySettings()),
+        )
+        assertEquals("Bild #urlaub", TagDisplay.plainText("Bild #urlaub", definitions, TagDisplaySettings()))
+    }
+
+    @Test
     fun settingsRoundTrip() {
         val person = definitions.groups.first { it.name == "Person" }
         val settings = TagDisplaySettings(otherTags = TagDisplayMode.HIDDEN).withGroup(person, TagDisplayMode.TEXT)

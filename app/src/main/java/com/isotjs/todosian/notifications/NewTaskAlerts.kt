@@ -54,12 +54,18 @@ object NewTaskAlerts {
         prefs(context).getStringSet(KEY_OWN, emptySet()).orEmpty().map { it.substringBefore('|') }.toSet()
 
     /** Compares the open tasks of a watched note with the last look and notifies about new ones. */
-    fun check(context: Context, fileKey: String, listName: String, open: List<SeenTask>) {
+    fun check(
+        context: Context,
+        fileKey: String,
+        listName: String,
+        open: List<SeenTask>,
+        display: (String) -> String = { it },
+    ) {
         val prefs = prefs(context)
         val previous = prefs.getStringSet(KEY_SEEN_PREFIX + fileKey, null)
         val fresh = NewTasks.detect(previous, open, ownLines(context))
         prefs.edit { putStringSet(KEY_SEEN_PREFIX + fileKey, open.map { it.key }.toSet()) }
-        if (fresh.isNotEmpty()) notify(context, fileKey, listName, fresh)
+        if (fresh.isNotEmpty()) notify(context, fileKey, listName, fresh.map { display(it.text) })
     }
 
     /** Forgets notes that are no longer watched, so watching them again starts fresh. */
@@ -70,7 +76,7 @@ object NewTaskAlerts {
     }
 
     @SuppressLint("MissingPermission")
-    private fun notify(context: Context, fileKey: String, listName: String, tasks: List<SeenTask>) {
+    private fun notify(context: Context, fileKey: String, listName: String, tasks: List<String>) {
         val appContext = context.applicationContext
         if (!canPostNotifications(appContext)) return
         createChannelIfNeeded(appContext)
@@ -87,11 +93,11 @@ object NewTaskAlerts {
         } else {
             appContext.resources.getQuantityString(R.plurals.notification_new_tasks_title, tasks.size, tasks.size, listName)
         }
-        val style = NotificationCompat.InboxStyle().also { inbox -> tasks.take(6).forEach { inbox.addLine(it.text) } }
+        val style = NotificationCompat.InboxStyle().also { inbox -> tasks.take(6).forEach { inbox.addLine(it) } }
         val notification = NotificationCompat.Builder(appContext, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title)
-            .setContentText(tasks.joinToString(", ") { it.text })
+            .setContentText(tasks.joinToString(", "))
             .setStyle(style)
             .setContentIntent(openApp)
             .setAutoCancel(true)
