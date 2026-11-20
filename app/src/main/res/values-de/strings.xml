@@ -265,7 +265,7 @@
     <string name="settings_reminder_profiles_enabled">Erinnerungen aus Profilen</string>
     <string name="settings_reminder_profiles_enabled_subtitle">Erinnerungen mit ⏰ an einer Aufgabe melden sich immer.</string>
     <string name="settings_reminder_profiles_none">Keines</string>
-    <string name="settings_reminder_profiles_empty">Noch keine Profile. Lege Notizen in Todosian/Erinnerungen/ in diesem Ordner an.</string>
+    <string name="settings_reminder_profiles_empty">Noch keine Profile. Lege Notizen in Todosian/Reminders/ in diesem Ordner an.</string>
     <string name="notification_due_channel_name">Fälligkeits-Erinnerungen</string>
     <string name="notification_due_channel_description">Erinnert dich, wenn Aufgaben bald fällig sind.</string>
     <plurals name="notification_due_title">

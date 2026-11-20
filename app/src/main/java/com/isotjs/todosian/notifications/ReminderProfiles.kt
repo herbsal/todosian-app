@@ -16,7 +16,7 @@ data class ProfileRule(val daysBefore: Int, val time: LocalTime)
 /** The rules for one keyword; [repeat] overrides the "Remind again" setting for these reminders. */
 data class KeywordRules(val tag: String, val rules: List<ProfileRule>, val repeat: ReminderRepeat?)
 
-/** A reminder profile: one note in `Todosian/Reminders/` (or `Todosian/Erinnerungen/`). */
+/** A reminder profile: one note in `Todosian/Reminders/`. */
 data class ReminderProfile(val name: String, val keywords: List<KeywordRules>)
 
 /**

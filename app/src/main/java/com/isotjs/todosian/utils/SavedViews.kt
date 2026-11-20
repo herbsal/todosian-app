@@ -7,7 +7,7 @@ package com.isotjs.todosian.utils
 data class SavedView(val name: String, val terms: List<FilterTerm>, val folder: String)
 
 /**
- * Reads the views note (`Todosian/Views.md` or `Ansichten.md`). Each list item is one view, in
+ * Reads the views note (`Todosian/Views.md`). Each list item is one view, in
  * the same syntax as a keyword: `- Small and tired: #5min, #energy/low`. Its tags are resolved
  * with the folder's keyword note, so synonyms count; keywords of one group are alternatives,
  * keywords of different groups must all apply.
