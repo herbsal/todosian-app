@@ -33,13 +33,18 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import com.isotjs.todosian.notifications.TaskReminderScheduler
 import com.isotjs.todosian.sync.FolderWatchScheduler
+import com.isotjs.todosian.notifications.ReminderProfile
+import com.isotjs.todosian.notifications.ReminderProfileParser
+import com.isotjs.todosian.notifications.ReminderProfileWriter
 import com.isotjs.todosian.utils.TagDefinitionParser
+import com.isotjs.todosian.utils.TagDefinitionWriter
 import com.isotjs.todosian.utils.TagDefinitions
 import com.isotjs.todosian.ui.widget.WidgetRefresher
 import java.io.FileNotFoundException
 import java.io.FileOutputStream
 import java.io.OutputStream
 import java.time.LocalDate
+import java.util.Locale
 
 private const val CONTENT_SCHEME = "content"
 
@@ -154,6 +159,19 @@ interface FileRepository {
 
     /** Names of the reminder profiles in `Todosian/Reminders/` (or `Erinnerungen/`) of [folderUri]. */
     suspend fun getReminderProfileNames(folderUri: Uri): List<String>
+
+    /** The keywords of the folder [folderUri] itself. */
+    suspend fun getFolderTagDefinitions(folderUri: Uri): TagDefinitions
+
+    /** Writes the keyword note of [folderUri], creating it (and `Todosian/`) when needed. */
+    suspend fun saveTagDefinitions(folderUri: Uri, definitions: TagDefinitions, title: String): Result<Unit>
+
+    suspend fun getReminderProfile(folderUri: Uri, name: String): ReminderProfile?
+
+    /** Writes the profile note `Todosian/Reminders/<name>.md` (or `Erinnerungen/`), creating it when needed. */
+    suspend fun saveReminderProfile(folderUri: Uri, profile: ReminderProfile): Result<Unit>
+
+    suspend fun deleteReminderProfile(folderUri: Uri, name: String): Result<Unit>
 }
 
 class SafFileRepository(
@@ -555,6 +573,56 @@ class SafFileRepository(
         runCatching { findReminderProfiles(appContext, folderUri).map { it.first } }
             .onFailure { Log.w(TAG, "Listing reminder profiles failed", it) }
             .getOrDefault(emptyList())
+    }
+
+    private val germanLocale: Boolean get() = Locale.getDefault().language == "de"
+
+    override suspend fun getFolderTagDefinitions(folderUri: Uri): TagDefinitions = withContext(Dispatchers.IO) {
+        runCatching {
+            val note = findTagNote(appContext, folderUri) ?: return@runCatching TagDefinitions.EMPTY
+            TagDefinitionParser.parse(readLinesInternal(note))
+        }.getOrDefault(TagDefinitions.EMPTY)
+    }
+
+    override suspend fun saveTagDefinitions(folderUri: Uri, definitions: TagDefinitions, title: String): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                fileMutex.withLock {
+                    val names = if (germanLocale) TAG_NOTE_NAMES.sortedByDescending { it.startsWith("Schlag") } else TAG_NOTE_NAMES
+                    val (uri, created) = ensureConfigNote(appContext, folderUri, subfolderNames = null, fileNames = names)
+                    val lines = TagDefinitionWriter.write(definitions, title)
+                    writeLinesInternal(uri, if (created) lines + "" else lines)
+                }
+            }
+        }
+
+    override suspend fun getReminderProfile(folderUri: Uri, name: String): ReminderProfile? = withContext(Dispatchers.IO) {
+        runCatching {
+            val uri = findReminderProfiles(appContext, folderUri).firstOrNull { it.first.equals(name, ignoreCase = true) }?.second
+                ?: return@runCatching null
+            ReminderProfileParser.parse(name, readLinesInternal(uri))
+        }.getOrNull()
+    }
+
+    override suspend fun saveReminderProfile(folderUri: Uri, profile: ReminderProfile): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                fileMutex.withLock {
+                    val folders = if (germanLocale) PROFILE_FOLDER_NAMES.reversed() else PROFILE_FOLDER_NAMES
+                    val (uri, created) = ensureConfigNote(appContext, folderUri, folders, listOf("${profile.name}.md"))
+                    val lines = ReminderProfileWriter.write(profile, germanLocale)
+                    writeLinesInternal(uri, if (created) lines + "" else lines)
+                }
+            }
+        }
+
+    override suspend fun deleteReminderProfile(folderUri: Uri, name: String): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            val uri = findReminderProfiles(appContext, folderUri).firstOrNull { it.first.equals(name, ignoreCase = true) }?.second
+                ?: return@runCatching
+            DocumentsContract.deleteDocument(appContext.contentResolver, uri)
+            scheduleWidgetUpdate()
+        }
     }
 
     override fun observeAllMarkdownFilesChanges(): Flow<Unit> {

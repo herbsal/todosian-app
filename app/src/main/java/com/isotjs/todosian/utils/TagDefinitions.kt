@@ -38,12 +38,12 @@ data class TagDefinitions(val groups: List<TagGroup>) {
  * - Low: #energy/low, #energie/niedrig
  * ```
  *
- * A heading starts a group. Each list item is one keyword: the text before `:` is its label, the
+ * A heading of level 2 or deeper starts a group; the `#` title does not. Each list item is one keyword: the text before `:` is its label, the
  * tags after it are synonyms, the first one is written by the app. Without a label the first tag
  * is used as label. Lines without tags and code blocks are ignored.
  */
 object TagDefinitionParser {
-    private val headingRegex = Regex("""^\s{0,3}#{1,6}\s+(.+?)\s*#*\s*$""")
+    private val headingRegex = Regex("""^\s{0,3}(#{1,6})\s+(.+?)\s*#*\s*$""")
     private val itemRegex = Regex("""^\s*(?:[-*+]|\d+[.)])\s+(.*)$""")
     private val tagRegex = Regex("""(?<![\p{L}\p{N}_])#([\p{L}\p{N}_/\-]*[\p{L}_/\-][\p{L}\p{N}_/\-]*)""")
 
@@ -69,7 +69,8 @@ object TagDefinitionParser {
             val heading = headingRegex.matchEntire(line)
             if (heading != null) {
                 flush()
-                currentName = heading.groupValues[1].trim().ifEmpty { null }
+                // The note's title (`# ...`) is not a group; keywords below it stay ungrouped.
+                currentName = if (heading.groupValues[1].length == 1) null else heading.groupValues[2].trim().ifEmpty { null }
                 continue
             }
 
@@ -116,4 +117,26 @@ object TagText {
         }
 
     private fun tidy(text: String): String = text.replace(Regex("""[ \t]{2,}"""), " ").trim()
+}
+
+/** Writes keyword definitions back as a keyword note that [TagDefinitionParser] reads again. */
+object TagDefinitionWriter {
+    fun write(definitions: TagDefinitions, title: String): List<String> = buildList {
+        add("# $title")
+        definitions.groups.forEach { group ->
+            if (group.terms.isEmpty() && group.name == null) return@forEach
+            add("")
+            group.name?.let { add("## $it") }
+            group.terms.forEach { term -> add("- ${term.label}: ${term.tags.joinToString(", ")}") }
+        }
+    }
+
+    /** Normalizes user input like `kurz, #5min  quick` to `#kurz`, `#5min`, `#quick`. */
+    fun parseTagInput(input: String): List<String> =
+        input.split(',', ' ', ';', '\n')
+            .map { it.trim().trimStart('#') }
+            .filter { it.isNotEmpty() }
+            .map { "#" + it.replace(Regex("""[^\p{L}\p{N}_/\-]"""), "") }
+            .filter { it.length > 1 }
+            .distinctBy { it.lowercase() }
 }
