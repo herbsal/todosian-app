@@ -1,5 +1,6 @@
 package com.isotjs.todosian.data
 
+import com.isotjs.todosian.utils.PersonScope
 import android.content.Context
 import android.net.Uri
 import androidx.core.content.edit
@@ -86,6 +87,17 @@ class PreferencesManager(
         }
     }
 
+    /** Whose tasks remind on this device for [folderUri]; null reminds about every task. Not synced. */
+    fun getPersonScope(folderUri: Uri): PersonScope? =
+        PersonScope.decode(prefs.getString(KEY_PERSON_SCOPE_PREFIX + folderUri.toString(), null))
+
+    fun savePersonScope(folderUri: Uri, scope: PersonScope?) {
+        prefs.edit {
+            if (scope == null) remove(KEY_PERSON_SCOPE_PREFIX + folderUri.toString())
+            else putString(KEY_PERSON_SCOPE_PREFIX + folderUri.toString(), scope.encode())
+        }
+    }
+
     fun getLastSeenVersionCode(): Int {
         return prefs.getInt(KEY_LAST_SEEN_VERSION_CODE, 0)
     }
@@ -98,6 +110,7 @@ class PreferencesManager(
         private const val PREFS_NAME = "todosian_prefs"
         private const val KEY_FOLDER_URI = "folder_uri"
         private const val KEY_REMINDER_PROFILE_PREFIX = "reminder_profile:"
+        private const val KEY_PERSON_SCOPE_PREFIX = "person_scope:"
         private const val KEY_LAST_SEEN_VERSION_CODE = "last_seen_version_code"
         private const val KEY_DEFAULT_ADD_TASK_FILE_URI = "default_add_task_file_uri"
         private const val KEY_EXTRA_FOLDER_URIS = "extra_folder_uris"

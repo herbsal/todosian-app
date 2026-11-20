@@ -21,6 +21,8 @@ import com.isotjs.todosian.data.FileRepository
 import com.isotjs.todosian.data.model.Category
 import com.isotjs.todosian.data.model.Todo
 import com.isotjs.todosian.utils.MarkdownParser
+import com.isotjs.todosian.utils.SavedView
+import com.isotjs.todosian.utils.TagFilter
 import com.isotjs.todosian.utils.TaskMarkers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
@@ -32,6 +34,8 @@ internal val KEY_WIDGET_ITEM_COUNT = intPreferencesKey("widget_item_count")
 internal val KEY_SELECTED_CATEGORY_URI = stringPreferencesKey("selected_category_uri")
 internal val KEY_SELECTED_CATEGORY_NAME = stringPreferencesKey("selected_category_name")
 internal val KEY_SHOW_COMPLETED = booleanPreferencesKey("show_completed")
+internal val KEY_SELECTED_VIEW_NAME = stringPreferencesKey("selected_view_name")
+internal val KEY_SELECTED_VIEW_FOLDER = stringPreferencesKey("selected_view_folder")
 private const val ITEM_KEY_PREFIX = "widget_item_"
 
 /**
@@ -50,10 +54,18 @@ internal fun filterCompletedItems(
 internal data class WidgetSelection(
     val categoryUri: String?,
     val categoryName: String?,
+    /** A saved view (quick view) instead of a note: its open tasks from all folders. */
+    val viewName: String? = null,
+    val viewFolder: String? = null,
 ) {
-    val isAllLists: Boolean get() = categoryUri == null
+    val isView: Boolean get() = viewName != null
+    val isAllLists: Boolean get() = categoryUri == null && viewName == null
 
     fun writeTo(prefs: MutablePreferences) {
+        if (viewName != null) prefs[KEY_SELECTED_VIEW_NAME] = viewName
+        else prefs.remove(KEY_SELECTED_VIEW_NAME)
+        if (viewFolder != null) prefs[KEY_SELECTED_VIEW_FOLDER] = viewFolder
+        else prefs.remove(KEY_SELECTED_VIEW_FOLDER)
         if (categoryUri != null) prefs[KEY_SELECTED_CATEGORY_URI] = categoryUri
         else prefs.remove(KEY_SELECTED_CATEGORY_URI)
         if (categoryName != null) prefs[KEY_SELECTED_CATEGORY_NAME] = categoryName
@@ -64,7 +76,12 @@ internal data class WidgetSelection(
         val ALL = WidgetSelection(null, null)
 
         fun from(prefs: Preferences): WidgetSelection =
-            WidgetSelection(prefs[KEY_SELECTED_CATEGORY_URI], prefs[KEY_SELECTED_CATEGORY_NAME])
+            WidgetSelection(
+                prefs[KEY_SELECTED_CATEGORY_URI],
+                prefs[KEY_SELECTED_CATEGORY_NAME],
+                prefs[KEY_SELECTED_VIEW_NAME],
+                prefs[KEY_SELECTED_VIEW_FOLDER],
+            )
     }
 }
 
@@ -251,7 +268,7 @@ object WidgetRefresher {
 
             // Read each needed file exactly once per refresh, no matter how many widgets share it.
             val neededUris = buildList {
-                if (selections.any { it.isAllLists }) categories.forEach { add(it.uri) }
+                if (selections.any { it.isAllLists || it.isView }) categories.forEach { add(it.uri) }
                 selections.forEach { selection ->
                     resolveSelectedCategory(categories, selection)?.let { add(it.uri) }
                 }
@@ -260,6 +277,7 @@ object WidgetRefresher {
                 fileRepository.readLines(uri).getOrDefault(emptyList())
             }
 
+            val savedViews = if (selections.any { it.isView }) fileRepository.getSavedViews() else emptyList()
             val hasFolder = fileRepository.getFolderUri() != null
             for ((index, glanceId) in glanceIds.withIndex()) {
                 val snapshot = buildSnapshot(
@@ -267,6 +285,10 @@ object WidgetRefresher {
                     categories = categories,
                     linesByUri = linesByUri,
                     selection = selections[index],
+                    view = selections[index].takeIf { it.isView }?.let { selection ->
+                        savedViews.firstOrNull { it.name == selection.viewName && it.folder == selection.viewFolder }
+                            ?: savedViews.firstOrNull { it.name.equals(selection.viewName, ignoreCase = true) }
+                    },
                     showCompleted = showCompletedFlags[index],
                     markers = markers,
                 )
@@ -299,9 +321,21 @@ object WidgetRefresher {
         categories: List<Category>,
         linesByUri: Map<Uri, List<String>>,
         selection: WidgetSelection,
+        view: SavedView?,
         showCompleted: Boolean,
         markers: TaskMarkers,
     ): WidgetSnapshot {
+        if (selection.isView && view == null) {
+            // The view was renamed or removed from the views note.
+            return WidgetSnapshot(
+                hasFolder = true,
+                activeCount = 0,
+                items = emptyList(),
+                title = selection.viewName ?: "",
+                selectedCategoryUri = null,
+                missingList = true,
+            )
+        }
         val resolved = resolveSelectedCategory(categories, selection)
 
         if (selection.categoryUri != null && resolved == null) {
@@ -329,6 +363,7 @@ object WidgetRefresher {
                 )
             }
         }
+            .filter { item -> view == null || TagFilter.matches(item.todo.text, view.terms) }
         val activeTasks = taskItems.filter { !it.todo.isDone }
         val completedTasks = taskItems.filter { it.todo.isDone }
         Log.d(
@@ -341,7 +376,7 @@ object WidgetRefresher {
             activeCount = activeTasks.size,
             items = filterCompletedItems(activeTasks + completedTasks, showCompleted)
                 .take(MAX_TASKS),
-            title = resolved?.displayName,
+            title = view?.name ?: resolved?.displayName,
             selectedCategoryUri = resolved?.uri?.toString(),
             missingList = false,
         )

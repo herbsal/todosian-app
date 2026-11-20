@@ -95,12 +95,16 @@ object TaskReminderScheduler {
             val files = runCatching { scanMarkdownTree(context, folder, settings.includeSubfolders).files }
                 .getOrElse { emptyList() }
             val profile = if (settings.profileRemindersEnabled) loadProfile(context, preferences, folder) else null
-            val definitions = if (profile != null) loadTagDefinitions(context, folder) else TagDefinitions.EMPTY
+            val personScope = preferences.getPersonScope(folder)
+            val definitions = if (profile != null || personScope != null) loadTagDefinitions(context, folder) else TagDefinitions.EMPTY
             files.flatMap { file ->
                 val lines = runCatching {
                     context.contentResolver.openInputStream(file.ref)?.bufferedReader()?.use { it.readLines() }
                 }.getOrNull().orEmpty()
-                val open = MarkdownParser.parse(lines, markers).filter { !it.isDone }
+                // Only tasks of the people chosen on this device remind, also those with ⏰.
+                val open = MarkdownParser.parse(lines, markers)
+                    .filter { !it.isDone }
+                    .filter { todo -> personScope?.allows(todo.text, definitions) ?: true }
                 val direct = open.mapNotNull { todo ->
                     val reminder = MarkdownParser.parseReminder(todo.reminder) ?: return@mapNotNull null
                     ReminderCandidate(file.ref.toString(), todo.text, reminder, todo.lineIndex)

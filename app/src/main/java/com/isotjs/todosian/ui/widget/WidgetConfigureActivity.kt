@@ -56,6 +56,8 @@ import com.isotjs.todosian.ui.components.TodosianDimens
 import com.isotjs.todosian.ui.components.TodosianEmptyState
 import com.isotjs.todosian.ui.components.TodosianLoadingIndicator
 import com.isotjs.todosian.ui.theme.TodosianTheme
+import com.isotjs.todosian.utils.SavedView
+import androidx.compose.material.icons.filled.FilterList
 import kotlinx.coroutines.launch
 
 /**
@@ -200,6 +202,7 @@ private fun WidgetConfigureScreen(
 ) {
     var isLoading by remember { mutableStateOf(fileRepository != null) }
     var categories by remember { mutableStateOf<List<Category>>(emptyList()) }
+    var savedViews by remember { mutableStateOf<List<SavedView>>(emptyList()) }
 
     LaunchedEffect(fileRepository) {
         if (fileRepository == null) {
@@ -207,6 +210,7 @@ private fun WidgetConfigureScreen(
             return@LaunchedEffect
         }
         categories = fileRepository.getCategories().getOrDefault(emptyList())
+        savedViews = fileRepository.getSavedViews()
         isLoading = false
     }
 
@@ -278,6 +282,28 @@ private fun WidgetConfigureScreen(
                             ),
                             modifier = Modifier.clickable {
                                 onConfirm(WidgetSelection.ALL)
+                            },
+                        )
+                    }
+                    items(
+                        items = savedViews,
+                        key = { "view\u001F${it.folder}\u001F${it.name}" },
+                    ) { view ->
+                        ListItem(
+                            headlineContent = { Text(text = view.name) },
+                            supportingContent = { Text(text = stringResource(R.string.widget_configure_view_hint)) },
+                            leadingContent = {
+                                Icon(
+                                    imageVector = Icons.Filled.FilterList,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                )
+                            },
+                            colors = ListItemDefaults.colors(
+                                containerColor = Color.Transparent,
+                            ),
+                            modifier = Modifier.clickable {
+                                onConfirm(WidgetSelection(null, null, viewName = view.name, viewFolder = view.folder))
                             },
                         )
                     }
