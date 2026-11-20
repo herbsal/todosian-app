@@ -393,4 +393,7 @@
         <item quantity="one">%1$d Zeile nicht verstanden</item>
         <item quantity="other">%1$d Zeilen nicht verstanden</item>
     </plurals>
+    <string name="tag_filter">Nach Schlagwort filtern</string>
+    <string name="tag_filter_clear">Filter aufheben</string>
+    <string name="tag_filter_empty">Keine Aufgaben mit diesen Schlagwörtern.</string>
 </resources>

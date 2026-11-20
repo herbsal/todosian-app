@@ -1,5 +1,6 @@
 package com.isotjs.todosian.ui.dailyfocus
 
+import android.net.Uri
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -40,6 +41,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -60,7 +62,9 @@ import com.isotjs.todosian.data.FileRepository
 import com.isotjs.todosian.data.settings.AppSettings
 import com.isotjs.todosian.data.settings.AppSettingsRepository
 import com.isotjs.todosian.data.settings.DailyFocusMode
+import com.isotjs.todosian.ui.components.TagFilterBar
 import com.isotjs.todosian.ui.components.TagQuickPicker
+import com.isotjs.todosian.utils.TagFilter
 import com.isotjs.todosian.ui.components.TasksMetaEditor
 import com.isotjs.todosian.utils.TagDefinitions
 import com.isotjs.todosian.ui.components.TodoRow
@@ -122,6 +126,17 @@ fun DailyFocusScreen(
         value = sheetTask?.categoryUri?.let { fileRepository.getTagDefinitions(it) } ?: TagDefinitions.EMPTY
     }
     var deleteTodoTarget by remember { mutableStateOf<DailyFocusTask?>(null) }
+    var tagFilterKeys by rememberSaveable { mutableStateOf("") }
+    val selectedTagKeys = remember(tagFilterKeys) { tagFilterKeys.split(TAG_FILTER_SEPARATOR).filter { it.isNotEmpty() }.toSet() }
+    val categoryUris = remember(uiState.tasks) { uiState.tasks.map { it.categoryUri }.distinct() }
+    // Keyword notes of the folders the tasks come from, so the chips use their labels and synonyms.
+    val tagDefinitionsByCategory by produceState(emptyMap<Uri, TagDefinitions>(), categoryUris) {
+        value = categoryUris.associateWith { fileRepository.getTagDefinitions(it) }
+    }
+    val filterTerms = remember(uiState.tasks, tagDefinitionsByCategory) {
+        TagFilter.termsFor(uiState.tasks.map { it.todo.text to (tagDefinitionsByCategory[it.categoryUri] ?: TagDefinitions.EMPTY) })
+    }
+    val selectedTerms = remember(filterTerms, selectedTagKeys) { filterTerms.filter { it.key in selectedTagKeys } }
 
     fun dismissSheet() {
         sheetMode = null
@@ -299,8 +314,8 @@ fun DailyFocusScreen(
         }
 
         // Group tasks by category name
-        val grouped = remember(uiState.tasks) {
-            uiState.tasks.groupBy { it.categoryName }
+        val grouped = remember(uiState.tasks, selectedTerms) {
+            uiState.tasks.filter { TagFilter.matches(it.todo.text, selectedTerms) }.groupBy { it.categoryName }
         }
 
         LazyColumn(
@@ -309,6 +324,29 @@ fun DailyFocusScreen(
                 .padding(padding)
                 .padding(horizontal = TodosianDimens.ScreenHorizontalPadding),
         ) {
+            if (filterTerms.isNotEmpty()) {
+                item(key = "tag_filter") {
+                    TagFilterBar(
+                        terms = filterTerms,
+                        selectedKeys = selectedTagKeys,
+                        onToggle = { term ->
+                            val keys = if (term.key in selectedTagKeys) selectedTagKeys - term.key else selectedTagKeys + term.key
+                            tagFilterKeys = keys.joinToString(TAG_FILTER_SEPARATOR)
+                        },
+                        onClear = { tagFilterKeys = "" },
+                    )
+                }
+            }
+            if (grouped.isEmpty()) {
+                item(key = "tag_filter_empty") {
+                    Text(
+                        text = stringResource(R.string.tag_filter_empty),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(vertical = 16.dp),
+                    )
+                }
+            }
             grouped.forEach { (categoryName, tasksInGroup) ->
                 stickyHeader(key = "header_$categoryName") {
                     TodosianSectionHeader(text = categoryName)
@@ -376,3 +414,5 @@ private class DailyFocusViewModelFactory(
         throw IllegalArgumentException("Unknown ViewModel class")
     }
 }
+
+private const val TAG_FILTER_SEPARATOR = "\u001F"
