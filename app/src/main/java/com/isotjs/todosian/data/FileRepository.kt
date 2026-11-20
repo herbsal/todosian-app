@@ -157,7 +157,7 @@ interface FileRepository {
     fun observeAllMarkdownFilesChanges(): Flow<Unit>
 
     /**
-     * The keywords defined in `Todosian/Tags.md` (or `Schlagwörter.md`) of the folder that holds
+     * The keywords defined in `Todosian/Tags.md` (or `Schlagwoerter.md`) of the folder that holds
      * [noteUri]; the main folder's when [noteUri] is null. Empty when there is no such note.
      */
     suspend fun getTagDefinitions(noteUri: Uri?): TagDefinitions
@@ -624,7 +624,7 @@ class SafFileRepository(
             runCatching {
                 fileMutex.withLock {
                     val existing = findTagNote(appContext, folderUri)
-                    val names = if (germanLocale) TAG_NOTE_NAMES.sortedByDescending { it.startsWith("Schlag") } else TAG_NOTE_NAMES
+                    val names = if (germanLocale) listOf(TAG_NOTE_NAME_GERMAN) + (TAG_NOTE_NAMES - TAG_NOTE_NAME_GERMAN) else TAG_NOTE_NAMES
                     val (uri, created) = existing?.let { it to false }
                         ?: ensureConfigNote(appContext, folderUri, subfolderNames = null, fileNames = names)
                     editConfigNote(uri, created, "# $title", edit)

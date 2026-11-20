@@ -18,7 +18,11 @@ internal const val CONFIG_FOLDER_NAME = "Todosian"
 internal val PROFILE_FOLDER_NAMES = listOf("Reminders", "Erinnerungen")
 
 /** Accepted names of the keyword note inside [CONFIG_FOLDER_NAME]. */
-internal val TAG_NOTE_NAMES = listOf("Tags.md", "Schlagwörter.md", "Schlagwoerter.md")
+internal val TAG_NOTE_NAMES = listOf("Tags.md", "Schlagwoerter.md", "Schlagwörter.md")
+
+/** Earlier German name of the keyword note; renamed once to [TAG_NOTE_NAME_GERMAN] (no umlaut in file names). */
+internal const val TAG_NOTE_NAME_OLD = "Schlagwörter.md"
+internal const val TAG_NOTE_NAME_GERMAN = "Schlagwoerter.md"
 
 /** Names of the note with saved views (keyword filters with a name) in `Todosian/`. */
 internal val VIEW_NOTE_NAMES = listOf("Views.md", "Ansichten.md")
@@ -91,7 +95,28 @@ internal fun scanMarkdownTree(context: Context, treeUri: Uri, recursive: Boolean
 }
 
 /** The keyword note of the folder [treeUri], or null if it has none. */
-internal fun findTagNote(context: Context, treeUri: Uri): Uri? = findConfigNote(context, treeUri, TAG_NOTE_NAMES)
+internal fun findTagNote(context: Context, treeUri: Uri): Uri? {
+    renameOldTagNote(context, treeUri)
+    return findConfigNote(context, treeUri, TAG_NOTE_NAMES)
+}
+
+/** Renames `Todosian/Schlagwörter.md` to `Schlagwoerter.md` once, unless that name is taken. */
+private fun renameOldTagNote(context: Context, treeUri: Uri) {
+    runCatching {
+        val rootId = DocumentsContract.getTreeDocumentId(treeUri)
+        val configId = listChildren(context, treeUri, rootId)
+            .firstOrNull { it.isDirectory && it.name.equals(CONFIG_FOLDER_NAME, ignoreCase = true) }
+            ?.id ?: return
+        val children = listChildren(context, treeUri, configId).filter { !it.isDirectory }
+        val old = children.firstOrNull { sameName(it.name, TAG_NOTE_NAME_OLD) } ?: return
+        if (children.any { sameName(it.name, TAG_NOTE_NAME_GERMAN) || sameName(it.name, "Tags.md") }) return
+        DocumentsContract.renameDocument(
+            context.contentResolver,
+            DocumentsContract.buildDocumentUriUsingTree(treeUri, old.id),
+            TAG_NOTE_NAME_GERMAN,
+        )
+    }
+}
 
 /** The first note in `Todosian/` of [treeUri] named like one of [names], or null. */
 internal fun findConfigNote(context: Context, treeUri: Uri, names: List<String>): Uri? {
@@ -101,7 +126,7 @@ internal fun findConfigNote(context: Context, treeUri: Uri, names: List<String>)
         ?.id ?: return null
     val children = listChildren(context, treeUri, configId).filter { !it.isDirectory }
     val note = names.firstNotNullOfOrNull { wanted ->
-        children.firstOrNull { it.name.equals(wanted, ignoreCase = true) }
+        children.firstOrNull { sameName(it.name, wanted) }
     } ?: return null
     return DocumentsContract.buildDocumentUriUsingTree(treeUri, note.id)
 }
@@ -149,7 +174,7 @@ internal fun ensureConfigNote(
     var parentId = ensureDir(DocumentsContract.getTreeDocumentId(treeUri), listOf(CONFIG_FOLDER_NAME))
     if (subfolderNames != null) parentId = ensureDir(parentId, subfolderNames)
     val existing = listChildren(context, treeUri, parentId)
-        .firstOrNull { child -> !child.isDirectory && fileNames.any { child.name.equals(it, ignoreCase = true) } }
+        .firstOrNull { child -> !child.isDirectory && fileNames.any { sameName(child.name, it) } }
     if (existing != null) return DocumentsContract.buildDocumentUriUsingTree(treeUri, existing.id) to false
     val created = DocumentsContract.createDocument(
         resolver,
@@ -222,3 +247,8 @@ private val STAMP_PROJECTION = arrayOf(
     DocumentsContract.Document.COLUMN_LAST_MODIFIED,
     DocumentsContract.Document.COLUMN_SIZE,
 )
+
+/** File names compared case-insensitively and with umlauts in either Unicode form (ö or o + ¨). */
+internal fun sameName(a: String, b: String): Boolean =
+    java.text.Normalizer.normalize(a, java.text.Normalizer.Form.NFC)
+        .equals(java.text.Normalizer.normalize(b, java.text.Normalizer.Form.NFC), ignoreCase = true)

@@ -1,5 +1,6 @@
 package com.isotjs.todosian.ui.dailyfocus
 
+import com.isotjs.todosian.utils.TagDisplaySettings
 import android.net.Uri
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
@@ -150,6 +151,7 @@ fun DailyFocusScreen(
             else -> uiState.tasks.filter { TagFilter.matches(it.todo.text, view.terms) }
         }
     }
+    val tagDisplay = remember(settings.tagDisplay) { TagDisplaySettings.decode(settings.tagDisplay) }
     val filterTerms = remember(viewTasks, tagDefinitionsByCategory) {
         TagFilter.termsFor(viewTasks.map { it.todo.text to (tagDefinitionsByCategory[it.categoryUri] ?: TagDefinitions.EMPTY) })
     }
@@ -376,6 +378,8 @@ fun DailyFocusScreen(
                         todo = task.todo,
                         enableTasksPluginSupport = settings.enableTasksPluginSupport,
                         useEmojisInUi = settings.tasksPluginUseEmojisInUi,
+                        tagDefinitions = tagDefinitionsByCategory[task.categoryUri] ?: TagDefinitions.EMPTY,
+                        tagDisplay = tagDisplay,
                         onToggle = { viewModel.toggleTodo(task) },
                         onEdit = {
                             sheetMode = TodoSheetMode.Edit(task.todo)

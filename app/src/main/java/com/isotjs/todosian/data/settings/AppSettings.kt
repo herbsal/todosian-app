@@ -27,6 +27,8 @@ data class AppSettings(
     val folderWatchMode: FolderWatchMode = FolderWatchMode.PERIODIC,
     /** Main switch for reminders from reminder profiles; ⏰ in a line always rings. */
     val profileRemindersEnabled: Boolean = true,
+    /** Encoded [com.isotjs.todosian.utils.TagDisplaySettings]; empty = defaults. */
+    val tagDisplay: String = "",
 ) {
     /** Resolves the configured markers, falling back to the emoji default when a field is blank. */
     fun toTaskMarkers(): TaskMarkers = TaskMarkers(

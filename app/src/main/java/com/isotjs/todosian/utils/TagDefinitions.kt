@@ -10,9 +10,23 @@ data class TagTerm(val label: String, val tags: List<String>) {
     fun matches(tag: String): Boolean = tags.any { it.equals(tag, ignoreCase = true) }
 }
 
-/** Keywords under one heading of the keyword note. Only one keyword of a named group is set at a time. */
-data class TagGroup(val name: String?, val terms: List<TagTerm>) {
+/**
+ * Keywords under one heading of the keyword note. Only one keyword of a named group is set at a time.
+ * [icon] is a symbol written before the name in the heading, e.g. `## ⏱ Effort`; [name] is without it.
+ */
+data class TagGroup(val name: String?, val terms: List<TagTerm>, val icon: String? = null) {
     val exclusive: Boolean get() = name != null
+
+    companion object {
+        private val iconRegex = Regex("""^([^\p{L}\p{N}\s#][^\p{L}\p{N}\s]*)\s+(\S.*)$""")
+
+        /** Splits a heading like `⏱ Aufwand` into name and icon. */
+        fun fromHeading(heading: String?, terms: List<TagTerm>): TagGroup {
+            val match = heading?.let { iconRegex.matchEntire(it.trim()) }
+            return if (match != null) TagGroup(match.groupValues[2].trim(), terms, match.groupValues[1])
+            else TagGroup(heading, terms)
+        }
+    }
 }
 
 /** The keywords a folder defines in its keyword note. */
@@ -116,7 +130,7 @@ data class TagNoteGroup(val name: String?, val headingLine: Int?, val terms: Lis
 /** A keyword note as read: its lines, groups with line numbers, and lines with wrong syntax. */
 data class TagNote(val lines: List<String>, val groups: List<TagNoteGroup>, val problems: List<NoteProblem>) {
     val definitions: TagDefinitions
-        get() = TagDefinitions(groups.filter { it.terms.isNotEmpty() }.map { group -> TagGroup(group.name, group.terms.map { it.term }) })
+        get() = TagDefinitions(groups.filter { it.terms.isNotEmpty() }.map { group -> TagGroup.fromHeading(group.name, group.terms.map { it.term }) })
 
     /** Groups the editor shows: named groups, and ungrouped keywords when there are any. */
     val editableGroups: List<TagNoteGroup> get() = groups.filter { it.name != null || it.terms.isNotEmpty() }

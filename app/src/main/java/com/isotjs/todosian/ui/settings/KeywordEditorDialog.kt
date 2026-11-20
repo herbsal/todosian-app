@@ -491,6 +491,7 @@ private fun HelpCard(profileHelp: Boolean) {
                     R.string.keyword_editor_help_1,
                     R.string.keyword_editor_help_2,
                     R.string.keyword_editor_help_3,
+                    R.string.keyword_editor_help_icon,
                     R.string.keyword_editor_help_4,
                 )
             }
