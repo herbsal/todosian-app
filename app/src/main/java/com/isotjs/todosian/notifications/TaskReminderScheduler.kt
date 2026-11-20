@@ -14,6 +14,7 @@ import com.isotjs.todosian.data.findTagNote
 import com.isotjs.todosian.data.scanMarkdownTree
 import com.isotjs.todosian.data.settings.SharedPrefsAppSettingsRepository
 import com.isotjs.todosian.utils.MarkdownParser
+import com.isotjs.todosian.utils.SeenTask
 import com.isotjs.todosian.utils.TagDefinitionParser
 import com.isotjs.todosian.utils.TagDefinitions
 import com.isotjs.todosian.utils.TagText
@@ -90,6 +91,7 @@ object TaskReminderScheduler {
         val settings = SharedPrefsAppSettingsRepository(context).settings.first()
         val markers = settings.toTaskMarkers()
         val folders = (listOfNotNull(preferences.getFolderUri()) + preferences.getExtraFolderUris()).distinct()
+        val alertFiles = preferences.getNewTaskAlertFiles()
 
         val candidates = folders.flatMap { folder ->
             val files = runCatching { scanMarkdownTree(context, folder, settings.includeSubfolders).files }
@@ -98,13 +100,24 @@ object TaskReminderScheduler {
             val personScope = preferences.getPersonScope(folder)
             val definitions = if (profile != null || personScope != null) loadTagDefinitions(context, folder) else TagDefinitions.EMPTY
             files.flatMap { file ->
-                val lines = runCatching {
+                val readLines = runCatching {
                     context.contentResolver.openInputStream(file.ref)?.bufferedReader()?.use { it.readLines() }
-                }.getOrNull().orEmpty()
+                }.getOrNull()
+                val lines = readLines.orEmpty()
                 // Only tasks of the people chosen on this device remind, also those with ⏰.
                 val open = MarkdownParser.parse(lines, markers)
                     .filter { !it.isDone }
                     .filter { todo -> personScope?.allows(todo.text, definitions) ?: true }
+                if (readLines != null && file.ref.toString() in alertFiles) {
+                    runCatching {
+                        NewTaskAlerts.check(
+                            context = context,
+                            fileKey = file.ref.toString(),
+                            listName = file.relativePath.substringAfterLast('/').removeSuffix(".md"),
+                            open = open.map { todo -> SeenTask(todo.text, lines.getOrElse(todo.lineIndex) { todo.text }) },
+                        )
+                    }.onFailure { Log.w(TAG, "Checking for new tasks failed", it) }
+                }
                 val direct = open.mapNotNull { todo ->
                     val reminder = MarkdownParser.parseReminder(todo.reminder) ?: return@mapNotNull null
                     ReminderCandidate(file.ref.toString(), todo.text, reminder, todo.lineIndex)
@@ -130,6 +143,7 @@ object TaskReminderScheduler {
             }
         }
 
+        NewTaskAlerts.keepOnly(context, alertFiles)
         val prefs = statePrefs(context)
         val existingKeys = candidates.map { TaskReminderPlanner.keyOf(it) }.toSet()
         val notified = readNotified(prefs).filterKeys { it in existingKeys }

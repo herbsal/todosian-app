@@ -413,4 +413,18 @@
     <string name="settings_person_scope_group">Group with people</string>
     <string name="settings_person_scope_people">Remind about tasks of</string>
     <string name="widget_configure_view_hint">Quick view: open tasks with these keywords from all lists</string>
+    <string name="settings_new_task_alerts">New tasks</string>
+    <string name="settings_new_task_alerts_off">Off: no message for tasks someone else adds</string>
+    <plurals name="settings_new_task_alerts_lists">
+        <item quantity="one">Message for new tasks in %d list</item>
+        <item quantity="other">Message for new tasks in %d lists</item>
+    </plurals>
+    <string name="settings_new_task_alerts_hint">When someone else adds a task to one of these lists, for example via Syncthing, you get a message right away, also without ⏰. Tasks you add on this device do not count. Only tasks for the people chosen under “Remind me about” count. How fast it arrives depends on “Notice changes from other apps”.</string>
+    <string name="notification_new_task_channel_name">New tasks</string>
+    <string name="notification_new_task_channel_description">Tells you when someone else adds a task to a list you chose.</string>
+    <string name="notification_new_task_title">New for you in %1$s</string>
+    <plurals name="notification_new_tasks_title">
+        <item quantity="one">%1$d new task for you in %2$s</item>
+        <item quantity="other">%1$d new tasks for you in %2$s</item>
+    </plurals>
 </resources>
