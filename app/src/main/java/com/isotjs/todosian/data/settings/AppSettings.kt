@@ -35,6 +35,12 @@ data class AppSettings(
     val tagRecognition: Boolean = true,
     /** Take recognized words out of the title; people's names always stay. */
     val tagRecognitionRemoveWords: Boolean = true,
+    /** Home screen: open tasks per list, or the list tiles. */
+    val homeLayout: HomeLayout = HomeLayout.TASKS,
+    /** How many open tasks each list shows on the home screen. */
+    val homeTasksPerList: Int = 3,
+    /** Lists folded on the home screen (note URIs). */
+    val homeCollapsed: Set<String> = emptySet(),
 ) {
     /** Resolves the configured markers, falling back to the emoji default when a field is blank. */
     fun toTaskMarkers(): TaskMarkers = TaskMarkers(
@@ -57,6 +63,11 @@ enum class ThemeMode {
     SYSTEM,
     LIGHT,
     DARK,
+}
+
+enum class HomeLayout {
+    TASKS,
+    TILES,
 }
 
 enum class CategorySort {

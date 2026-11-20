@@ -56,6 +56,8 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ColorLens
 import androidx.compose.material.icons.filled.ContentCut
+import androidx.compose.material.icons.filled.Dashboard
+import androidx.compose.material.icons.filled.FormatListNumbered
 import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FiberNew
@@ -132,6 +134,7 @@ import com.isotjs.todosian.data.model.Category
 import com.isotjs.todosian.data.settings.AppSettings
 import com.isotjs.todosian.data.settings.AppSettingsRepository
 import com.isotjs.todosian.data.settings.CategorySort
+import com.isotjs.todosian.data.settings.HomeLayout
 import com.isotjs.todosian.data.settings.FolderWatchMode
 import com.isotjs.todosian.data.settings.ReminderRepeat
 import com.isotjs.todosian.sync.FolderWatchScheduler
@@ -213,6 +216,8 @@ fun SettingsScreen(
 
     var showThemeDialog by remember { mutableStateOf(false) }
     var showSortDialog by remember { mutableStateOf(false) }
+    var showHomeLayoutDialog by remember { mutableStateOf(false) }
+    var showHomeCountDialog by remember { mutableStateOf(false) }
     var showGroupingDialog by remember { mutableStateOf(false) }
     var showTodoSortDialog by remember { mutableStateOf(false) }
     var showNewTodoFilePositionDialog by remember { mutableStateOf(false) }
@@ -256,6 +261,29 @@ fun SettingsScreen(
             selected = settings.themeMode,
             onSelected = { appSettingsRepository.setThemeMode(it) },
             onDismiss = { showThemeDialog = false },
+        )
+    }
+
+    if (showHomeLayoutDialog) {
+        SingleChoiceDialog(
+            title = stringResource(R.string.settings_home_layout),
+            options = listOf(
+                ChoiceOption(HomeLayout.TASKS, stringResource(R.string.settings_home_layout_tasks)),
+                ChoiceOption(HomeLayout.TILES, stringResource(R.string.settings_home_layout_tiles)),
+            ),
+            selected = settings.homeLayout,
+            onSelected = { appSettingsRepository.setHomeLayout(it) },
+            onDismiss = { showHomeLayoutDialog = false },
+        )
+    }
+
+    if (showHomeCountDialog) {
+        SingleChoiceDialog(
+            title = stringResource(R.string.settings_home_tasks_per_list),
+            options = listOf(3, 5, 10, 20).map { ChoiceOption(it, it.toString()) },
+            selected = settings.homeTasksPerList,
+            onSelected = { appSettingsRepository.setHomeTasksPerList(it) },
+            onDismiss = { showHomeCountDialog = false },
         )
     }
 
@@ -886,6 +914,28 @@ fun SettingsScreen(
                             onCheckedChange = { appSettingsRepository.setTagRecognitionRemoveWords(it) },
                             enabled = settings.tagRecognition,
                         )
+
+                        SettingsDivider()
+
+                        SettingsNavRow(
+                            icon = Icons.Filled.Dashboard,
+                            title = stringResource(R.string.settings_home_layout),
+                            subtitle = stringResource(
+                                if (settings.homeLayout == HomeLayout.TASKS) R.string.settings_home_layout_tasks
+                                else R.string.settings_home_layout_tiles,
+                            ),
+                            onClick = { showHomeLayoutDialog = true },
+                        )
+
+                        if (settings.homeLayout == HomeLayout.TASKS) {
+                            SettingsDivider()
+                            SettingsNavRow(
+                                icon = Icons.Filled.FormatListNumbered,
+                                title = stringResource(R.string.settings_home_tasks_per_list),
+                                subtitle = settings.homeTasksPerList.toString(),
+                                onClick = { showHomeCountDialog = true },
+                            )
+                        }
 
                         SettingsDivider()
 
