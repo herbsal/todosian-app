@@ -413,4 +413,7 @@
     <string name="settings_person_scope_group">Gruppe mit Personen</string>
     <string name="settings_person_scope_people">Erinnern an Aufgaben von</string>
     <string name="widget_configure_view_hint">Schnellansicht: offene Aufgaben mit diesen Schlagwörtern aus allen Listen</string>
+    <string name="category_recognized_reminder">⏰ %1$s, %2$s</string>
+    <string name="category_recognized_due">📅 %1$s</string>
+    <string name="category_recognized_ignore">Datum als Text behalten</string>
 </resources>

@@ -1,5 +1,17 @@
 package com.isotjs.todosian.ui.category
 
+import androidx.compose.material3.InputChip
+import androidx.compose.material3.InputChipDefaults
+import androidx.compose.material.icons.filled.Close
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
+import androidx.compose.ui.platform.LocalConfiguration
+import com.isotjs.todosian.utils.NaturalDates
+import com.isotjs.todosian.utils.DateMatch
+import com.isotjs.todosian.utils.TaskMarkers
+import com.isotjs.todosian.utils.REMINDER_MARKER
+import androidx.compose.foundation.layout.size
 import android.net.Uri
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
@@ -176,6 +188,12 @@ fun CategoryScreen(
             sheetState = todoSheetState,
         ) {
             val scrollState = rememberScrollState()
+            val recognizedDate = remember(sheetText) { NaturalDates.find(sheetText, LocalDateTime.now()) }
+            var ignoreDateInText by remember(sheetMode) { mutableStateOf(false) }
+            val applyDate: (String, MarkdownParser.TasksMeta) -> Pair<String, MarkdownParser.TasksMeta> = { text, meta ->
+                val match = if (sheetMode is TodoSheetMode.Edit || ignoreDateInText) null else NaturalDates.find(text, LocalDateTime.now())
+                applyRecognizedDate(match, text, meta, settings.enableTasksPluginSupport, settings.toTaskMarkers())
+            }
             val todoTextBringIntoView = remember { BringIntoViewRequester() }
             val recurrenceBringIntoView = remember { BringIntoViewRequester() }
             val titleRes = when (sheetMode) {
@@ -219,6 +237,13 @@ fun CategoryScreen(
                             }
                         },
                 )
+
+                // C2: "morgen 17 Uhr ..." becomes ⏰ / 📅 on save; the chip shows it and can turn it off.
+                val dateMatch = if (sheetMode is TodoSheetMode.Edit || ignoreDateInText) null else recognizedDate
+                if (dateMatch != null) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    RecognizedDateChip(match = dateMatch, onIgnore = { ignoreDateInText = true })
+                }
 
                 if (!uiState.tagDefinitions.isEmpty) {
                     Spacer(modifier = Modifier.height(8.dp))
@@ -266,12 +291,15 @@ fun CategoryScreen(
                     TextButton(
                         onClick = {
                             when (val mode = sheetMode) {
-                                TodoSheetMode.Add -> viewModel.addTodo(
-                                    text = sheetText,
-                                    meta = if (settings.enableTasksPluginSupport) sheetMeta else null,
-                                    enableTasksPluginSupport = settings.enableTasksPluginSupport,
-                                    addAtStart = settings.newTodoFilePosition == NewTodoFilePosition.TOP,
-                                )
+                                TodoSheetMode.Add -> {
+                                    val (text, meta) = applyDate(sheetText, sheetMeta)
+                                    viewModel.addTodo(
+                                        text = text,
+                                        meta = if (settings.enableTasksPluginSupport) meta else null,
+                                        enableTasksPluginSupport = settings.enableTasksPluginSupport,
+                                        addAtStart = settings.newTodoFilePosition == NewTodoFilePosition.TOP,
+                                    )
+                                }
 
                                 is TodoSheetMode.Edit -> viewModel.editTodo(
                                     todo = mode.todo,
@@ -283,10 +311,11 @@ fun CategoryScreen(
                                 TodoSheetMode.AddSubtask -> {
                                     val parent = sheetParentTodo
                                     if (parent != null) {
+                                        val (text, meta) = applyDate(sheetText, sheetMeta)
                                         viewModel.addSubTodo(
                                             parent = parent,
-                                            text = sheetText,
-                                            meta = if (settings.enableTasksPluginSupport) sheetMeta else null,
+                                            text = text,
+                                            meta = if (settings.enableTasksPluginSupport) meta else null,
                                             enableTasksPluginSupport = settings.enableTasksPluginSupport,
                                         )
                                     }
@@ -835,3 +864,45 @@ private class CategoryViewModelFactory(
 }
 
 private const val TAG_FILTER_SEPARATOR = "\u001F"
+
+/**
+ * Moves a date found in the text into the task: with a time as ⏰ reminder, without as 📅 due
+ * date. Without Obsidian Tasks support the markers are written into the text itself.
+ */
+private fun applyRecognizedDate(
+    match: DateMatch?,
+    text: String,
+    meta: MarkdownParser.TasksMeta,
+    tasksPlugin: Boolean,
+    markers: TaskMarkers,
+): Pair<String, MarkdownParser.TasksMeta> {
+    if (match == null) return text to meta
+    val reminder = match.dateTime?.let { MarkdownParser.formatReminder(it) }
+    return if (tasksPlugin) {
+        match.text to if (reminder != null) meta.copy(reminder = reminder) else meta.copy(dueDate = match.date.toString())
+    } else {
+        val suffix = if (reminder != null) "$REMINDER_MARKER $reminder" else "${markers.due} ${match.date}"
+        "${match.text} $suffix" to meta
+    }
+}
+
+@Composable
+private fun RecognizedDateChip(match: DateMatch, onIgnore: () -> Unit) {
+    val locale = LocalConfiguration.current.locales[0]
+    val dateText = match.date.format(DateTimeFormatter.ofPattern("EEE d. MMM", locale))
+    val label = match.time?.let { time ->
+        stringResource(R.string.category_recognized_reminder, dateText, time.format(DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT).withLocale(locale)))
+    } ?: stringResource(R.string.category_recognized_due, dateText)
+    InputChip(
+        selected = true,
+        onClick = onIgnore,
+        label = { Text(text = label) },
+        trailingIcon = {
+            Icon(
+                Icons.Filled.Close,
+                contentDescription = stringResource(R.string.category_recognized_ignore),
+                modifier = Modifier.size(InputChipDefaults.IconSize),
+            )
+        },
+    )
+}
