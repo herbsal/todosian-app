@@ -51,6 +51,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ColorLens
 import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.FiberNew
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderShared
 import androidx.compose.material.icons.filled.Info
@@ -219,6 +220,8 @@ fun SettingsScreen(
     var showReminderRepeatDialog by remember { mutableStateOf(false) }
     var showFolderWatchDialog by remember { mutableStateOf(false) }
     var showReminderProfilesDialog by remember { mutableStateOf(false) }
+    var showNewTaskAlertDialog by remember { mutableStateOf(false) }
+    var newTaskAlertFiles by remember { mutableStateOf(preferencesManager.getNewTaskAlertFiles()) }
     var showKeywordEditor by remember { mutableStateOf(false) }
     var hasAllFilesAccess by remember { mutableStateOf(FolderWatchScheduler.hasAllFilesAccess()) }
     LifecycleResumeEffect(settings.folderWatchMode) {
@@ -339,6 +342,20 @@ fun SettingsScreen(
             fileRepository = fileRepository,
             preferencesManager = preferencesManager,
             onDismiss = { showReminderProfilesDialog = false },
+        )
+    }
+
+    if (showNewTaskAlertDialog) {
+        NewTaskAlertDialog(
+            fileRepository = fileRepository,
+            selected = newTaskAlertFiles,
+            onSave = { files ->
+                preferencesManager.saveNewTaskAlertFiles(files)
+                newTaskAlertFiles = files
+                showNewTaskAlertDialog = false
+                TaskReminderScheduler.requestSync(context)
+            },
+            onDismiss = { showNewTaskAlertDialog = false },
         )
     }
 
@@ -796,6 +813,19 @@ fun SettingsScreen(
                                 stringResource(R.string.settings_reminder_profiles_subtitle_off)
                             },
                             onClick = { showReminderProfilesDialog = true },
+                        )
+
+                        SettingsDivider()
+
+                        SettingsNavRow(
+                            icon = Icons.Filled.FiberNew,
+                            title = stringResource(R.string.settings_new_task_alerts),
+                            subtitle = if (newTaskAlertFiles.isEmpty()) {
+                                stringResource(R.string.settings_new_task_alerts_off)
+                            } else {
+                                pluralStringResource(R.plurals.settings_new_task_alerts_lists, newTaskAlertFiles.size, newTaskAlertFiles.size)
+                            },
+                            onClick = { showNewTaskAlertDialog = true },
                         )
 
                         SettingsDivider()
@@ -1293,6 +1323,65 @@ private fun reminderRepeatLabel(repeat: ReminderRepeat): String = when (repeat) 
 private fun folderWatchLabel(mode: FolderWatchMode): String = when (mode) {
     FolderWatchMode.PERIODIC -> stringResource(R.string.settings_folder_watch_periodic)
     FolderWatchMode.INSTANT -> stringResource(R.string.settings_folder_watch_instant)
+}
+
+/**
+ * Lists whose new tasks are announced on this device ("New for you"), also without ⏰. Who counts
+ * as "you" follows the "Remind about" choice of the reminder profiles.
+ */
+@Composable
+private fun NewTaskAlertDialog(
+    fileRepository: FileRepository,
+    selected: Set<String>,
+    onSave: (Set<String>) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val categories by produceState<List<Category>?>(initialValue = null) {
+        value = fileRepository.getCategories().getOrDefault(emptyList())
+    }
+    var chosen by remember { mutableStateOf(selected) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(text = stringResource(R.string.settings_new_task_alerts)) },
+        text = {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                Text(
+                    text = stringResource(R.string.settings_new_task_alerts_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 8.dp),
+                )
+                val loaded = categories
+                if (loaded == null) {
+                    CircularProgressIndicator(modifier = Modifier.padding(top = 8.dp).size(24.dp))
+                }
+                loaded.orEmpty().forEach { category ->
+                    val key = category.uri.toString()
+                    val checked = key in chosen
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .toggleable(
+                                value = checked,
+                                role = Role.Checkbox,
+                                onValueChange = { on -> chosen = if (on) chosen + key else chosen - key },
+                            )
+                            .padding(vertical = 4.dp),
+                    ) {
+                        Checkbox(checked = checked, onCheckedChange = null)
+                        Text(text = category.displayName, modifier = Modifier.padding(start = 8.dp))
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onSave(chosen) }) { Text(text = stringResource(R.string.action_save)) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(text = stringResource(R.string.action_cancel)) }
+        },
+    )
 }
 
 private data class FolderProfiles(val uri: Uri, val name: String, val profiles: List<String>, val definitions: TagDefinitions)

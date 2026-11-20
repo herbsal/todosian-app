@@ -14,10 +14,14 @@ import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.isotjs.todosian.ui.theme.TodosianTheme
 import com.isotjs.todosian.data.settings.ThemeMode
+import com.isotjs.todosian.utils.SharedText
 import kotlinx.coroutines.flow.MutableStateFlow
 
-/** Request to open the add-task flow; [categoryUri] non-null routes straight into that note. */
-data class AddTaskRequest(val tick: Long, val categoryUri: String?)
+/**
+ * Request to open the add-task flow; [categoryUri] non-null routes straight into that note.
+ * [text] pre-fills the new task, e.g. text shared from another app.
+ */
+data class AddTaskRequest(val tick: Long, val categoryUri: String?, val text: String? = null)
 
 class MainActivity : ComponentActivity() {
 
@@ -73,7 +77,16 @@ class MainActivity : ComponentActivity() {
 
     private fun handleIntent(intent: Intent?) {
         if (intent == null) return
-        val wantsGlobalAdd = intent.getBooleanExtra(EXTRA_OPEN_ADD_TASK, false)
+        val sharedText = if (intent.action == Intent.ACTION_SEND && intent.type?.startsWith("text/") == true) {
+            SharedText.toTaskText(
+                subject = intent.getStringExtra(Intent.EXTRA_SUBJECT),
+                text = intent.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString(),
+            )
+        } else {
+            null
+        }
+        // Shared text goes to the quick note (the default list), like the widget button.
+        val wantsGlobalAdd = intent.getBooleanExtra(EXTRA_OPEN_ADD_TASK, false) || sharedText != null
         val app = application as TodosianApplication
         val fileRepository = app.fileRepository
         val categoryUri = (
@@ -83,7 +96,7 @@ class MainActivity : ComponentActivity() {
             ?.takeIf { fileRepository.isCategoryUri(it) }
             ?.toString()
         if (wantsGlobalAdd || categoryUri != null) {
-            addTaskSignal.value = AddTaskRequest(addTaskSignal.value.tick + 1L, categoryUri)
+            addTaskSignal.value = AddTaskRequest(addTaskSignal.value.tick + 1L, categoryUri, sharedText)
             intent.removeExtra(EXTRA_OPEN_ADD_TASK)
             intent.removeExtra(EXTRA_OPEN_ADD_TASK_CATEGORY)
         }

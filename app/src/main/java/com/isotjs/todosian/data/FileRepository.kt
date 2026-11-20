@@ -31,6 +31,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import com.isotjs.todosian.notifications.NewTaskAlerts
 import com.isotjs.todosian.notifications.TaskReminderScheduler
 import com.isotjs.todosian.sync.FolderWatchScheduler
 import com.isotjs.todosian.utils.TagDefinitionParser
@@ -859,6 +860,10 @@ class SafFileRepository(
         val bytes = joinLinesLike(original, lines).toByteArray(Charsets.UTF_8)
         // Old and new content go to the journal first, so an interrupted save can be repaired (D2).
         val journaled = runCatching { writeJournal.begin(uri.toString(), originalBytes, bytes) }.isSuccess
+        // Lines written here are this device's own, never "new for you" (P1).
+        runCatching {
+            NewTaskAlerts.recordOwnLines(appContext, lines.toSet() - original.lines().toSet())
+        }
         writeBytesInternal(uri, bytes)
         if (journaled) {
             // Read back: some providers report success but keep old bytes at the end of the file.

@@ -115,6 +115,7 @@ fun CategoryScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
     autoOpenAddTodo: Boolean = false,
+    initialAddText: String = "",
 ) {
     val viewModel: CategoryViewModel = viewModel(
         factory = CategoryViewModelFactory(
@@ -168,7 +169,7 @@ fun CategoryScreen(
         if (autoOpenAddTodo && !autoOpenedAddTodo) {
             autoOpenedAddTodo = true
             sheetMode = TodoSheetMode.Add
-            sheetText = ""
+            sheetText = initialAddText
             sheetMeta = if (settings.enableTasksPluginSupport) {
                 MarkdownParser.TasksMeta(createdDate = LocalDate.now().toString())
             } else {
