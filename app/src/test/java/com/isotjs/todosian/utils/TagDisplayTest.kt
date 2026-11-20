@@ -20,7 +20,7 @@ class TagDisplayTest {
     fun definedTagsBecomeBadges() {
         val result = TagDisplay.split("Müll rausbringen #kurz #person/alex", definitions, TagDisplaySettings())
         assertEquals("Müll rausbringen", result.title)
-        assertEquals(listOf(TagBadge("⏱", "5 Min"), TagBadge("👤", "Alex")), result.badges)
+        assertEquals(listOf(TagBadge("⏱", "5 Min"), TagBadge("👤", "Alex", isPerson = true)), result.badges)
     }
 
     @Test
@@ -57,5 +57,13 @@ class TagDisplayTest {
     @Test
     fun onlyTagsKeepsText() {
         assertEquals("#kurz", TagDisplay.split("#kurz", definitions, TagDisplaySettings()).title)
+    }
+
+    @Test
+    fun severalPeopleBecomeSeveralPersonBadges() {
+        val defs = TagDefinitionParser.parse(listOf("## Person", "- Alex: #person/alex", "- Sam: #person/sam"))
+        val result = TagDisplay.split("Elternabend #person/alex #person/sam", defs, TagDisplaySettings())
+        assertEquals("Elternabend", result.title)
+        assertEquals(listOf(TagBadge("👤", "Alex", true), TagBadge("👤", "Sam", true)), result.badges)
     }
 }

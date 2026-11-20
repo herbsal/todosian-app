@@ -96,4 +96,16 @@ class TagDefinitionsTest {
         assertFalse(TagText.hasTerm("Read #5minutes", effort.terms[0]))
         assertEquals("Read #5minutes #5min", TagText.toggle("Read #5minutes", effort, effort.terms[0]))
     }
+
+    @Test
+    fun `a task can be assigned to several people`() {
+        val d = TagDefinitionParser.parse(listOf("## 👤 Wer", "- Alex: #person/alex", "- Sam: #person/sam", "## Person", "- Kim: #kim"))
+        val who = d.groups[0]
+        assertTrue(who.isPerson)
+        assertFalse(who.exclusive)
+        assertTrue(d.groups[1].isPerson)
+        val both = TagText.toggle("Kita anrufen #person/alex", who, who.terms[1])
+        assertEquals("Kita anrufen #person/alex #person/sam", both)
+        assertEquals("Kita anrufen #person/sam", TagText.toggle(both, who, who.terms[0]))
+    }
 }

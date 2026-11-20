@@ -10,6 +10,8 @@ data class AppSettings(
     val categorySort: CategorySort = CategorySort.A_Z,
     val todoGrouping: TodoGrouping = TodoGrouping.GROUPED,
     val todoSort: TodoSort = TodoSort.FILE_ORDER,
+    /** Keyword group (by name) used when [todoSort] is [TodoSort.TAG_GROUP]. */
+    val todoSortGroup: String = "",
     val newTodoFilePosition: NewTodoFilePosition = NewTodoFilePosition.BOTTOM,
     val enableTasksPluginSupport: Boolean = false,
     val tasksPluginUseEmojisInUi: Boolean = false,
@@ -68,6 +70,11 @@ enum class TodoSort {
     PRIORITY_HIGH_TO_LOW,
     CREATED_DATE_NEWEST_FIRST,
     DUE_DATE_EARLIEST_FIRST,
+    REMINDER_EARLIEST_FIRST,
+    TITLE_A_Z,
+
+    /** By the order of the keywords of one keyword group, see [AppSettings.todoSortGroup]. */
+    TAG_GROUP,
 }
 
 enum class NewTodoFilePosition {

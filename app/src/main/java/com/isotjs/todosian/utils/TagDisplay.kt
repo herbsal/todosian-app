@@ -3,8 +3,8 @@ package com.isotjs.todosian.utils
 /** How the tags of one keyword group appear in a task row. */
 enum class TagDisplayMode { CHIP, TEXT, HIDDEN }
 
-/** A keyword shown as a small badge below the task title, e.g. ⏱ 5 Min. */
-data class TagBadge(val icon: String, val label: String)
+/** A keyword shown below the task title, e.g. ⏱ 5 Min. People ([isPerson]) appear as initials. */
+data class TagBadge(val icon: String, val label: String, val isPerson: Boolean = false)
 
 /** The task title without the tags shown as badges or hidden, and the badges. */
 data class TagDisplayResult(val title: String, val badges: List<TagBadge>)
@@ -56,7 +56,7 @@ object TagDisplay {
         return when {
             listOf("aufwand", "effort", "dauer", "zeit", "time", "duration").any { name.contains(it) } -> "⏱"
             listOf("energie", "energy").any { name.contains(it) } -> "🔋"
-            listOf("person", "wer", "who", "people", "leute", "zuständig").any { name.contains(it) } -> "👤"
+            group.isPerson -> TagGroup.PERSON_ICON
             listOf("ort", "place", "location", "kontext", "context").any { name.contains(it) } -> "📍"
             listOf("prio", "wichtig").any { name.contains(it) } -> "⭐"
             else -> OTHER_ICON
@@ -74,7 +74,7 @@ object TagDisplay {
                 TagDisplayMode.HIDDEN -> ""
                 TagDisplayMode.CHIP -> {
                     val badge = if (group != null) {
-                        TagBadge(iconFor(group), group.terms.first { it.matches(tag) }.label)
+                        TagBadge(iconFor(group), group.terms.first { it.matches(tag) }.label, group.isPerson)
                     } else {
                         TagBadge(OTHER_ICON, tag.removePrefix("#"))
                     }
