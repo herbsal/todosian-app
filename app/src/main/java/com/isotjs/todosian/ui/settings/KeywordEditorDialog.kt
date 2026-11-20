@@ -56,6 +56,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -116,7 +117,7 @@ internal fun KeywordEditorDialog(
     val saveFailed = stringResource(R.string.keyword_editor_save_failed)
     val noteChanged = stringResource(R.string.keyword_editor_note_changed)
     val noteTitle = stringResource(R.string.keyword_editor_note_title)
-    val german = Locale.getDefault().language == "de"
+    val german = LocalConfiguration.current.locales[0].language == "de"
 
     val folders by produceState<List<EditorFolder>?>(initialValue = null) {
         value = (listOfNotNull(fileRepository.getFolderUri()) + fileRepository.getExtraFolderUris()).distinct().map { uri ->
