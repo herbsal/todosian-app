@@ -31,6 +31,18 @@ android {
     fun signingValue(key: String): String? = System.getenv(key) ?: keystoreProperties.getProperty(key)
 
     signingConfigs {
+        // Fixed debug key for this fork, so APKs from CI (GitHub release "develop-latest") install
+        // as updates over each other. Debug keys are not secret; never use this key for releases.
+        val forkDebugKeystore = file("fork-debug.keystore")
+        if (forkDebugKeystore.exists()) {
+            getByName("debug") {
+                storeFile = forkDebugKeystore
+                storePassword = "android"
+                keyAlias = "androiddebugkey"
+                keyPassword = "android"
+            }
+        }
+
         val storeFilePath = signingValue("TODOSIAN_RELEASE_STORE_FILE")
         val storePassword = signingValue("TODOSIAN_RELEASE_STORE_PASSWORD")
         val keyAlias = signingValue("TODOSIAN_RELEASE_KEY_ALIAS")
