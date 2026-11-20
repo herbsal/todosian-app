@@ -115,6 +115,9 @@ interface FileRepository {
     suspend fun getFolderDisplayName(folderUri: Uri): Result<String>
 
     suspend fun writeLines(uri: Uri, lines: List<String>): Result<Unit>
+
+    /** Repairs notes whose save was cut off, e.g. because the app was killed while writing. */
+    suspend fun recoverInterruptedWrites() {}
     
     /**
      * Reads the current file, applies [transform] to those lines and writes the result, all while
@@ -392,6 +395,25 @@ class SafFileRepository(
                 folder.name
                     ?: folderUri.lastPathSegment
                     ?: folderUri.toString()
+            }
+        }
+    }
+
+    override suspend fun recoverInterruptedWrites() {
+        withContext(Dispatchers.IO) {
+            fileMutex.withLock {
+                writeJournal.pending().forEach { entry ->
+                    runCatching {
+                        val uri = Uri.parse(entry.uri)
+                        val current = runCatching { readBytesInternal(uri) }.getOrNull()
+                        if (WriteJournal.recoveryFor(current, entry) == WriteJournal.Recovery.COMPLETE) {
+                            Log.w(TAG, "Completing an interrupted save")
+                            writeBytesInternal(uri, entry.new)
+                            runCatching { appContext.contentResolver.notifyChange(uri, null) }
+                        }
+                    }.onFailure { Log.w(TAG, "Recovering an interrupted save failed", it) }
+                    writeJournal.finish(entry.uri)
+                }
             }
         }
     }
@@ -814,13 +836,12 @@ class SafFileRepository(
         } ?: throw IllegalStateException("Unable to open input stream")
     }
 
-    private fun writeLinesInternal(uri: Uri, lines: List<String>) {
-        // Re-read the file so CRLF and the final newline survive the round trip through readLines().
-        val original = appContext.contentResolver.openInputStream(uri)?.use { input ->
-            input.bufferedReader().readText()
-        }.orEmpty()
-        // Encode everything before opening the file, so a failure cannot leave it half written.
-        val bytes = joinLinesLike(original, lines).toByteArray(Charsets.UTF_8)
+    private val writeJournal by lazy { WriteJournal(java.io.File(appContext.filesDir, "write-journal")) }
+
+    private fun readBytesInternal(uri: Uri): ByteArray? =
+        appContext.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+
+    private fun writeBytesInternal(uri: Uri, bytes: ByteArray) {
         openTruncatingOutputStream(uri)?.use { out ->
             runCatching { (out as? FileOutputStream)?.channel?.truncate(0) }
             out.write(bytes)
@@ -828,7 +849,25 @@ class SafFileRepository(
             // Make sure the data reaches the disk before sync tools pick the file up.
             runCatching { (out as? FileOutputStream)?.fd?.sync() }
         } ?: throw IllegalStateException("Unable to open output stream")
+    }
 
+    private fun writeLinesInternal(uri: Uri, lines: List<String>) {
+        // Re-read the file so CRLF and the final newline survive the round trip through readLines().
+        val originalBytes = readBytesInternal(uri) ?: ByteArray(0)
+        val original = originalBytes.toString(Charsets.UTF_8)
+        // Encode everything before opening the file, so a failure cannot leave it half written.
+        val bytes = joinLinesLike(original, lines).toByteArray(Charsets.UTF_8)
+        // Old and new content go to the journal first, so an interrupted save can be repaired (D2).
+        val journaled = runCatching { writeJournal.begin(uri.toString(), originalBytes, bytes) }.isSuccess
+        writeBytesInternal(uri, bytes)
+        if (journaled) {
+            // Read back: some providers report success but keep old bytes at the end of the file.
+            if (readBytesInternal(uri)?.contentEquals(bytes) != true) {
+                writeBytesInternal(uri, bytes)
+                check(readBytesInternal(uri)?.contentEquals(bytes) == true) { "Saved note differs from what was written" }
+            }
+            writeJournal.finish(uri.toString())
+        }
 
         try {
             appContext.contentResolver.notifyChange(uri, null)

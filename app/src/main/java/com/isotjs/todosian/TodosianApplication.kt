@@ -40,6 +40,9 @@ class TodosianApplication : Application() {
     override fun onCreate() {
         super.onCreate()
 
+        // A save cut off by a crash or a killed app is repaired before anything else reads the note.
+        appScope.launch { fileRepository.recoverInterruptedWrites() }
+
         appScope.launch {
             // Re-plan ⏰ alarms on start and whenever a setting that affects them changes.
             appSettingsRepository.settings
