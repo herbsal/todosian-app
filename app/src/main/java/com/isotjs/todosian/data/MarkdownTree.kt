@@ -116,6 +116,44 @@ internal fun findReminderProfiles(context: Context, treeUri: Uri): List<Pair<Str
         .sortedBy { it.first.lowercase() }
 }
 
+/**
+ * Finds or creates a note below the config folder: `Todosian/<file>` or `Todosian/<sub>/<file>`.
+ * Existing folders and files are matched by any of the given names, ignoring case; new ones get
+ * the first name. Returns the note's URI and whether it was just created.
+ */
+internal fun ensureConfigNote(
+    context: Context,
+    treeUri: Uri,
+    subfolderNames: List<String>?,
+    fileNames: List<String>,
+): Pair<Uri, Boolean> {
+    val resolver = context.contentResolver
+    fun ensureDir(parentId: String, names: List<String>): String =
+        listChildren(context, treeUri, parentId)
+            .firstOrNull { child -> child.isDirectory && names.any { child.name.equals(it, ignoreCase = true) } }
+            ?.id
+            ?: DocumentsContract.createDocument(
+                resolver,
+                DocumentsContract.buildDocumentUriUsingTree(treeUri, parentId),
+                DocumentsContract.Document.MIME_TYPE_DIR,
+                names.first(),
+            )?.let(DocumentsContract::getDocumentId)
+            ?: throw IllegalStateException("Unable to create folder ${names.first()}")
+
+    var parentId = ensureDir(DocumentsContract.getTreeDocumentId(treeUri), listOf(CONFIG_FOLDER_NAME))
+    if (subfolderNames != null) parentId = ensureDir(parentId, subfolderNames)
+    val existing = listChildren(context, treeUri, parentId)
+        .firstOrNull { child -> !child.isDirectory && fileNames.any { child.name.equals(it, ignoreCase = true) } }
+    if (existing != null) return DocumentsContract.buildDocumentUriUsingTree(treeUri, existing.id) to false
+    val created = DocumentsContract.createDocument(
+        resolver,
+        DocumentsContract.buildDocumentUriUsingTree(treeUri, parentId),
+        "text/markdown",
+        fileNames.first(),
+    ) ?: throw IllegalStateException("Unable to create ${fileNames.first()}")
+    return created to true
+}
+
 private fun listChildren(context: Context, treeUri: Uri, folderId: String): List<DocumentEntry> {
     val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, folderId)
     return context.contentResolver.query(childrenUri, PROJECTION, null, null, null)?.use { cursor ->

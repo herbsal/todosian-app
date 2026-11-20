@@ -123,3 +123,41 @@ object ProfileReminderPlanner {
         return term.matches(tag)
     }
 }
+
+/** Writes a reminder profile note in German or English wording; the parser reads both. */
+object ReminderProfileWriter {
+    fun write(profile: ReminderProfile, german: Boolean): List<String> = buildList {
+        add("# ${profile.name}")
+        profile.keywords.forEach { keyword ->
+            add("")
+            add("## ${keyword.tag}")
+            keyword.rules.sortedWith(compareByDescending<ProfileRule> { it.daysBefore }.thenBy { it.time }).forEach { rule ->
+                add("- " + describe(rule, german))
+            }
+            keyword.repeat?.let { add("- " + repeatLine(it, german)) }
+        }
+    }
+
+    fun describe(rule: ProfileRule, german: Boolean): String {
+        val time = "%02d:%02d".format(rule.time.hour, rule.time.minute)
+        return when {
+            rule.daysBefore == 0 -> time
+            german -> "${rule.daysBefore} ${if (rule.daysBefore == 1) "Tag" else "Tage"} vorher $time"
+            else -> "${rule.daysBefore} ${if (rule.daysBefore == 1) "day" else "days"} before $time"
+        }
+    }
+
+    private fun repeatLine(repeat: ReminderRepeat, german: Boolean): String = if (german) {
+        "erneut: " + when (repeat) {
+            ReminderRepeat.OFF -> "nie"
+            ReminderRepeat.HOURLY -> "stündlich"
+            ReminderRepeat.DAILY -> "täglich"
+        }
+    } else {
+        "repeat: " + when (repeat) {
+            ReminderRepeat.OFF -> "off"
+            ReminderRepeat.HOURLY -> "hourly"
+            ReminderRepeat.DAILY -> "daily"
+        }
+    }
+}

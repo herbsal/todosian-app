@@ -50,6 +50,7 @@ import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderShared
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.NotificationsActive
+import androidx.compose.material.icons.filled.Sell
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Schedule
@@ -213,6 +214,7 @@ fun SettingsScreen(
     var showReminderRepeatDialog by remember { mutableStateOf(false) }
     var showFolderWatchDialog by remember { mutableStateOf(false) }
     var showReminderProfilesDialog by remember { mutableStateOf(false) }
+    var showKeywordEditor by remember { mutableStateOf(false) }
     var hasAllFilesAccess by remember { mutableStateOf(FolderWatchScheduler.hasAllFilesAccess()) }
     LifecycleResumeEffect(settings.folderWatchMode) {
         // Coming back from the "All files access" screen: start or stop instant watching.
@@ -332,6 +334,13 @@ fun SettingsScreen(
             fileRepository = fileRepository,
             preferencesManager = preferencesManager,
             onDismiss = { showReminderProfilesDialog = false },
+        )
+    }
+
+    if (showKeywordEditor) {
+        KeywordEditorDialog(
+            fileRepository = fileRepository,
+            onDismiss = { showKeywordEditor = false },
         )
     }
 
@@ -782,6 +791,15 @@ fun SettingsScreen(
                                 stringResource(R.string.settings_reminder_profiles_subtitle_off)
                             },
                             onClick = { showReminderProfilesDialog = true },
+                        )
+
+                        SettingsDivider()
+
+                        SettingsNavRow(
+                            icon = Icons.Filled.Sell,
+                            title = stringResource(R.string.settings_keyword_editor),
+                            subtitle = stringResource(R.string.settings_keyword_editor_subtitle),
+                            onClick = { showKeywordEditor = true },
                         )
 
                         SettingsDivider()
