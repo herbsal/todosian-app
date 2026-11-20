@@ -44,8 +44,8 @@ fun TodosianApp(
         when {
             fileRepository.getFolderUri() == null -> Routes.Onboarding
             addTaskRequest.tick > 0L && categoryUri != null ->
-                Routes.category(categoryUri.toUri(), addTodo = true)
-            addTaskRequest.tick > 0L -> Routes.AddTask
+                Routes.category(categoryUri.toUri(), addTodo = true, text = addTaskRequest.text)
+            addTaskRequest.tick > 0L -> Routes.addTask(addTaskRequest.text)
             else -> Routes.Home
         }
     }
@@ -54,14 +54,16 @@ fun TodosianApp(
         val request = addTaskRequest
         if (request.tick > 0L && fileRepository.getFolderUri() != null) {
             val destination = navController.currentDestination?.route
+            // Shared text always opens a fresh sheet, even if that screen is already showing.
+            val shared = request.text != null
             when {
-                request.categoryUri != null && destination != Routes.Category ->
+                request.categoryUri != null && (shared || destination != Routes.Category) ->
                     navController.navigate(
-                        Routes.category(request.categoryUri.toUri(), addTodo = true),
-                    ) { launchSingleTop = true }
+                        Routes.category(request.categoryUri.toUri(), addTodo = true, text = request.text),
+                    ) { launchSingleTop = !shared }
 
-                request.categoryUri == null && destination != Routes.AddTask ->
-                    navController.navigate(Routes.AddTask) { launchSingleTop = true }
+                request.categoryUri == null && (shared || destination != Routes.AddTask) ->
+                    navController.navigate(Routes.addTask(request.text)) { launchSingleTop = !shared }
             }
         }
     }
@@ -182,6 +184,11 @@ fun TodosianApp(
                     type = NavType.BoolType
                     defaultValue = false
                 },
+                navArgument(Routes.ARG_TEXT) {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
             ),
         ) { backStackEntry ->
             val encoded = backStackEntry.arguments?.getString(Routes.ARG_CATEGORY_URI).orEmpty()
@@ -192,6 +199,7 @@ fun TodosianApp(
                 appSettingsRepository = appSettingsRepository,
                 categoryUri = uri,
                 autoOpenAddTodo = autoOpenAddTodo,
+                initialAddText = backStackEntry.arguments?.getString(Routes.ARG_TEXT).orEmpty(),
                 onBack = {
                     navController.previousBackStackEntry?.savedStateHandle?.set(
                         KEY_REFRESH_HOME,
@@ -202,11 +210,21 @@ fun TodosianApp(
             )
         }
 
-        composable(Routes.AddTask) {
+        composable(
+            route = Routes.AddTask,
+            arguments = listOf(
+                navArgument(Routes.ARG_TEXT) {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
+            ),
+        ) { backStackEntry ->
+            val text = backStackEntry.arguments?.getString(Routes.ARG_TEXT)
             AddTaskScreen(
                 fileRepository = fileRepository,
                 onSelectCategory = { uri ->
-                    navController.navigate(Routes.category(uri, addTodo = true))
+                    navController.navigate(Routes.category(uri, addTodo = true, text = text))
                 },
                 onBack = {
                     navController.previousBackStackEntry?.savedStateHandle?.set(
@@ -259,11 +277,15 @@ object Routes {
     const val Home = "home"
     const val Settings = "settings"
     const val DailyFocus = "daily_focus"
-    const val AddTask = "add_task"
+    const val ARG_TEXT = "text"
+    const val AddTask = "add_task?$ARG_TEXT={$ARG_TEXT}"
 
     const val ARG_CATEGORY_URI = "categoryUri"
     const val ARG_CATEGORY_ADD = "add"
-    const val Category = "category/{$ARG_CATEGORY_URI}?$ARG_CATEGORY_ADD={$ARG_CATEGORY_ADD}"
+    const val Category = "category/{$ARG_CATEGORY_URI}?$ARG_CATEGORY_ADD={$ARG_CATEGORY_ADD}&$ARG_TEXT={$ARG_TEXT}"
+
+    fun addTask(text: String? = null): String =
+        if (text == null) "add_task" else "add_task?$ARG_TEXT=${Uri.encode(text)}"
 
     const val ARG_VIEW_FOLDER = "folder"
     const val ARG_VIEW_NAME = "name"
@@ -272,6 +294,7 @@ object Routes {
     fun savedView(folder: String, name: String): String =
         "view?$ARG_VIEW_FOLDER=${Uri.encode(folder)}&$ARG_VIEW_NAME=${Uri.encode(name)}"
 
-    fun category(uri: Uri, addTodo: Boolean = false): String =
-        "category/${Uri.encode(uri.toString())}?$ARG_CATEGORY_ADD=$addTodo"
+    fun category(uri: Uri, addTodo: Boolean = false, text: String? = null): String =
+        "category/${Uri.encode(uri.toString())}?$ARG_CATEGORY_ADD=$addTodo" +
+            (text?.let { "&$ARG_TEXT=${Uri.encode(it)}" } ?: "")
 }
