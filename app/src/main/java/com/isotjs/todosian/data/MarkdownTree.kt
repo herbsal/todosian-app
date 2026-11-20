@@ -20,6 +20,9 @@ internal val PROFILE_FOLDER_NAMES = listOf("Reminders", "Erinnerungen")
 /** Accepted names of the keyword note inside [CONFIG_FOLDER_NAME]. */
 internal val TAG_NOTE_NAMES = listOf("Tags.md", "Schlagwörter.md", "Schlagwoerter.md")
 
+/** Names of the note with saved views (keyword filters with a name) in `Todosian/`. */
+internal val VIEW_NOTE_NAMES = listOf("Views.md", "Ansichten.md")
+
 /**
  * Picks the folder a document belongs to: the tree whose document id is the longest prefix of
  * [documentId] (`primary:Vault` holds `primary:Vault/Inbox.md`). Null when none does.
@@ -88,13 +91,16 @@ internal fun scanMarkdownTree(context: Context, treeUri: Uri, recursive: Boolean
 }
 
 /** The keyword note of the folder [treeUri], or null if it has none. */
-internal fun findTagNote(context: Context, treeUri: Uri): Uri? {
+internal fun findTagNote(context: Context, treeUri: Uri): Uri? = findConfigNote(context, treeUri, TAG_NOTE_NAMES)
+
+/** The first note in `Todosian/` of [treeUri] named like one of [names], or null. */
+internal fun findConfigNote(context: Context, treeUri: Uri, names: List<String>): Uri? {
     val rootId = DocumentsContract.getTreeDocumentId(treeUri)
     val configId = listChildren(context, treeUri, rootId)
         .firstOrNull { it.isDirectory && it.name.equals(CONFIG_FOLDER_NAME, ignoreCase = true) }
         ?.id ?: return null
     val children = listChildren(context, treeUri, configId).filter { !it.isDirectory }
-    val note = TAG_NOTE_NAMES.firstNotNullOfOrNull { wanted ->
+    val note = names.firstNotNullOfOrNull { wanted ->
         children.firstOrNull { it.name.equals(wanted, ignoreCase = true) }
     } ?: return null
     return DocumentsContract.buildDocumentUriUsingTree(treeUri, note.id)

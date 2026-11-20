@@ -89,16 +89,19 @@ import kotlinx.coroutines.launch
 
 private data class EditorFolder(val uri: Uri, val name: String)
 
+/** The note a line belongs to. */
+private enum class NoteTarget { TAGS, PROFILE, VIEWS }
+
 /** Which small dialog of the editor is open. Each one keeps the note it was opened on. */
 private sealed interface EditorPrompt {
     data object NewGroup : EditorPrompt
     data class RenameGroup(val note: TagNote, val group: TagNoteGroup) : EditorPrompt
-    data class Term(val note: TagNote, val group: TagNoteGroup?, val term: TagNoteTerm?) : EditorPrompt
+    data class Term(val note: TagNote, val group: TagNoteGroup?, val term: TagNoteTerm?, val view: Boolean = false) : EditorPrompt
     data object NewProfile : EditorPrompt
     data object AddKeyword : EditorPrompt
     data class AddRule(val note: ProfileNote, val keyword: ProfileNoteKeyword) : EditorPrompt
     data object DeleteProfile : EditorPrompt
-    data class FixProblem(val problem: NoteProblem, val inProfile: Boolean) : EditorPrompt
+    data class FixProblem(val problem: NoteProblem, val target: NoteTarget) : EditorPrompt
 }
 
 /**
@@ -117,6 +120,7 @@ internal fun KeywordEditorDialog(
     val saveFailed = stringResource(R.string.keyword_editor_save_failed)
     val noteChanged = stringResource(R.string.keyword_editor_note_changed)
     val noteTitle = stringResource(R.string.keyword_editor_note_title)
+    val viewsTitle = stringResource(R.string.keyword_editor_views)
     val german = LocalConfiguration.current.locales[0].language == "de"
 
     val folders by produceState<List<EditorFolder>?>(initialValue = null) {
@@ -130,6 +134,7 @@ internal fun KeywordEditorDialog(
     }
 
     var tagLines by remember { mutableStateOf<List<String>?>(null) }
+    var viewLines by remember { mutableStateOf<List<String>>(emptyList()) }
     var profileNames by remember { mutableStateOf<List<String>>(emptyList()) }
     var profileName by remember { mutableStateOf<String?>(null) }
     var profileLines by remember { mutableStateOf<List<String>>(emptyList()) }
@@ -137,6 +142,7 @@ internal fun KeywordEditorDialog(
     var showHelp by remember { mutableStateOf(false) }
 
     val tagNote = remember(tagLines) { tagLines?.let { TagDefinitionParser.parseNote(it) } }
+    val viewNote = remember(viewLines) { TagDefinitionParser.parseNote(viewLines) }
     val profileNote = remember(profileName, profileLines) {
         profileName?.let { ReminderProfileParser.parseNote(it, profileLines) }
     }
@@ -146,6 +152,7 @@ internal fun KeywordEditorDialog(
         tagLines = null
         profileName = null
         val lines = fileRepository.readTagNote(uri)
+        viewLines = fileRepository.readViewNote(uri)
         tagLines = lines
         profileNames = fileRepository.getReminderProfileNames(uri)
         if (TagDefinitionParser.parseNote(lines).definitions.isEmpty) showHelp = true
@@ -164,6 +171,18 @@ internal fun KeywordEditorDialog(
                 .onFailure {
                     report(it)
                     tagLines = fileRepository.readTagNote(uri)
+                }
+        }
+    }
+
+    fun editViews(edit: (List<String>) -> List<String>?) {
+        val uri = folderUri ?: return
+        scope.launch {
+            fileRepository.editViewNote(uri, viewsTitle, edit)
+                .onSuccess { viewLines = it }
+                .onFailure {
+                    report(it)
+                    viewLines = fileRepository.readViewNote(uri)
                 }
         }
     }
@@ -258,7 +277,7 @@ internal fun KeywordEditorDialog(
                     profile != null -> {
                         ProblemCard(
                             problems = profile.problems,
-                            onFix = { prompt = EditorPrompt.FixProblem(it, inProfile = true) },
+                            onFix = { prompt = EditorPrompt.FixProblem(it, NoteTarget.PROFILE) },
                             onDelete = { problem -> editProfile(profile.name) { NoteLines.remove(it, listOf(problem.line to problem.text)) } },
                         )
                         ProfileSection(
@@ -276,7 +295,7 @@ internal fun KeywordEditorDialog(
                     else -> {
                         ProblemCard(
                             problems = note.problems,
-                            onFix = { prompt = EditorPrompt.FixProblem(it, inProfile = false) },
+                            onFix = { prompt = EditorPrompt.FixProblem(it, NoteTarget.TAGS) },
                             onDelete = { problem -> editTags { NoteLines.remove(it, listOf(problem.line to problem.text)) } },
                         )
                         KeywordSection(
@@ -284,6 +303,13 @@ internal fun KeywordEditorDialog(
                             onEditGroup = { prompt = EditorPrompt.RenameGroup(note, it) },
                             onEditTerm = { group, term -> prompt = EditorPrompt.Term(note, group, term) },
                             onAddGroup = { prompt = EditorPrompt.NewGroup },
+                        )
+                        HorizontalDivider()
+                        ViewSection(
+                            note = viewNote,
+                            onFix = { prompt = EditorPrompt.FixProblem(it, NoteTarget.VIEWS) },
+                            onDeleteProblem = { problem -> editViews { NoteLines.remove(it, listOf(problem.line to problem.text)) } },
+                            onEdit = { term -> prompt = EditorPrompt.Term(viewNote, viewNote.editableGroups.lastOrNull(), term, view = true) },
                         )
                         HorizontalDivider()
                         Text(
@@ -344,25 +370,29 @@ internal fun KeywordEditorDialog(
                 editTags { TagNoteEdits.removeGroup(it, current.note, current.group) }
             },
         )
-        is EditorPrompt.Term -> TermPrompt(
-            term = current.term?.term,
-            onDismiss = { prompt = null },
-            onConfirm = { updated ->
-                prompt = null
-                val term = current.term
-                if (term == null) {
-                    editTags { TagNoteEdits.addTerm(it, current.note, current.group, updated) }
-                } else {
-                    editTags { TagNoteEdits.replaceTerm(it, current.note, term, updated) }
-                }
-            },
-            onDelete = current.term?.let { term ->
-                {
+        is EditorPrompt.Term -> {
+            val edit: ((List<String>) -> List<String>?) -> Unit = if (current.view) ::editViews else ::editTags
+            TermPrompt(
+                term = current.term?.term,
+                view = current.view,
+                onDismiss = { prompt = null },
+                onConfirm = { updated ->
                     prompt = null
-                    editTags { TagNoteEdits.removeTerm(it, current.note, term) }
-                }
-            },
-        )
+                    val term = current.term
+                    if (term == null) {
+                        edit { TagNoteEdits.addTerm(it, current.note, current.group, updated) }
+                    } else {
+                        edit { TagNoteEdits.replaceTerm(it, current.note, term, updated) }
+                    }
+                },
+                onDelete = current.term?.let { term ->
+                    {
+                        prompt = null
+                        edit { TagNoteEdits.removeTerm(it, current.note, term) }
+                    }
+                },
+            )
+        }
         EditorPrompt.NewProfile -> TextPrompt(
             title = stringResource(R.string.keyword_editor_add_profile),
             label = stringResource(R.string.keyword_editor_profile_name),
@@ -411,10 +441,11 @@ internal fun KeywordEditorDialog(
                 prompt = null
                 val problem = current.problem
                 val profile = profileNote
-                if (current.inProfile && profile != null) {
-                    editProfile(profile.name) { NoteLines.replace(it, problem.line, problem.text, text) }
-                } else {
-                    editTags { NoteLines.replace(it, problem.line, problem.text, text) }
+                when {
+                    current.target == NoteTarget.PROFILE && profile != null ->
+                        editProfile(profile.name) { NoteLines.replace(it, problem.line, problem.text, text) }
+                    current.target == NoteTarget.VIEWS -> editViews { NoteLines.replace(it, problem.line, problem.text, text) }
+                    else -> editTags { NoteLines.replace(it, problem.line, problem.text, text) }
                 }
             },
             supportingText = problemHint(current.problem.kind),
@@ -586,6 +617,39 @@ private fun KeywordSection(
     }
 }
 
+/** Saved views: named keyword filters shown as chips on the home screen. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ViewSection(
+    note: TagNote,
+    onFix: (NoteProblem) -> Unit,
+    onDeleteProblem: (NoteProblem) -> Unit,
+    onEdit: (TagNoteTerm?) -> Unit,
+) {
+    Text(text = stringResource(R.string.keyword_editor_views), style = MaterialTheme.typography.titleMedium)
+    Text(
+        text = stringResource(R.string.keyword_editor_views_hint),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    ProblemCard(problems = note.problems, onFix = onFix, onDelete = onDeleteProblem)
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        note.groups.flatMap { it.terms }.forEach { entry ->
+            InputChip(
+                selected = false,
+                onClick = { onEdit(entry) },
+                label = { Text(entry.term.label) },
+            )
+        }
+        InputChip(
+            selected = false,
+            onClick = { onEdit(null) },
+            label = { Text(stringResource(R.string.keyword_editor_add_view)) },
+            leadingIcon = { Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(InputChipDefaults.IconSize)) },
+        )
+    }
+}
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ProfileSection(
@@ -718,6 +782,7 @@ private fun TextPrompt(
 @Composable
 private fun TermPrompt(
     term: TagTerm?,
+    view: Boolean,
     onDismiss: () -> Unit,
     onConfirm: (TagTerm) -> Unit,
     onDelete: (() -> Unit)?,
@@ -728,7 +793,13 @@ private fun TermPrompt(
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Text(text = stringResource(if (term == null) R.string.keyword_editor_add_keyword else R.string.keyword_editor_edit_keyword))
+            val title = when {
+                view && term == null -> R.string.keyword_editor_add_view
+                view -> R.string.keyword_editor_edit_view
+                term == null -> R.string.keyword_editor_add_keyword
+                else -> R.string.keyword_editor_edit_keyword
+            }
+            Text(text = stringResource(title))
         },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -742,7 +813,9 @@ private fun TermPrompt(
                     value = tags,
                     onValueChange = { tags = it },
                     label = { Text(stringResource(R.string.keyword_editor_keyword_tags)) },
-                    supportingText = { Text(stringResource(R.string.keyword_editor_keyword_tags_hint)) },
+                    supportingText = {
+                        Text(stringResource(if (view) R.string.keyword_editor_view_tags_hint else R.string.keyword_editor_keyword_tags_hint))
+                    },
                 )
             }
         },

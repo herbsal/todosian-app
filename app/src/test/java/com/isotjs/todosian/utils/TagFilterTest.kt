@@ -51,4 +51,24 @@ class TagFilterTest {
         assertEquals(listOf("baumarkt", "Einkauf"), terms.map { it.label })
         assertTrue(TagFilter.matches("b #einkauf", listOf(terms[1])))
     }
+
+    @Test
+    fun savedViewsUseSynonymsAndGroups() {
+        val views = SavedViews.parse(
+            listOf(
+                "# Ansichten",
+                "- Kleine Aufgaben: #kurz, #2h",
+                "- Schnell und müde: #5min, #energie/niedrig",
+                "- Papier: #papierkram",
+            ),
+            definitions,
+            "folder",
+        )
+        assertEquals(listOf("Kleine Aufgaben", "Schnell und müde", "Papier"), views.map { it.name })
+        // #kurz and #2h are both effort: either one is enough.
+        assertEquals(texts.take(3), texts.filter { TagFilter.matches(it, views[0].terms) })
+        // Effort and energy are different groups: both must apply; #5min is a synonym of #kurz.
+        assertEquals(listOf(texts[0]), texts.filter { TagFilter.matches(it, views[1].terms) })
+        assertEquals(listOf(texts[1]), texts.filter { TagFilter.matches(it, views[2].terms) })
+    }
 }

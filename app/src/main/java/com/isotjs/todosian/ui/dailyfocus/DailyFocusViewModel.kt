@@ -47,6 +47,8 @@ class DailyFocusViewModel(
     val mode: DailyFocusMode,
     val enableTasksPluginSupport: Boolean,
     private val appSettingsRepository: AppSettingsRepository,
+    /** For a saved view: every open task, not only the ones due. */
+    private val showAllOpen: Boolean = false,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(DailyFocusUiState(isLoading = true))
@@ -110,7 +112,7 @@ class DailyFocusViewModel(
 
                 MarkdownParser.parse(lines, markers)
                     .filter { !it.isDone }
-                    .filter { todo -> matchesFocusMode(todo, mode, today) }
+                    .filter { todo -> showAllOpen || matchesFocusMode(todo, mode, today) }
                     .forEach { todo ->
                         tasks.add(
                             DailyFocusTask(
@@ -251,7 +253,7 @@ class DailyFocusViewModel(
 
             MarkdownParser.parse(lines, markers)
                 .filter { !it.isDone }
-                .filter { todo -> matchesFocusMode(todo, mode, today) }
+                .filter { todo -> showAllOpen || matchesFocusMode(todo, mode, today) }
                 .forEach { todo ->
                     tasks.add(
                         DailyFocusTask(
