@@ -11,13 +11,23 @@ data class TagTerm(val label: String, val tags: List<String>) {
 }
 
 /**
- * Keywords under one heading of the keyword note. Only one keyword of a named group is set at a time.
+ * Keywords under one heading of the keyword note. Only one keyword of a named group is set at a time,
+ * except in person groups (see [isPerson]).
  * [icon] is a symbol written before the name in the heading, e.g. `## ⏱ Effort`; [name] is without it.
  */
 data class TagGroup(val name: String?, val terms: List<TagTerm>, val icon: String? = null) {
-    val exclusive: Boolean get() = name != null
+    /**
+     * A group of people (icon 👤 or a name like "Person"/"Wer"). A task may be assigned to several
+     * people at once, so person groups are not exclusive.
+     */
+    val isPerson: Boolean
+        get() = icon == PERSON_ICON || name?.lowercase()?.let { n -> PERSON_NAMES.any { n.contains(it) } } == true
+
+    val exclusive: Boolean get() = name != null && !isPerson
 
     companion object {
+        const val PERSON_ICON = "👤"
+        val PERSON_NAMES = listOf("person", "wer", "who", "people", "leute", "zuständig")
         private val iconRegex = Regex("""^([^\p{L}\p{N}\s#][^\p{L}\p{N}\s]*)\s+(\S.*)$""")
 
         /** Splits a heading like `⏱ Aufwand` into name and icon. */

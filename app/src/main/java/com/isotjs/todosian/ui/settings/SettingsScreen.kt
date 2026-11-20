@@ -298,6 +298,11 @@ fun SettingsScreen(
                     TodoSort.DUE_DATE_EARLIEST_FIRST,
                     stringResource(R.string.settings_todo_sort_due_earliest)
                 ),
+                ChoiceOption(
+                    TodoSort.REMINDER_EARLIEST_FIRST,
+                    stringResource(R.string.settings_todo_sort_reminder_earliest)
+                ),
+                ChoiceOption(TodoSort.TITLE_A_Z, stringResource(R.string.settings_todo_sort_title)),
             ),
             selected = settings.todoSort,
             onSelected = { appSettingsRepository.setTodoSort(it) },
@@ -885,7 +890,7 @@ fun SettingsScreen(
                         SettingsNavRow(
                             icon = Icons.AutoMirrored.Filled.Sort,
                             title = stringResource(R.string.settings_todo_sort),
-                            subtitle = todoSortLabel(settings.todoSort),
+                            subtitle = todoSortLabel(settings.todoSort, settings.todoSortGroup),
                             onClick = { showTodoSortDialog = true },
                         )
 
@@ -1299,12 +1304,15 @@ private fun todoGroupingLabel(grouping: TodoGrouping): String {
 }
 
 @Composable
-private fun todoSortLabel(sort: TodoSort): String {
+private fun todoSortLabel(sort: TodoSort, group: String): String {
     return when (sort) {
         TodoSort.FILE_ORDER -> stringResource(R.string.settings_todo_sort_file_order)
         TodoSort.PRIORITY_HIGH_TO_LOW -> stringResource(R.string.settings_todo_sort_priority_desc)
         TodoSort.CREATED_DATE_NEWEST_FIRST -> stringResource(R.string.settings_todo_sort_created_newest)
         TodoSort.DUE_DATE_EARLIEST_FIRST -> stringResource(R.string.settings_todo_sort_due_earliest)
+        TodoSort.REMINDER_EARLIEST_FIRST -> stringResource(R.string.settings_todo_sort_reminder_earliest)
+        TodoSort.TITLE_A_Z -> stringResource(R.string.settings_todo_sort_title)
+        TodoSort.TAG_GROUP -> stringResource(R.string.settings_todo_sort_group, group)
     }
 }
 

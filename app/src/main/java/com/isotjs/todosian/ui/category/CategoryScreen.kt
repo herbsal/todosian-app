@@ -30,7 +30,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
@@ -83,16 +83,17 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.isotjs.todosian.R
 import com.isotjs.todosian.data.FileRepository
 import com.isotjs.todosian.data.model.Todo
-import com.isotjs.todosian.data.model.priorityRank
 import com.isotjs.todosian.data.settings.AppSettingsRepository
 import com.isotjs.todosian.data.settings.NewTodoFilePosition
 import com.isotjs.todosian.data.settings.TodoGrouping
-import com.isotjs.todosian.data.settings.TodoSort
 import com.isotjs.todosian.ui.components.TagFilterBar
 import com.isotjs.todosian.ui.components.TagQuickPicker
 import com.isotjs.todosian.utils.TagFilter
 import com.isotjs.todosian.ui.components.TasksMetaEditor
 import com.isotjs.todosian.ui.components.TodoRow
+import com.isotjs.todosian.ui.components.TodoSortMenu
+import com.isotjs.todosian.ui.components.groupedRowShape
+import com.isotjs.todosian.utils.TodoSorting
 import com.isotjs.todosian.ui.components.TodoSheetMode
 import com.isotjs.todosian.ui.components.TodosianDimens
 import com.isotjs.todosian.ui.components.TodosianEmptyState
@@ -549,6 +550,17 @@ fun CategoryScreen(
                         )
                     }
                 },
+                actions = {
+                    TodoSortMenu(
+                        sort = settings.todoSort,
+                        sortGroup = settings.todoSortGroup,
+                        groupNames = uiState.tagDefinitions.groups.mapNotNull { group -> group.name.takeIf { group.terms.isNotEmpty() } },
+                        onSelect = { sort, group ->
+                            if (group != null) appSettingsRepository.setTodoSortGroup(group)
+                            appSettingsRepository.setTodoSort(sort)
+                        },
+                    )
+                },
             )
         },
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
@@ -621,18 +633,20 @@ fun CategoryScreen(
                     }
                 }
             } else {
-                val sortedActiveTodos = remember(filteredActiveTodos, settings.todoSort) {
-                    sortTodos(filteredActiveTodos, settings.todoSort)
+                val sortKey = Triple(settings.todoSort, settings.todoSortGroup, uiState.tagDefinitions)
+                val sortedActiveTodos = remember(filteredActiveTodos, sortKey) {
+                    TodoSorting.sort(filteredActiveTodos, settings.todoSort, settings.todoSortGroup, uiState.tagDefinitions)
                 }
-                val sortedCompletedTodos = remember(filteredCompletedTodos, settings.todoSort) {
-                    sortTodos(filteredCompletedTodos, settings.todoSort)
+                val sortedCompletedTodos = remember(filteredCompletedTodos, sortKey) {
+                    TodoSorting.sort(filteredCompletedTodos, settings.todoSort, settings.todoSortGroup, uiState.tagDefinitions)
                 }
-                val sortedAllTodos = remember(
-                    filteredActiveTodos,
-                    filteredCompletedTodos,
-                    settings.todoSort,
-                ) {
-                    sortTodos(filteredActiveTodos + filteredCompletedTodos, settings.todoSort)
+                val sortedAllTodos = remember(filteredActiveTodos, filteredCompletedTodos, sortKey) {
+                    TodoSorting.sort(
+                        filteredActiveTodos + filteredCompletedTodos,
+                        settings.todoSort,
+                        settings.todoSortGroup,
+                        uiState.tagDefinitions,
+                    )
                 }
 
                 LazyColumn(modifier = Modifier.fillMaxSize()) {
@@ -660,10 +674,10 @@ fun CategoryScreen(
                         }
                     }
                     if (settings.todoGrouping == TodoGrouping.FILE_ORDER) {
-                        items(
+                        itemsIndexed(
                             items = sortedAllTodos,
-                            key = { it.id },
-                        ) { todo ->
+                            key = { _, todo -> todo.id },
+                        ) { index, todo ->
                             TodoRow(
                                 todo = todo,
                                 enableTasksPluginSupport = settings.enableTasksPluginSupport,
@@ -671,6 +685,8 @@ fun CategoryScreen(
                                 showSubtaskButton = settings.enableSubtasks,
                                 tagDefinitions = uiState.tagDefinitions,
                                 tagDisplay = tagDisplay,
+                                shape = groupedRowShape(index, sortedAllTodos.size),
+                                showDivider = index > 0,
                                 onToggle = { viewModel.toggleTodo(todo, settings.enableTasksPluginSupport) },
                                 onEdit = {
                                     sheetMode = TodoSheetMode.Edit(todo)
@@ -710,18 +726,18 @@ fun CategoryScreen(
                                     fadeOutSpec = tween(durationMillis = 160),
                                 ),
                             )
-                            Spacer(modifier = Modifier.height(8.dp))
                         }
+                        item { Spacer(modifier = Modifier.height(12.dp)) }
                         item { Spacer(modifier = Modifier.height(96.dp)) }
                         return@LazyColumn
                     }
 
                     if (sortedActiveTodos.isNotEmpty()) {
-                        item { TodosianSectionHeader(text = stringResource(R.string.category_active)) }
-                        items(
+                        item { TodosianSectionHeader(text = stringResource(R.string.category_section_count, stringResource(R.string.category_active), sortedActiveTodos.size)) }
+                        itemsIndexed(
                             items = sortedActiveTodos,
-                            key = { it.id },
-                        ) { todo ->
+                            key = { _, todo -> todo.id },
+                        ) { index, todo ->
                             TodoRow(
                                 todo = todo,
                                 enableTasksPluginSupport = settings.enableTasksPluginSupport,
@@ -729,6 +745,8 @@ fun CategoryScreen(
                                 showSubtaskButton = settings.enableSubtasks,
                                 tagDefinitions = uiState.tagDefinitions,
                                 tagDisplay = tagDisplay,
+                                shape = groupedRowShape(index, sortedActiveTodos.size),
+                                showDivider = index > 0,
                                 onToggle = { viewModel.toggleTodo(todo, settings.enableTasksPluginSupport) },
                                 onEdit = {
                                     sheetMode = TodoSheetMode.Edit(todo)
@@ -768,16 +786,16 @@ fun CategoryScreen(
                                     fadeOutSpec = tween(durationMillis = 160),
                                 ),
                             )
-                            Spacer(modifier = Modifier.height(8.dp))
                         }
+                        item { Spacer(modifier = Modifier.height(12.dp)) }
                     }
 
                     if (sortedCompletedTodos.isNotEmpty()) {
-                        item { TodosianSectionHeader(text = stringResource(R.string.category_completed)) }
-                        items(
+                        item { TodosianSectionHeader(text = stringResource(R.string.category_section_count, stringResource(R.string.category_completed), sortedCompletedTodos.size)) }
+                        itemsIndexed(
                             items = sortedCompletedTodos,
-                            key = { it.id },
-                        ) { todo ->
+                            key = { _, todo -> todo.id },
+                        ) { index, todo ->
                             TodoRow(
                                 todo = todo,
                                 enableTasksPluginSupport = settings.enableTasksPluginSupport,
@@ -785,6 +803,8 @@ fun CategoryScreen(
                                 showSubtaskButton = settings.enableSubtasks,
                                 tagDefinitions = uiState.tagDefinitions,
                                 tagDisplay = tagDisplay,
+                                shape = groupedRowShape(index, sortedCompletedTodos.size),
+                                showDivider = index > 0,
                                 onToggle = { viewModel.toggleTodo(todo, settings.enableTasksPluginSupport) },
                                 onEdit = {
                                     sheetMode = TodoSheetMode.Edit(todo)
@@ -824,8 +844,8 @@ fun CategoryScreen(
                                     fadeOutSpec = tween(durationMillis = 160),
                                 ),
                             )
-                            Spacer(modifier = Modifier.height(8.dp))
                         }
+                        item { Spacer(modifier = Modifier.height(12.dp)) }
                     }
 
                     item { Spacer(modifier = Modifier.height(96.dp)) }
@@ -833,73 +853,6 @@ fun CategoryScreen(
             }
         }
     }
-}
-
-private fun sortTodos(todos: List<Todo>, sort: TodoSort): List<Todo> {
-    return when (sort) {
-        TodoSort.FILE_ORDER -> todos.sortedBy { it.lineIndex }
-        TodoSort.PRIORITY_HIGH_TO_LOW -> sortTodosByPriorityKeepingSubtasks(todos)
-        TodoSort.CREATED_DATE_NEWEST_FIRST ->
-            todos.sortedWith(
-                compareByDescending<Todo> { it.createdDate != null }
-                    .thenByDescending { it.createdDate ?: "" }
-                    .thenBy { it.lineIndex },
-            )
-            
-        TodoSort.DUE_DATE_EARLIEST_FIRST ->
-            todos.sortedWith(
-                compareBy<Todo> { it.dueDate == null }
-                    .thenBy { it.dueDate ?: "" }
-                    .thenBy { it.lineIndex },
-            )
-    }
-}
-
-private data class TodoGroup(
-    val parent: Todo,
-    val children: List<Todo>,
-)
-
-private fun sortTodosByPriorityKeepingSubtasks(todos: List<Todo>): List<Todo> {
-    if (todos.isEmpty()) return todos
-
-    val ordered = todos.sortedBy { it.lineIndex }
-    val groups = ArrayList<TodoGroup>()
-
-    var currentParent: Todo? = null
-    var currentChildren = ArrayList<Todo>()
-
-    fun flushGroup() {
-        val parent = currentParent
-        if (parent != null) {
-            groups.add(TodoGroup(parent = parent, children = currentChildren.toList()))
-        }
-    }
-
-    for (todo in ordered) {
-        if (todo.indentLevel == 0 || currentParent == null) {
-            flushGroup()
-            currentParent = todo
-            currentChildren = ArrayList()
-        } else {
-            currentChildren.add(todo)
-        }
-    }
-
-    flushGroup()
-
-    val sortedGroups = groups.sortedWith(
-        compareByDescending<TodoGroup> { it.parent.priority.priorityRank() }
-            .thenBy { it.parent.lineIndex },
-    )
-
-    val result = ArrayList<Todo>(ordered.size)
-    for (group in sortedGroups) {
-        result.add(group.parent)
-        result.addAll(group.children)
-    }
-
-    return result
 }
 
 private class CategoryViewModelFactory(

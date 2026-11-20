@@ -44,6 +44,12 @@
     <string name="category_empty_title">No todos yet</string>
     <string name="category_empty_subtitle">Add a task to get started.</string>
     <string name="category_active">Active</string>
+    <string name="category_section_count">%1$s · %2$d</string>
+    <string name="date_today">Today</string>
+    <string name="date_tomorrow">Tomorrow</string>
+    <string name="date_yesterday">Yesterday</string>
+    <string name="date_with_time">%1$s %2$s</string>
+    <string name="cd_assigned_people">Assigned to %1$s</string>
     <string name="category_completed">Completed</string>
     <string name="category_add_todo_title">Add todo</string>
     <string name="category_add_todo_hint">What needs to be done?</string>
@@ -197,6 +203,9 @@
     <string name="settings_todo_sort_priority_desc">Priority (high to low)</string>
     <string name="settings_todo_sort_created_newest">Created date (newest first)</string>
     <string name="settings_todo_sort_due_earliest">Due date (earliest first)</string>
+    <string name="settings_todo_sort_reminder_earliest">Reminder (earliest first)</string>
+    <string name="settings_todo_sort_title">Title (A–Z)</string>
+    <string name="settings_todo_sort_group">By %1$s</string>
     <string name="settings_new_todo_file_position">Add new todos</string>
     <string name="settings_new_todo_file_position_top">Top of file</string>
     <string name="settings_new_todo_file_position_bottom">Bottom of file</string>

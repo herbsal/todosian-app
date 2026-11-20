@@ -51,6 +51,9 @@ interface AppSettingsRepository {
 
     /** How keyword tags appear in task rows (encoded [com.isotjs.todosian.utils.TagDisplaySettings]). */
     fun setTagDisplay(encoded: String) {}
+
+    /** Keyword group (by name) for [TodoSort.TAG_GROUP]. */
+    fun setTodoSortGroup(group: String) {}
 }
 
 class SharedPrefsAppSettingsRepository(
@@ -171,6 +174,10 @@ class SharedPrefsAppSettingsRepository(
         prefs.edit { putString(KEY_TAG_DISPLAY, encoded) }
     }
 
+    override fun setTodoSortGroup(group: String) {
+        prefs.edit { putString(KEY_TODO_SORT_GROUP, group) }
+    }
+
     private fun readSettings(): AppSettings {
         val themeMode = prefs.getString(KEY_THEME_MODE, null)?.let { raw ->
             runCatching { ThemeMode.valueOf(raw) }.getOrNull()
@@ -202,6 +209,7 @@ class SharedPrefsAppSettingsRepository(
             categorySort = categorySort,
             todoGrouping = todoGrouping,
             todoSort = todoSort,
+            todoSortGroup = prefs.getString(KEY_TODO_SORT_GROUP, null).orEmpty(),
             newTodoFilePosition = newTodoFilePosition,
             enableTasksPluginSupport = prefs.getBoolean(KEY_TASKS_PLUGIN, false),
             tasksPluginUseEmojisInUi = prefs.getBoolean(KEY_TASKS_PLUGIN_UI_EMOJIS, false),
@@ -258,5 +266,6 @@ class SharedPrefsAppSettingsRepository(
         private const val KEY_FOLDER_WATCH_MODE = "folder_watch_mode"
         private const val KEY_PROFILE_REMINDERS = "profile_reminders_enabled"
         private const val KEY_TAG_DISPLAY = "tag_display"
+        private const val KEY_TODO_SORT_GROUP = "todo_sort_group"
     }
 }
