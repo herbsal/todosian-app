@@ -98,6 +98,14 @@ class PreferencesManager(
         }
     }
 
+    /** Lists (file URIs) whose new tasks are announced on this device ("New for you"). */
+    fun getNewTaskAlertFiles(): Set<String> =
+        prefs.getStringSet(KEY_NEW_TASK_ALERT_FILES, emptySet()).orEmpty()
+
+    fun saveNewTaskAlertFiles(files: Set<String>) {
+        prefs.edit { putStringSet(KEY_NEW_TASK_ALERT_FILES, files) }
+    }
+
     fun getLastSeenVersionCode(): Int {
         return prefs.getInt(KEY_LAST_SEEN_VERSION_CODE, 0)
     }
@@ -111,6 +119,7 @@ class PreferencesManager(
         private const val KEY_FOLDER_URI = "folder_uri"
         private const val KEY_REMINDER_PROFILE_PREFIX = "reminder_profile:"
         private const val KEY_PERSON_SCOPE_PREFIX = "person_scope:"
+        private const val KEY_NEW_TASK_ALERT_FILES = "new_task_alert_files"
         private const val KEY_LAST_SEEN_VERSION_CODE = "last_seen_version_code"
         private const val KEY_DEFAULT_ADD_TASK_FILE_URI = "default_add_task_file_uri"
         private const val KEY_EXTRA_FOLDER_URIS = "extra_folder_uris"

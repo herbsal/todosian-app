@@ -410,4 +410,18 @@
     <string name="settings_person_scope_group">Gruppe mit Personen</string>
     <string name="settings_person_scope_people">Erinnern an Aufgaben von</string>
     <string name="widget_configure_view_hint">Schnellansicht: offene Aufgaben mit diesen Schlagwörtern aus allen Listen</string>
+    <string name="settings_new_task_alerts">Neue Aufgaben</string>
+    <string name="settings_new_task_alerts_off">Aus: keine Meldung, wenn jemand anderes Aufgaben hinzufügt</string>
+    <plurals name="settings_new_task_alerts_lists">
+        <item quantity="one">Meldung bei neuen Aufgaben in %d Liste</item>
+        <item quantity="other">Meldung bei neuen Aufgaben in %d Listen</item>
+    </plurals>
+    <string name="settings_new_task_alerts_hint">Fügt jemand anderes eine Aufgabe in eine dieser Listen ein, zum Beispiel über Syncthing, kommt sofort eine Meldung, auch ohne ⏰. Aufgaben, die du auf diesem Gerät anlegst, zählen nicht. Es zählen nur Aufgaben für die Personen, die unter „Erinnern an“ gewählt sind. Wie schnell die Meldung kommt, hängt von „Änderungen anderer Apps erkennen“ ab.</string>
+    <string name="notification_new_task_channel_name">Neue Aufgaben</string>
+    <string name="notification_new_task_channel_description">Meldet, wenn jemand anderes eine Aufgabe in eine gewählte Liste einfügt.</string>
+    <string name="notification_new_task_title">Neu für dich in %1$s</string>
+    <plurals name="notification_new_tasks_title">
+        <item quantity="one">%1$d neue Aufgabe für dich in %2$s</item>
+        <item quantity="other">%1$d neue Aufgaben für dich in %2$s</item>
+    </plurals>
 </resources>
