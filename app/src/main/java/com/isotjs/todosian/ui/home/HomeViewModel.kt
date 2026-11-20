@@ -10,6 +10,7 @@ import com.isotjs.todosian.data.FileRepository
 import com.isotjs.todosian.data.model.Category
 import com.isotjs.todosian.data.settings.AppSettingsRepository
 import com.isotjs.todosian.ui.components.awaitMinimumPullRefreshDuration
+import com.isotjs.todosian.utils.MarkdownParser
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -87,6 +88,27 @@ class HomeViewModel(
                     _uiState.value = _uiState.value.copy(isRefreshing = false)
                 }
             }
+        }
+    }
+
+    /** Ticks a task off (or on) right from the home screen; recurring tasks get their next instance. */
+    fun toggleTodo(categoryUri: Uri, todo: com.isotjs.todosian.data.model.Todo) {
+        viewModelScope.launch {
+            val settings = appSettingsRepository.settings.first()
+            val markers = settings.toTaskMarkers()
+            val result = fileRepository.updateLines(categoryUri) { lines ->
+                val index = if (todo.isDone) {
+                    todo.lineIndex.takeIf { MarkdownParser.parse(lines, markers).any { it.lineIndex == todo.lineIndex && it.text == todo.text } }
+                } else {
+                    MarkdownParser.locateOpenTodo(lines, todo.text, todo.lineIndex, markers)
+                } ?: return@updateLines null
+                MarkdownParser.tryToggleLine(lines, index, settings.enableTasksPluginSupport, markers = markers)
+            }
+            when {
+                result.isFailure -> _events.emit(Event.ShowMessage(R.string.error_write_failed))
+                result.getOrNull() == null -> _events.emit(Event.ShowMessage(R.string.error_todo_changed_externally))
+            }
+            refresh(showLoading = false)
         }
     }
 

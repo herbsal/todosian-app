@@ -464,4 +464,34 @@
     <string name="quick_add_saved">Gespeichert in %1$s</string>
     <string name="quick_add_failed">Die Aufgabe konnte nicht gespeichert werden.</string>
     <string name="cd_quick_add">Schnell erfassen</string>
+    <string name="home_tab_lists">Listen</string>
+    <string name="home_tab_calendar">Kalender</string>
+    <string name="home_list_all_done">Alles erledigt 🎉</string>
+    <string name="home_list_expand">Aufgaben zeigen</string>
+    <string name="home_list_collapse">Liste einklappen</string>
+    <string name="calendar_month">Monat</string>
+    <string name="calendar_agenda">Agenda</string>
+    <string name="calendar_day_empty">Keine Aufgaben an diesem Tag.</string>
+    <string name="calendar_agenda_empty">Keine offenen Aufgaben mit Datum.</string>
+    <string name="calendar_overdue">Überfällig</string>
+    <string name="calendar_today">Heute</string>
+    <string name="calendar_tomorrow">Morgen</string>
+    <string name="calendar_this_week">Diese Woche</string>
+    <string name="calendar_later">Später</string>
+    <string name="calendar_today_with_date">Heute, %1$s</string>
+    <string name="calendar_tomorrow_with_date">Morgen, %1$s</string>
+    <string name="calendar_previous_month">Vorheriger Monat</string>
+    <string name="calendar_next_month">Nächster Monat</string>
+    <string name="settings_home_layout">Startseite</string>
+    <string name="settings_home_layout_tasks">Aufgaben je Liste</string>
+    <string name="settings_home_layout_tiles">Listen-Kacheln</string>
+    <string name="settings_home_tasks_per_list">Aufgaben pro Liste</string>
+    <plurals name="home_list_overdue">
+        <item quantity="one">%1$d überfällig</item>
+        <item quantity="other">%1$d überfällig</item>
+    </plurals>
+    <plurals name="home_list_more">
+        <item quantity="one">+ %1$d weitere</item>
+        <item quantity="other">+ %1$d weitere</item>
+    </plurals>
 </resources>

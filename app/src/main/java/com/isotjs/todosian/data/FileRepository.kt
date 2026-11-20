@@ -359,6 +359,7 @@ class SafFileRepository(
                             doneCount = doneCount,
                             dueTodayCount = dueTodayCount,
                             overdueCount = overdueCount,
+                            openTodos = activeTodos,
                         )
                     }
                     .sortedBy { it.displayName.lowercase() }

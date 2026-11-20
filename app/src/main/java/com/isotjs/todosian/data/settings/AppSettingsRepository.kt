@@ -56,6 +56,12 @@ interface AppSettingsRepository {
 
     fun setTagRecognitionRemoveWords(enabled: Boolean) {}
 
+    fun setHomeLayout(layout: HomeLayout) {}
+
+    fun setHomeTasksPerList(count: Int) {}
+
+    fun setHomeCollapsed(uris: Set<String>) {}
+
     /** Keyword group (by name) for [TodoSort.TAG_GROUP]. */
     fun setTodoSortGroup(group: String) {}
 }
@@ -186,6 +192,18 @@ class SharedPrefsAppSettingsRepository(
         prefs.edit { putBoolean(KEY_TAG_RECOGNITION_REMOVE, enabled) }
     }
 
+    override fun setHomeLayout(layout: HomeLayout) {
+        prefs.edit { putString(KEY_HOME_LAYOUT, layout.name) }
+    }
+
+    override fun setHomeTasksPerList(count: Int) {
+        prefs.edit { putInt(KEY_HOME_TASKS_PER_LIST, count) }
+    }
+
+    override fun setHomeCollapsed(uris: Set<String>) {
+        prefs.edit { putStringSet(KEY_HOME_COLLAPSED, uris) }
+    }
+
     override fun setTodoSortGroup(group: String) {
         prefs.edit { putString(KEY_TODO_SORT_GROUP, group) }
     }
@@ -245,6 +263,10 @@ class SharedPrefsAppSettingsRepository(
             tagDisplay = prefs.getString(KEY_TAG_DISPLAY, null).orEmpty(),
             tagRecognition = prefs.getBoolean(KEY_TAG_RECOGNITION, true),
             tagRecognitionRemoveWords = prefs.getBoolean(KEY_TAG_RECOGNITION_REMOVE, true),
+            homeLayout = prefs.getString(KEY_HOME_LAYOUT, null)
+                ?.let { raw -> runCatching { HomeLayout.valueOf(raw) }.getOrNull() } ?: HomeLayout.TASKS,
+            homeTasksPerList = prefs.getInt(KEY_HOME_TASKS_PER_LIST, 3),
+            homeCollapsed = prefs.getStringSet(KEY_HOME_COLLAPSED, emptySet()).orEmpty().toSet(),
         )
     }
 
@@ -282,6 +304,9 @@ class SharedPrefsAppSettingsRepository(
         private const val KEY_TAG_DISPLAY = "tag_display"
         private const val KEY_TAG_RECOGNITION = "tag_recognition"
         private const val KEY_TAG_RECOGNITION_REMOVE = "tag_recognition_remove_words"
+        private const val KEY_HOME_LAYOUT = "home_layout"
+        private const val KEY_HOME_TASKS_PER_LIST = "home_tasks_per_list"
+        private const val KEY_HOME_COLLAPSED = "home_collapsed"
         private const val KEY_TODO_SORT_GROUP = "todo_sort_group"
     }
 }

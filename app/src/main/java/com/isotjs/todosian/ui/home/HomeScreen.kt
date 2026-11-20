@@ -87,6 +87,14 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.Lifecycle
 import com.isotjs.todosian.BuildConfig
 import com.isotjs.todosian.R
+import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.runtime.saveable.rememberSaveable
+import com.isotjs.todosian.data.settings.HomeLayout
+import com.isotjs.todosian.utils.TagDefinitions
+import com.isotjs.todosian.utils.TagDisplaySettings
 import com.isotjs.todosian.data.FileRepository
 import com.isotjs.todosian.data.PreferencesManager
 import com.isotjs.todosian.data.settings.AppSettingsRepository
@@ -170,6 +178,13 @@ fun HomeScreen(
 
     LaunchedEffect(refreshSignal) {
         if (refreshSignal > 0L) viewModel.refresh()
+    }
+
+    var tab by rememberSaveable { mutableStateOf(HomeTab.LISTS) }
+    val tagDisplay = remember(settings.tagDisplay) { TagDisplaySettings.decode(settings.tagDisplay) }
+    // Tags per list (from the Tags note of its folder), for the symbols in the task rows.
+    val tagDefinitionsByList by produceState(emptyMap<android.net.Uri, TagDefinitions>(), uiState.categories) {
+        value = uiState.categories.associate { category -> category.uri to fileRepository.getTagDefinitions(category.uri) }
     }
 
     var showNewCategorySheet by remember { mutableStateOf(false) }
@@ -390,6 +405,22 @@ fun HomeScreen(
             )
         },
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
+        bottomBar = {
+            NavigationBar {
+                NavigationBarItem(
+                    selected = tab == HomeTab.LISTS,
+                    onClick = { tab = HomeTab.LISTS },
+                    icon = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = null) },
+                    label = { Text(text = stringResource(R.string.home_tab_lists)) },
+                )
+                NavigationBarItem(
+                    selected = tab == HomeTab.CALENDAR,
+                    onClick = { tab = HomeTab.CALENDAR },
+                    icon = { Icon(Icons.Filled.CalendarMonth, contentDescription = null) },
+                    label = { Text(text = stringResource(R.string.home_tab_calendar)) },
+                )
+            }
+        },
         floatingActionButton = {
           Row(verticalAlignment = Alignment.CenterVertically) {
             // ⚡ Quick capture, next to "new list": the list comes from the words, else the Inbox.
@@ -407,6 +438,7 @@ fun HomeScreen(
                     contentDescription = stringResource(R.string.cd_quick_add),
                 )
             }
+            if (tab == HomeTab.LISTS) {
             Spacer(modifier = Modifier.width(12.dp))
             FloatingActionButton(
                 onClick = { showNewCategorySheet = true },
@@ -425,6 +457,7 @@ fun HomeScreen(
                     imageVector = Icons.Filled.Add,
                     contentDescription = stringResource(R.string.cd_add_category),
                 )
+            }
             }
           }
         },
@@ -509,7 +542,16 @@ fun HomeScreen(
                         }
                     }
 
-                    HomeContentState.DATA -> {
+                    HomeContentState.DATA -> if (tab == HomeTab.CALENDAR) {
+                        CalendarTab(
+                            categories = categories,
+                            settings = settings,
+                            tagDefinitions = tagDefinitionsByList,
+                            tagDisplay = tagDisplay,
+                            onOpenCategory = onOpenCategory,
+                            onToggleTodo = { category, todo -> viewModel.toggleTodo(category.uri, todo) },
+                        )
+                    } else {
                         Column(modifier = Modifier.fillMaxSize()) {
                             AnimatedVisibility(
                                 visible = settings.showDailyFocus,
@@ -531,7 +573,22 @@ fun HomeScreen(
                                 Spacer(modifier = Modifier.height(12.dp))
                             }
 
-                            LazyVerticalGrid(
+                            if (settings.homeLayout == HomeLayout.TASKS) {
+                                HomeTaskSections(
+                                    categories = categories,
+                                    settings = settings,
+                                    tagDefinitions = tagDefinitionsByList,
+                                    tagDisplay = tagDisplay,
+                                    onToggleCollapse = { category ->
+                                        val key = category.uri.toString()
+                                        val collapsed = settings.homeCollapsed
+                                        appSettingsRepository.setHomeCollapsed(if (key in collapsed) collapsed - key else collapsed + key)
+                                    },
+                                    onOpenCategory = onOpenCategory,
+                                    onToggleTodo = { category, todo -> viewModel.toggleTodo(category.uri, todo) },
+                                    header = {},
+                                )
+                            } else LazyVerticalGrid(
                                 columns = GridCells.Fixed(2),
                                 contentPadding = PaddingValues(bottom = 96.dp),
                                 horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -570,6 +627,8 @@ fun HomeScreen(
         }
     }
 }
+
+private enum class HomeTab { LISTS, CALENDAR }
 
 private enum class HomeContentState {
     LOADING,
