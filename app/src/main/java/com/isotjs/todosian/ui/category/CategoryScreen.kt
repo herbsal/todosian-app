@@ -74,6 +74,7 @@ import com.isotjs.todosian.data.settings.AppSettingsRepository
 import com.isotjs.todosian.data.settings.NewTodoFilePosition
 import com.isotjs.todosian.data.settings.TodoGrouping
 import com.isotjs.todosian.data.settings.TodoSort
+import com.isotjs.todosian.ui.components.TagQuickPicker
 import com.isotjs.todosian.ui.components.TasksMetaEditor
 import com.isotjs.todosian.ui.components.TodoRow
 import com.isotjs.todosian.ui.components.TodoSheetMode
@@ -215,6 +216,15 @@ fun CategoryScreen(
                             }
                         },
                 )
+
+                if (!uiState.tagDefinitions.isEmpty) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    TagQuickPicker(
+                        definitions = uiState.tagDefinitions,
+                        text = sheetText,
+                        onTextChange = { sheetText = it },
+                    )
+                }
 
                 if (settings.enableTasksPluginSupport) {
                     Spacer(modifier = Modifier.height(12.dp))
