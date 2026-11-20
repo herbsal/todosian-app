@@ -1,5 +1,10 @@
 package com.isotjs.todosian.ui.settings
 
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.material3.Checkbox
+import com.isotjs.todosian.utils.PersonScope
+import com.isotjs.todosian.utils.TagDefinitionParser
+import com.isotjs.todosian.utils.TagDefinitions
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
@@ -1290,7 +1295,7 @@ private fun folderWatchLabel(mode: FolderWatchMode): String = when (mode) {
     FolderWatchMode.INSTANT -> stringResource(R.string.settings_folder_watch_instant)
 }
 
-private data class FolderProfiles(val uri: Uri, val name: String, val profiles: List<String>)
+private data class FolderProfiles(val uri: Uri, val name: String, val profiles: List<String>, val definitions: TagDefinitions)
 
 /**
  * Main switch for profile reminders, and the profile per folder. The choice is stored on this
@@ -1311,10 +1316,27 @@ private fun ReminderProfilesDialog(
                 uri = uri,
                 name = fileRepository.getFolderDisplayName(uri).getOrNull() ?: uri.toString(),
                 profiles = fileRepository.getReminderProfileNames(uri),
+                definitions = TagDefinitionParser.parse(fileRepository.readTagNote(uri)),
             )
         }
     }
     var selection by remember { mutableStateOf<Map<Uri, String?>>(emptyMap()) }
+    var personScopes by remember { mutableStateOf<Map<Uri, PersonScope?>>(emptyMap()) }
+    var personFolder by remember { mutableStateOf<FolderProfiles?>(null) }
+
+    personFolder?.let { folder ->
+        PersonScopeDialog(
+            definitions = folder.definitions,
+            initial = if (folder.uri in personScopes) personScopes[folder.uri] else preferencesManager.getPersonScope(folder.uri),
+            onDismiss = { personFolder = null },
+            onSave = { scope ->
+                preferencesManager.savePersonScope(folder.uri, scope)
+                personScopes = personScopes + (folder.uri to scope)
+                personFolder = null
+                TaskReminderScheduler.requestSync(context)
+            },
+        )
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -1346,6 +1368,28 @@ private fun ReminderProfilesDialog(
                         color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.padding(top = 16.dp, bottom = 4.dp),
                     )
+                    val scope = if (folder.uri in personScopes) personScopes[folder.uri] else preferencesManager.getPersonScope(folder.uri)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(role = Role.Button) { personFolder = folder }
+                            .padding(vertical = 8.dp),
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(text = stringResource(R.string.settings_person_scope))
+                            Text(
+                                text = personScopeSummary(scope, folder.definitions),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                     if (folder.profiles.isEmpty()) {
                         Text(
                             text = stringResource(R.string.settings_reminder_profiles_empty),
@@ -1384,6 +1428,126 @@ private fun ReminderProfilesDialog(
         },
         confirmButton = {
             TextButton(onClick = onDismiss) { Text(text = stringResource(R.string.action_ok)) }
+        },
+    )
+}
+
+@Composable
+private fun personScopeSummary(scope: PersonScope?, definitions: TagDefinitions): String {
+    if (scope == null) return stringResource(R.string.settings_person_scope_all)
+    val labels = definitions.groups.firstOrNull { it.name.equals(scope.group, ignoreCase = true) }?.terms
+        ?.filter { it.primaryTag.lowercase() in scope.persons }?.map { it.label }.orEmpty()
+    val parts = labels + if (scope.includeUnassigned) listOf(stringResource(R.string.settings_person_scope_unassigned)) else emptyList()
+    return parts.joinToString(", ").ifEmpty { stringResource(R.string.settings_person_scope_nobody) }
+}
+
+/**
+ * Picks the keyword group that names people and the people whose tasks remind on this device,
+ * e.g. only my own, my own and unassigned ones, or any choice.
+ */
+@Composable
+private fun PersonScopeDialog(
+    definitions: TagDefinitions,
+    initial: PersonScope?,
+    onDismiss: () -> Unit,
+    onSave: (PersonScope?) -> Unit,
+) {
+    val groups = definitions.groups.filter { it.name != null && it.terms.isNotEmpty() }
+    var groupName by remember { mutableStateOf(initial?.group?.takeIf { name -> groups.any { it.name.equals(name, ignoreCase = true) } }) }
+    var persons by remember { mutableStateOf(initial?.persons.orEmpty()) }
+    var includeUnassigned by remember { mutableStateOf(initial?.includeUnassigned ?: true) }
+    val group = groups.firstOrNull { it.name.equals(groupName, ignoreCase = true) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(text = stringResource(R.string.settings_person_scope)) },
+        text = {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                Text(
+                    text = stringResource(R.string.settings_person_scope_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (groups.isEmpty()) {
+                    Text(
+                        text = stringResource(R.string.settings_person_scope_no_groups),
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(top = 12.dp),
+                    )
+                }
+                Text(
+                    text = stringResource(R.string.settings_person_scope_group),
+                    style = MaterialTheme.typography.titleSmall,
+                    modifier = Modifier.padding(top = 12.dp),
+                )
+                (listOf<String?>(null) + groups.map { it.name }).forEach { option ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .selectable(
+                                selected = groupName.equals(option, ignoreCase = true) || (option == null && group == null),
+                                role = Role.RadioButton,
+                                onClick = {
+                                    groupName = option
+                                    // A new group starts with everyone, so nothing goes silent by surprise.
+                                    persons = groups.firstOrNull { it.name == option }?.terms?.map { it.primaryTag.lowercase() }?.toSet().orEmpty()
+                                },
+                            ),
+                    ) {
+                        RadioButton(selected = groupName.equals(option, ignoreCase = true) || (option == null && group == null), onClick = null)
+                        Text(
+                            text = option ?: stringResource(R.string.settings_person_scope_all),
+                            modifier = Modifier.padding(start = 8.dp, top = 10.dp, bottom = 10.dp),
+                        )
+                    }
+                }
+                if (group != null) {
+                    Text(
+                        text = stringResource(R.string.settings_person_scope_people),
+                        style = MaterialTheme.typography.titleSmall,
+                        modifier = Modifier.padding(top = 12.dp),
+                    )
+                    group.terms.forEach { term ->
+                        val key = term.primaryTag.lowercase()
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .toggleable(
+                                    value = key in persons,
+                                    role = Role.Checkbox,
+                                    onValueChange = { checked -> persons = if (checked) persons + key else persons - key },
+                                ),
+                        ) {
+                            Checkbox(checked = key in persons, onCheckedChange = null)
+                            Text(text = term.label, modifier = Modifier.padding(start = 8.dp))
+                        }
+                    }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .toggleable(
+                                value = includeUnassigned,
+                                role = Role.Checkbox,
+                                onValueChange = { includeUnassigned = it },
+                            ),
+                    ) {
+                        Checkbox(checked = includeUnassigned, onCheckedChange = null)
+                        Text(text = stringResource(R.string.settings_person_scope_unassigned), modifier = Modifier.padding(start = 8.dp))
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                val chosen = group?.name
+                onSave(chosen?.let { PersonScope(it, persons, includeUnassigned) })
+            }) { Text(text = stringResource(R.string.action_ok)) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(text = stringResource(R.string.action_cancel)) }
         },
     )
 }

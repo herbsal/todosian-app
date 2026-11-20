@@ -401,4 +401,13 @@
     <string name="keyword_editor_add_view">Quick view</string>
     <string name="keyword_editor_edit_view">Edit quick view</string>
     <string name="keyword_editor_view_tags_hint">Same group = either one, different groups = all must apply</string>
+    <string name="settings_person_scope">Remind me about</string>
+    <string name="settings_person_scope_all">All tasks</string>
+    <string name="settings_person_scope_unassigned">Tasks without a person</string>
+    <string name="settings_person_scope_nobody">No tasks</string>
+    <string name="settings_person_scope_hint">Applies to reminders on this device only, including ⏰. People are the keywords of one group, e.g. Person: #person/alex.</string>
+    <string name="settings_person_scope_no_groups">No keyword groups yet. Add a group like “Person” with one keyword per person in Keywords and profiles.</string>
+    <string name="settings_person_scope_group">Group with people</string>
+    <string name="settings_person_scope_people">Remind about tasks of</string>
+    <string name="widget_configure_view_hint">Quick view: open tasks with these keywords from all lists</string>
 </resources>

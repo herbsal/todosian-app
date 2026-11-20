@@ -401,4 +401,13 @@
     <string name="keyword_editor_add_view">Schnellansicht</string>
     <string name="keyword_editor_edit_view">Schnellansicht bearbeiten</string>
     <string name="keyword_editor_view_tags_hint">Gleiche Gruppe = eins davon, verschiedene Gruppen = alle müssen passen</string>
+    <string name="settings_person_scope">Erinnern an</string>
+    <string name="settings_person_scope_all">Alle Aufgaben</string>
+    <string name="settings_person_scope_unassigned">Aufgaben ohne Person</string>
+    <string name="settings_person_scope_nobody">Keine Aufgaben</string>
+    <string name="settings_person_scope_hint">Gilt nur für Erinnerungen auf diesem Gerät, auch für ⏰. Personen sind die Schlagwörter einer Gruppe, z. B. Person: #person/alex.</string>
+    <string name="settings_person_scope_no_groups">Noch keine Schlagwort-Gruppen. Lege unter Schlagwörter und Profile eine Gruppe wie „Person“ mit einem Schlagwort pro Person an.</string>
+    <string name="settings_person_scope_group">Gruppe mit Personen</string>
+    <string name="settings_person_scope_people">Erinnern an Aufgaben von</string>
+    <string name="widget_configure_view_hint">Schnellansicht: offene Aufgaben mit diesen Schlagwörtern aus allen Listen</string>
 </resources>
