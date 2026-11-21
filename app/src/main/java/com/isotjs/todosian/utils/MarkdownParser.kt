@@ -221,6 +221,27 @@ object MarkdownParser {
             this[lineIndex] = newLine
         }
 
+        // Unchecking a recurring task takes back the next one its checking added above it, as long
+        // as that line is still exactly as it was written; checking it again would add a second one.
+        if (isDone && enableTasksPlugin && lineIndex > 0) {
+            val parsed = parseRemainder(remainder, markers)
+            val rule = parsed.meta.recurrence?.takeIf { it.isNotBlank() }
+            val doneOn = parsed.meta.completionDate?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+            if (rule != null && doneOn != null) {
+                val added = buildRecurredTaskLine(
+                    indentPrefix = indentPrefix,
+                    taskText = parsed.mainText,
+                    originalMeta = parsed.meta.copy(completionDate = null),
+                    rule = rule,
+                    today = doneOn,
+                    markers = markers,
+                )
+                if (added != null && withoutTaskId(lines[lineIndex - 1]) == withoutTaskId(added)) {
+                    updatedLines.removeAt(lineIndex - 1)
+                }
+            }
+        }
+
         if (!isDone && enableTasksPlugin) {
             val parsed = parseRemainder(remainder, markers)
             val nextLine = parsed.meta.recurrence?.takeIf { it.isNotBlank() }?.let { rule ->
@@ -521,8 +542,12 @@ object MarkdownParser {
             today = today,
         ) ?: return null
 
+        // A recurring task without any date would come back without one, and so never show up
+        // as due: the next one is due on the rule's next date ("every week" → in a week).
+        val undated = next.dueDate == null && next.scheduledDate == null && next.startDate == null &&
+            originalMeta.reminder == null
         val newMeta = TasksMeta(
-            dueDate = next.dueDate?.toString(),
+            dueDate = (if (undated) next.reference else next.dueDate)?.toString(),
             scheduledDate = next.scheduledDate?.toString(),
             startDate = next.startDate?.toString(),
             completionDate = null,

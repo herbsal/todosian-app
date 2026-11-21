@@ -843,4 +843,35 @@ class MarkdownParserTest {
         assertEquals("Müll #haushalt", todo.text)
         assertEquals("every week", todo.recurrence)
     }
+
+    @Test
+    fun uncheckingARecurringTaskRemovesTheNextOne() {
+        val today = LocalDate.of(2024, 3, 15)
+        val start = listOf("# Haushalt", "- [ ] Water plants 📅 2024-03-14 🔁 every day ⏰ 2024-03-14 08:00", "Notiz")
+        val checked = MarkdownParser.toggleLine(start, 1, enableTasksPlugin = true, today = today)
+        assertEquals(4, checked.size)
+        // Unchecking (even a day later) takes the next one back; checking again adds only one.
+        val unchecked = MarkdownParser.toggleLine(checked, 2, enableTasksPlugin = true, today = today.plusDays(1))
+        assertEquals(start, unchecked)
+        val again = MarkdownParser.toggleLine(unchecked, 1, enableTasksPlugin = true, today = today)
+        assertEquals(checked, again)
+        // With a 🆔 given to the next one it is still recognized.
+        val withId = checked.toMutableList().apply { this[1] = this[1] + " 🆔 abc123" }
+        assertEquals(start, MarkdownParser.toggleLine(withId, 2, enableTasksPlugin = true, today = today))
+    }
+
+    @Test
+    fun uncheckingKeepsAChangedNextTask() {
+        val today = LocalDate.of(2024, 3, 15)
+        val checked = MarkdownParser.toggleLine(listOf("- [ ] Water plants 📅 2024-03-14 🔁 every day"), 0, enableTasksPlugin = true, today = today)
+        val edited = listOf(checked[0].replace("Water", "Water all"), checked[1])
+        val unchecked = MarkdownParser.toggleLine(edited, 1, enableTasksPlugin = true, today = today)
+        assertEquals(listOf(edited[0], "- [ ] Water plants 📅 2024-03-14 🔁 every day"), unchecked)
+    }
+
+    @Test
+    fun aRecurringTaskWithoutDateGetsOneForTheNextTime() {
+        val result = MarkdownParser.toggleLine(listOf("- [ ] Zähne Kinder 🔁 every week"), 0, enableTasksPlugin = true, today = LocalDate.of(2024, 3, 15))
+        assertEquals("- [ ] Zähne Kinder 📅 2024-03-22 🔁 every week", result[0])
+    }
 }
