@@ -49,6 +49,8 @@ data class AppSettings(
     val tagRecognition: Boolean = true,
     /** Take recognized words out of the title; people's names always stay. */
     val tagRecognitionRemoveWords: Boolean = true,
+    /** Tab of the home screen shown when the app opens. */
+    val startTab: StartTab = StartTab.LISTS,
     /** Home screen: open tasks per list, or the list tiles. */
     val homeLayout: HomeLayout = HomeLayout.TASKS,
     /** How many open tasks each list shows on the home screen. */
@@ -77,6 +79,13 @@ enum class ThemeMode {
     SYSTEM,
     LIGHT,
     DARK,
+}
+
+/** Tab the home screen opens with; [FOCUS] falls back to [LISTS] while the daily focus is off. */
+enum class StartTab {
+    LISTS,
+    CALENDAR,
+    FOCUS,
 }
 
 enum class HomeLayout {

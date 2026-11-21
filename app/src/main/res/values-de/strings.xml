@@ -495,6 +495,7 @@
     <string name="calendar_tomorrow_with_date">Morgen, %1$s</string>
     <string name="calendar_previous_month">Vorheriger Monat</string>
     <string name="calendar_next_month">Nächster Monat</string>
+    <string name="settings_start_tab">Ansicht beim Start</string>
     <string name="settings_home_layout">Startseite</string>
     <string name="settings_home_layout_tasks">Aufgaben je Liste</string>
     <string name="settings_home_layout_tiles">Listen-Kacheln</string>
