@@ -194,4 +194,45 @@ class ReconcilerTest {
         reconciler.reconcile("tree", vault.listing(), vault::read) { done, total -> steps += done to total }
         assertEquals(listOf(0 to 3, 1 to 3, 2 to 3, 3 to 3), steps)
     }
+
+    @Test
+    fun conflictCopiesFromTheListingKeepTheBaseWithoutDeliveringTasks() {
+        vault.write("Einkauf", "- [ ] Milch\n", at = start - 60_000)
+        pass()
+        val base = index.note("uri:Einkauf")!!.lineHashes
+        vault.write("Einkauf", "- [x] Milch\n", at = start - 30_000)
+        reconciler.reconcile("tree", vault.listing(), vault::read, conflictPaths = listOf("Einkauf.sync-conflict-20261121-142233-ABCDEF7"))
+        assertArrayEquals(base, index.note("uri:Einkauf")!!.baseLineHashes)
+        assertEquals(1, index.notes().size)
+    }
+
+    @Test
+    fun checkingSingleFilesLeavesAllOtherNotesAlone() {
+        repeat(5) { vault.write("N$it", "- [ ] $it\n", at = start - 60_000) }
+        pass()
+        vault.write("N1", "- [x] 1\n", at = start - 30_000)
+        vault.files.remove("N2")
+        vault.reads = 0
+        val listed = vault.listing().filter { it.relPath == "N1" }
+        val result = reconciler.reconcile("tree", listed, vault::read, scope = setOf("uri:N1", "uri:N2"))
+        assertEquals(1, vault.reads)
+        assertEquals(listOf("uri:N1"), result.changed)
+        assertEquals(listOf("uri:N2"), result.removed)
+        assertEquals(4, index.notes().size)
+        assertNotNull(index.note("uri:N3"))
+    }
+
+    @Test
+    fun singleFileCheckFindsAMoveReportedAsTwoEvents() {
+        vault.write("Alt", "- [ ] Arzt\n", at = start - 60_000)
+        vault.write("Andere", "- [ ] B\n", at = start - 60_000)
+        pass()
+        val id = index.note("uri:Alt")!!.id
+        vault.files["Neu"] = vault.files.remove("Alt")!!
+        val listed = vault.listing().filter { it.relPath == "Neu" }
+        val result = reconciler.reconcile("tree", listed, vault::read, scope = setOf("uri:Alt", "uri:Neu"))
+        assertEquals(mapOf("uri:Alt" to "uri:Neu"), result.renamed)
+        assertEquals(id, index.note("uri:Neu")!!.id)
+        assertNotNull(index.note("uri:Andere"))
+    }
 }

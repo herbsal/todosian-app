@@ -2,9 +2,11 @@ package com.isotjs.todosian.data
 
 import android.content.Context
 import android.net.Uri
+import android.provider.DocumentsContract
 import android.util.Log
 import com.isotjs.todosian.data.index.IndexedNote
 import com.isotjs.todosian.data.index.ListedNote
+import com.isotjs.todosian.data.index.NoteIndexer
 import com.isotjs.todosian.data.index.NoteState
 import com.isotjs.todosian.data.index.ReconcileResult
 import com.isotjs.todosian.data.index.Reconciler
@@ -45,7 +47,7 @@ internal class VaultSync(private val context: Context, private val index: VaultI
         val result: ReconcileResult
         synchronized(lock) {
             if (fresh) invalidateFolder(key)
-            result = reconciler.reconcile(key, listed, ::readBytes, onProgress)
+            result = reconciler.reconcile(key, listed, ::readBytes, conflictPaths = tree.conflictPaths, onProgress = onProgress)
         }
         if (result.read > 0) {
             Log.d(TAG, "sync $key: ${listed.size} notes, read ${result.read}, +${result.added.size} ~${result.changed.size} -${result.removed.size}")
@@ -53,12 +55,108 @@ internal class VaultSync(private val context: Context, private val index: VaultI
         return tree.files.map { SyncedNote(it, index.note(it.ref.toString())) }
     }
 
+    /**
+     * A number that changes whenever a note of [folders] is added, removed, renamed or gets other
+     * content, as far as the index knows. Reads nothing.
+     */
+    fun fingerprint(folders: Collection<Uri>): Long {
+        val keys = folders.mapTo(HashSet()) { it.toString() }
+        return index.notes()
+            .filter { it.folder in keys }
+            .sortedBy { it.uri }
+            .fold(keys.size.toLong()) { acc, note -> acc * 31 + (note.uri.hashCode().toLong() shl 32 xor note.hash.hashCode().toLong()) }
+    }
+
     /** Drops notes of folders that are no longer selected. */
     fun retainFolders(folders: Collection<Uri>) {
         synchronized(lock) { reconciler.retainFolders(folders.mapTo(HashSet()) { it.toString() }) }
     }
 
-    /** The app wrote [uri]: read it again on the next look, whatever its time and size say. */
+    /**
+     * The app wrote [bytes] to [uri]: the index takes them over directly, with time and size from
+     * a query of this one file. Its hash is kept as our own write, so the change report that
+     * follows causes nothing. A note the index does not know yet is left to the next look.
+     */
+    fun recordOwnWrite(uri: Uri, bytes: ByteArray) {
+        val old = index.note(uri.toString()) ?: return
+        val content = NoteIndexer.read(bytes)
+        val stamp = runCatching { queryStamp(uri) }.getOrNull()
+        val now = System.currentTimeMillis()
+        val settled = stamp != null && stamp.lastModified > 0 && now - stamp.lastModified >= Reconciler.RACY_MS
+        index.put(
+            old.copy(
+                mtime = stamp?.lastModified ?: 0L,
+                size = stamp?.size ?: -1L,
+                hash = content.hash,
+                lineCount = content.lines.size,
+                // Just written, so the time is fresh: read once more on the next look (racy clean).
+                state = if (settled) NoteState.OK else NoteState.UNSETTLED,
+                indexedAt = now,
+                ownWriteHash = content.hash,
+                lineHashes = content.lineHashes,
+                taskLines = content.taskLines,
+            ),
+        )
+    }
+
+    /** The app renamed a note to [newName] (no `.md`): it keeps its entry under the new URI. */
+    fun recordRename(oldUri: Uri, newUri: Uri, newName: String) {
+        val old = index.note(oldUri.toString()) ?: return
+        index.remove(oldUri.toString())
+        index.put(
+            old.copy(
+                uri = newUri.toString(),
+                docId = newUri.toString().substringAfterLast("/document/"),
+                relPath = old.relPath.substringBeforeLast('/', "").let { if (it.isEmpty()) newName else "$it/$newName" },
+                state = NoteState.UNSETTLED,
+            ),
+        )
+    }
+
+    /** The app deleted a note. */
+    fun recordDelete(uri: Uri) {
+        index.remove(uri.toString())
+    }
+
+    /**
+     * Checks only the notes [paths] (relative to [folder], with `.md`) that the folder watch
+     * reported, without listing the folder. Returns null when a full look is needed instead.
+     */
+    fun checkFiles(folder: Uri, paths: Collection<String>, recursive: Boolean): ReconcileResult? {
+        if (paths.any { it.contains("sync-conflict", ignoreCase = true) }) return null
+        // The same notes a folder listing would yield: no hidden folders, not Todosian's own notes.
+        val notes = paths.filter { path ->
+            val folders = path.split('/').dropLast(1)
+            (recursive || folders.isEmpty()) && folders.none { it.startsWith('.') } &&
+                folders.firstOrNull()?.equals(CONFIG_FOLDER_NAME, ignoreCase = true) != true
+        }
+        if (notes.isEmpty()) return ReconcileResult()
+        val treeId = DocumentsContract.getTreeDocumentId(folder)
+        val key = folder.toString()
+        val listed = ArrayList<ListedNote>()
+        val scope = HashSet<String>()
+        notes.forEach { path ->
+            val docId = if (treeId.endsWith(":") || treeId.endsWith("/")) treeId + path else "$treeId/$path"
+            val uri = DocumentsContract.buildDocumentUriUsingTree(folder, docId)
+            scope += uri.toString()
+            val stamp = runCatching { queryStamp(uri) }.getOrNull() ?: return@forEach
+            listed += ListedNote(uri.toString().substringAfterLast("/document/"), uri.toString(), path.dropLast(3), stamp.lastModified, stamp.size)
+        }
+        return synchronized(lock) { reconciler.reconcile(key, listed, ::readBytes, scope = scope) }
+    }
+
+    /** Time and size of one file; throws when it does not exist (any more). */
+    private fun queryStamp(uri: Uri): FileStamp {
+        val projection = arrayOf(DocumentsContract.Document.COLUMN_LAST_MODIFIED, DocumentsContract.Document.COLUMN_SIZE)
+        context.contentResolver.query(uri, projection, null, null, null)?.use { c ->
+            if (c.moveToFirst()) {
+                return FileStamp(if (c.isNull(0)) 0L else c.getLong(0), if (c.isNull(1)) -1L else c.getLong(1))
+            }
+        }
+        throw java.io.FileNotFoundException(uri.toString())
+    }
+
+    /** The app is about to write [uri]: should the write fail half way, the next look reads it. */
     fun invalidate(uri: Uri) {
         index.note(uri.toString())?.let { index.put(it.copy(state = NoteState.UNSETTLED)) }
     }

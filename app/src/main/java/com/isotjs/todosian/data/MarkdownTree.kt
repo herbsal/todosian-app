@@ -17,7 +17,12 @@ internal data class DocumentEntry(
 /** A Markdown note; [relativePath] is relative to the selected folder and has no `.md` suffix, e.g. `Projects/Move`. */
 internal data class MarkdownEntry<T>(val ref: T, val relativePath: String, val stamp: FileStamp? = null)
 
-internal data class MarkdownTree<T>(val files: List<MarkdownEntry<T>>, val folderIds: List<String>)
+/** [conflictPaths] are the paths (no `.md`) of Syncthing conflict copies; they deliver no tasks. */
+internal data class MarkdownTree<T>(
+    val files: List<MarkdownEntry<T>>,
+    val folderIds: List<String>,
+    val conflictPaths: List<String> = emptyList(),
+)
 
 /** Folder at the root of a notes folder that holds Todosian's own notes (keywords, reminder profiles). */
 internal const val CONFIG_FOLDER_NAME = "Todosian"
@@ -56,6 +61,7 @@ internal fun walkMarkdownTree(
 ): MarkdownTree<String> {
     val files = mutableListOf<MarkdownEntry<String>>()
     val folderIds = mutableListOf<String>()
+    val conflicts = mutableListOf<String>()
     val pending = ArrayDeque(listOf(rootId to ""))
     while (pending.isNotEmpty()) {
         val (folderId, prefix) = pending.removeFirst()
@@ -66,10 +72,12 @@ internal fun walkMarkdownTree(
                 if (recursive && !child.name.startsWith('.') && !isConfig) pending.add(child.id to "$prefix${child.name}/")
             } else if (isMarkdownNoteName(child.name)) {
                 files.add(MarkdownEntry(child.id, prefix + child.name.dropLast(MD_SUFFIX_LENGTH), child.stamp))
+            } else if (child.name.endsWith(".md", ignoreCase = true)) {
+                conflicts.add(prefix + child.name.dropLast(MD_SUFFIX_LENGTH))
             }
         }
     }
-    return MarkdownTree(files, folderIds)
+    return MarkdownTree(files, folderIds, conflicts)
 }
 
 /** SAF version of [walkMarkdownTree]: one query per folder, instead of DocumentFile's several queries per child. */
@@ -92,6 +100,7 @@ internal fun scanMarkdownTree(context: Context, treeUri: Uri, recursive: Boolean
     return MarkdownTree(
         files = tree.files.map { MarkdownEntry(DocumentsContract.buildDocumentUriUsingTree(treeUri, it.ref), it.relativePath, it.stamp) },
         folderIds = tree.folderIds,
+        conflictPaths = tree.conflictPaths,
     )
 }
 
@@ -190,35 +199,6 @@ private val PROJECTION = arrayOf(
     DocumentsContract.Document.COLUMN_DISPLAY_NAME,
     DocumentsContract.Document.COLUMN_MIME_TYPE,
 )
-
-/**
- * A cheap fingerprint of the notes below [treeUri]: path, last-modified time and size of every
- * Markdown file, without reading any content. It changes when a note is added, removed, renamed
- * or written.
- */
-internal fun markdownTreeFingerprint(context: Context, treeUri: Uri, recursive: Boolean): Long {
-    val resolver = context.contentResolver
-    val stamps = HashMap<String, String>()
-    val tree = walkMarkdownTree(DocumentsContract.getTreeDocumentId(treeUri), recursive) { folderId ->
-        val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, folderId)
-        resolver.query(childrenUri, STAMP_PROJECTION, null, null, null)?.use { cursor ->
-            buildList {
-                while (cursor.moveToNext()) {
-                    val id = cursor.getString(0) ?: continue
-                    val name = cursor.getString(1) ?: continue
-                    val isDirectory = cursor.getString(2) == DocumentsContract.Document.MIME_TYPE_DIR
-                    if (!isDirectory) {
-                        val modified = if (cursor.isNull(3)) 0L else cursor.getLong(3)
-                        val size = if (cursor.isNull(4)) 0L else cursor.getLong(4)
-                        stamps[id] = "$modified:$size"
-                    }
-                    add(DocumentEntry(id = id, name = name, isDirectory = isDirectory))
-                }
-            }
-        }.orEmpty()
-    }
-    return fingerprintOf(tree.files.map { it.relativePath to stamps[it.ref].orEmpty() })
-}
 
 private val STAMP_PROJECTION = arrayOf(
     DocumentsContract.Document.COLUMN_DOCUMENT_ID,

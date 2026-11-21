@@ -500,6 +500,7 @@ class SafFileRepository(
 
                 val renamed = DocumentsContract.renameDocument(appContext.contentResolver, categoryUri, fileName)
                 if (renamed == null) throw IllegalStateException("Unable to rename document")
+                vaultSync.recordRename(categoryUri, renamed, fileName.dropLast(3))
                 scheduleWidgetUpdate()
             }
         }
@@ -512,6 +513,7 @@ class SafFileRepository(
                     ?: throw IllegalStateException("Invalid file URI")
                 val ok = file.delete()
                 if (!ok) throw IllegalStateException("Unable to delete file")
+                vaultSync.recordDelete(categoryUri)
                 scheduleWidgetUpdate()
             }
         }
@@ -843,7 +845,7 @@ class SafFileRepository(
         appContext.contentResolver.openInputStream(uri)?.use { it.readBytes() }
 
     private fun writeBytesInternal(uri: Uri, bytes: ByteArray) {
-        // Own writes may keep size and time (same second); the next look reads the note itself.
+        // Should the write fail half way, the next look reads the note itself.
         vaultSync.invalidate(uri)
         openTruncatingOutputStream(uri)?.use { out ->
             runCatching { (out as? FileOutputStream)?.channel?.truncate(0) }
@@ -852,6 +854,8 @@ class SafFileRepository(
             // Make sure the data reaches the disk before sync tools pick the file up.
             runCatching { (out as? FileOutputStream)?.fd?.sync() }
         } ?: throw IllegalStateException("Unable to open output stream")
+        // The index takes over exactly the written bytes, never the other way round.
+        runCatching { vaultSync.recordOwnWrite(uri, bytes) }.onFailure { Log.w(TAG, "Index update after write failed", it) }
     }
 
     private fun writeLinesInternal(uri: Uri, lines: List<String>) {
