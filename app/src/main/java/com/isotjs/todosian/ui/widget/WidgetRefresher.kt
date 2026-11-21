@@ -1,7 +1,6 @@
 package com.isotjs.todosian.ui.widget
 
 import android.content.Context
-import android.net.Uri
 import android.util.Log
 import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
@@ -20,10 +19,8 @@ import com.isotjs.todosian.TodosianApplication
 import com.isotjs.todosian.data.FileRepository
 import com.isotjs.todosian.data.model.Category
 import com.isotjs.todosian.data.model.Todo
-import com.isotjs.todosian.utils.MarkdownParser
 import com.isotjs.todosian.utils.SavedView
 import com.isotjs.todosian.utils.TagFilter
-import com.isotjs.todosian.utils.TaskMarkers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -269,31 +266,18 @@ object WidgetRefresher {
             val selections = widgetStates.map { WidgetSelection.from(it) }
             val showCompletedFlags = widgetStates.map { it[KEY_SHOW_COMPLETED] ?: true }
 
-            // Read each needed file exactly once per refresh, no matter how many widgets share it.
-            val neededUris = buildList {
-                if (selections.any { it.isAllLists || it.isView }) categories.forEach { add(it.uri) }
-                selections.forEach { selection ->
-                    resolveSelectedCategory(categories, selection)?.let { add(it.uri) }
-                }
-            }.toSet()
-            val linesByUri = neededUris.associateWith { uri ->
-                fileRepository.readLines(uri).getOrDefault(emptyList())
-            }
-
             val savedViews = if (selections.any { it.isView }) fileRepository.getSavedViews() else emptyList()
             val hasFolder = fileRepository.getFolderUri() != null
             for ((index, glanceId) in glanceIds.withIndex()) {
                 val snapshot = buildSnapshot(
                     hasFolder = hasFolder,
                     categories = categories,
-                    linesByUri = linesByUri,
                     selection = selections[index],
                     view = selections[index].takeIf { it.isView }?.let { selection ->
                         savedViews.firstOrNull { it.name == selection.viewName && it.folder == selection.viewFolder }
                             ?: savedViews.firstOrNull { it.name.equals(selection.viewName, ignoreCase = true) }
                     },
                     showCompleted = showCompletedFlags[index],
-                    markers = markers,
                 )
                 runCatching {
                     updateAppWidgetState(context, PreferencesGlanceStateDefinition, glanceId) { prefs ->
@@ -322,11 +306,9 @@ object WidgetRefresher {
     private fun buildSnapshot(
         hasFolder: Boolean,
         categories: List<Category>,
-        linesByUri: Map<Uri, List<String>>,
         selection: WidgetSelection,
         view: SavedView?,
         showCompleted: Boolean,
-        markers: TaskMarkers,
     ): WidgetSnapshot {
         if (selection.isView && view == null) {
             // The view was renamed or removed from the views note.
@@ -357,8 +339,8 @@ object WidgetRefresher {
 
         val scopedCategories = if (resolved != null) listOf(resolved) else categories
         val taskItems = scopedCategories.flatMap { category ->
-            val lines = linesByUri[category.uri].orEmpty()
-            MarkdownParser.parse(lines, markers).map { todo ->
+            // The tasks come with the lists (from the note index), no second read per note.
+            category.todos.map { todo ->
                 WidgetTaskItem(
                     categoryUri = category.uri.toString(),
                     categoryName = category.displayName,

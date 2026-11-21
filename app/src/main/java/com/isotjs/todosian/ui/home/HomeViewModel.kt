@@ -69,7 +69,8 @@ class HomeViewModel(
                     _uiState.value = _uiState.value.copy(isLoading = true)
                 }
                 val markers = appSettingsRepository.settings.first().toTaskMarkers()
-                val result = fileRepository.getCategories(markers)
+                // Pulling to refresh reads every note again, past the note index.
+                val result = fileRepository.getCategories(markers, fresh = showRefreshing)
                 if (result.isFailure) {
                     fileRepository.clearFolderUri()
                     _events.emit(Event.ShowMessage(R.string.error_folder_invalid))

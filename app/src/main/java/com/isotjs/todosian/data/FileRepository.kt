@@ -106,7 +106,11 @@ interface FileRepository {
 
     suspend fun persistFolderUri(uri: Uri): Result<Unit>
 
-    suspend fun getCategories(markers: TaskMarkers = TaskMarkers.Default): Result<List<Category>>
+    /**
+     * All notes with their tasks. Notes unchanged since the last look come from the note index;
+     * [fresh] reads every note again (pull to refresh).
+     */
+    suspend fun getCategories(markers: TaskMarkers = TaskMarkers.Default, fresh: Boolean = false): Result<List<Category>>
 
     suspend fun readLines(uri: Uri): Result<List<String>>
 
@@ -333,17 +337,20 @@ class SafFileRepository(
         }
     }
 
-    override suspend fun getCategories(markers: TaskMarkers): Result<List<Category>> {
+    private val noteIndex by lazy { NoteIndex.get(appContext) }
+
+    override suspend fun getCategories(markers: TaskMarkers, fresh: Boolean): Result<List<Category>> {
         if (getFolderUri() == null) return Result.success(emptyList())
         return withContext(Dispatchers.IO) {
             val recursive = includeSubfolders()
             runCatching {
-                noteFolders()
+                val files = noteFolders().flatMap { folder -> scanFolderOrEmpty(folder, recursive) }
+                noteIndex.retainOnly(files.map { it.second.ref.toString() }.toSet())
+                files
                     .asSequence()
-                    .flatMap { folder -> scanFolderOrEmpty(folder, recursive).asSequence() }
                     .map { (folder, file) ->
                         val displayName = folder.prefix + file.relativePath
-                        val lines = readLinesInternal(file.ref)
+                        val lines = noteIndex.lines(file.ref.toString(), file.stamp, fresh) { readLinesInternal(file.ref) }
                         val todos = MarkdownParser.parse(lines, markers)
                         val doneCount = todos.count { it.isDone }
                         val today = LocalDate.now().toString()
@@ -360,10 +367,15 @@ class SafFileRepository(
                             dueTodayCount = dueTodayCount,
                             overdueCount = overdueCount,
                             openTodos = activeTodos,
+                            todos = todos,
                         )
                     }
                     .sortedBy { it.displayName.lowercase() }
                     .toList()
+                    .also {
+                        Log.d(TAG, "getCategories: ${files.size} notes, index hits=${noteIndex.hits} misses=${noteIndex.misses}")
+                        noteIndex.save()
+                    }
             }
         }
     }
@@ -842,6 +854,8 @@ class SafFileRepository(
         appContext.contentResolver.openInputStream(uri)?.use { it.readBytes() }
 
     private fun writeBytesInternal(uri: Uri, bytes: ByteArray) {
+        // Own writes may keep size and time (same second); the next look reads the note itself.
+        noteIndex.forget(uri.toString())
         openTruncatingOutputStream(uri)?.use { out ->
             runCatching { (out as? FileOutputStream)?.channel?.truncate(0) }
             out.write(bytes)
