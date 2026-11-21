@@ -8,6 +8,7 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.os.FileObserver
@@ -41,6 +42,9 @@ class FolderWatchService : Service() {
     private var pendingCheck: Job? = null
     private var pendingRebuild: Job? = null
     private var recursive = false
+
+    /** Notes reported since the last check: folder to paths relative to it, with `.md`. */
+    private val reported = HashMap<Uri, MutableSet<String>>()
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -84,9 +88,10 @@ class FolderWatchService : Service() {
         val primary = Environment.getExternalStorageDirectory()
         val roots = (listOfNotNull(preferences.getFolderUri()) + preferences.getExtraFolderUris())
             .distinct()
-            .mapNotNull { treeUriToDirectory(it, primary) }
-            .filter { it.isDirectory }
-        val directories = roots.flatMap { collectDirectories(it, recursive) }.distinct()
+            .mapNotNull { folder -> treeUriToDirectory(folder, primary)?.let { folder to it } }
+            .filter { it.second.isDirectory }
+        val directories = roots.flatMap { (folder, root) -> collectDirectories(root, recursive).map { WatchedDirectory(folder, root, it) } }
+            .distinctBy { it.dir }
 
         synchronized(observers) {
             observers.forEach { it.stopWatching() }
@@ -114,11 +119,16 @@ class FolderWatchService : Service() {
         return result
     }
 
-    private fun onNoteEvent() {
+    /** Collects reports for a moment; then only the reported notes are checked, no folder listing. */
+    private fun onNoteEvent(folder: Uri, path: String) {
+        synchronized(reported) { reported.getOrPut(folder) { HashSet() }.add(path) }
         pendingCheck?.cancel()
         pendingCheck = scope.launch {
             delay(CHECK_DEBOUNCE_MS)
-            FolderChangeCheck.run(applicationContext)
+            val files = synchronized(reported) {
+                reported.mapValues { it.value.toSet() }.also { reported.clear() }
+            }
+            if (files.isNotEmpty()) FolderChangeCheck.runForFiles(applicationContext, files)
         }
     }
 
@@ -132,14 +142,21 @@ class FolderWatchService : Service() {
         }
     }
 
-    private inner class DirectoryObserver(private val dir: File) : FileObserver(dir, EVENTS) {
+    /** A watched [dir] below [root], the directory of the note folder [folder]. */
+    private data class WatchedDirectory(val folder: Uri, val root: File, val dir: File)
+
+    private inner class DirectoryObserver(private val watched: WatchedDirectory) : FileObserver(watched.dir, EVENTS) {
         override fun onEvent(event: Int, path: String?) {
             val name = path ?: return
+            val file = File(watched.dir, name)
             // IN_ISDIR is passed through in the raw event; a check on disk covers devices that drop it.
-            val isDirectory = event and IS_DIRECTORY_FLAG != 0 || File(dir, name).isDirectory
+            val isDirectory = event and IS_DIRECTORY_FLAG != 0 || file.isDirectory
             when {
                 isDirectory && !name.startsWith('.') -> onDirectoryEvent()
-                !isDirectory && isWatchedNoteName(name) -> onNoteEvent()
+                // Conflict copies are reported too: they start or end a Syncthing conflict.
+                !isDirectory && name.endsWith(".md", ignoreCase = true) &&
+                    (isWatchedNoteName(name) || name.contains("sync-conflict", ignoreCase = true)) ->
+                    onNoteEvent(watched.folder, file.relativeTo(watched.root).invariantSeparatorsPath)
             }
         }
     }

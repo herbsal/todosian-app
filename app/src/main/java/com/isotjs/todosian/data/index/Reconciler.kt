@@ -36,15 +36,21 @@ class Reconciler(
 ) {
     /**
      * [listed] are all Markdown notes of [folder]; [read] returns a note's bytes or null when it
-     * cannot be read. [onProgress] gets (read so far, to read) for the loading indicator.
+     * cannot be read. [conflictPaths] are the paths of Syncthing conflict copies in the folder.
+     * [onProgress] gets (read so far, to read) for the loading indicator.
+     *
+     * With [scope], only the notes with these URIs are looked at (the folder watch reports single
+     * files): a URI of [scope] missing from [listed] is gone, all other notes stay as they are.
      */
     fun reconcile(
         folder: String,
         listed: List<ListedNote>,
         read: (ListedNote) -> ByteArray?,
+        conflictPaths: Collection<String> = emptyList(),
+        scope: Set<String>? = null,
         onProgress: (done: Int, total: Int) -> Unit = { _, _ -> },
     ): ReconcileResult {
-        val known = index.notes().filter { it.folder == folder }.associateBy { it.uri }
+        val known = index.notes().filter { it.folder == folder && (scope == null || it.uri in scope) }.associateBy { it.uri }
         val listedUris = listed.mapTo(HashSet()) { it.uri }
         // Notes that are gone from their place; one of them may turn up under a new name below.
         val missing = known.values.filter { it.uri !in listedUris }.toMutableList()
@@ -55,7 +61,8 @@ class Reconciler(
         val ownWrites = ArrayList<String>()
         val unreadable = ArrayList<String>()
         val renamed = LinkedHashMap<String, String>()
-        val conflictOriginals = listed.mapNotNullTo(HashSet()) { ConflictNames.originalOf(it.relPath) }
+        val conflictOriginals = (conflictPaths.asSequence() + listed.asSequence().map { it.relPath })
+            .mapNotNullTo(HashSet()) { ConflictNames.originalOf(it) }
 
         onProgress(0, toRead.size)
         toRead.forEachIndexed { i, entry ->
@@ -105,8 +112,9 @@ class Reconciler(
         }
 
         // Keep the state before a change while a Syncthing conflict copy exists: it is the common
-        // base for merging the copy back. Without a copy the base is dropped.
-        index.notes().filter { it.folder == folder && it.uri in listedUris }.forEach { note ->
+        // base for merging the copy back. Without a copy the base is dropped. A check of single
+        // files does not see the copies, so it leaves the base alone.
+        if (scope == null) index.notes().filter { it.folder == folder && it.uri in listedUris }.forEach { note ->
             val conflicted = note.relPath in conflictOriginals
             val base = when {
                 !conflicted -> null
