@@ -12,6 +12,7 @@ import com.isotjs.todosian.data.PreferencesManager
 import com.isotjs.todosian.data.VaultSync
 import com.isotjs.todosian.data.findReminderProfiles
 import com.isotjs.todosian.data.findTagNote
+import com.isotjs.todosian.data.settings.DeletedNoteReminders
 import com.isotjs.todosian.data.settings.SharedPrefsAppSettingsRepository
 import com.isotjs.todosian.utils.MarkdownParser
 import com.isotjs.todosian.utils.SeenTask
@@ -156,14 +157,23 @@ object TaskReminderScheduler {
         NewTaskAlerts.keepOnly(context, alertFiles)
         val prefs = statePrefs(context)
         // "Already shown" stays with a task whose note was renamed or whose text was fixed.
-        val notified = TaskReminderPlanner.carryOverNotified(readNotified(prefs), candidates, sync.takeRenames())
+        val renames = sync.takeRenames()
+        val deletions = sync.takeDeletions()
+        val notified = TaskReminderPlanner.carryOverNotified(readNotified(prefs), candidates, renames)
         val plan = TaskReminderPlanner.plan(candidates, LocalDateTime.now(), notified, settings.reminderRepeat)
 
         val alarmManager = context.getSystemService(AlarmManager::class.java)
         val previous = prefs.getStringSet(KEY_SCHEDULED, emptySet()).orEmpty()
         val previousSignatures = decodeSignatures(prefs.getStringSet(KEY_SIGNATURES, emptySet()).orEmpty())
         val planned = plan.map { it.key }.toSet()
-        (previous - planned).forEach { key -> cancelAlarm(context, alarmManager, key) }
+        val cancelled = previous - planned
+        cancelled.forEach { key -> cancelAlarm(context, alarmManager, key) }
+        if (settings.deletedNoteReminders == DeletedNoteReminders.NOTIFY) {
+            // Reminders that went away with a note deleted outside the app, by the note's path.
+            val byNote = cancelled.mapNotNull { key -> deletions[TaskReminderPlanner.fileKeyOf(key)] }
+                .groupingBy { it }.eachCount()
+            runCatching { DeletedNoteNotice.show(context, byNote) }.onFailure { Log.w(TAG, "Deleted note notice failed", it) }
+        }
         // Only alarms that are new or changed are set again; the others stay as they are. An alarm
         // the system dropped (restart, app stopped) has no pending intent any more and is set too.
         val signatures = plan.associate { it.key to TaskReminderPlanner.signatureOf(it) }
@@ -177,7 +187,7 @@ object TaskReminderScheduler {
             putStringSet(KEY_SIGNATURES, encodeSignatures(signatures))
             putStringSet(KEY_NOTIFIED, encode(notified))
         }
-        Log.d(TAG, "Planned ${plan.size} reminder(s), set ${changed.size}, cancelled ${(previous - planned).size}")
+        Log.d(TAG, "Planned ${plan.size} reminder(s), set ${changed.size}, cancelled ${cancelled.size}")
     }
 
     /** The reminder profile chosen on this device for [folder], or null. */

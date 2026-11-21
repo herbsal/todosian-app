@@ -78,6 +78,9 @@ object TaskReminderPlanner {
         return current
     }
 
+    /** The note part of a key made by [keyOf]. */
+    fun fileKeyOf(key: String): String = key.substringBefore(SEPARATOR)
+
     /** What an alarm carries; an alarm whose signature did not change is left as it is. */
     fun signatureOf(planned: PlannedReminder): String =
         "${planned.triggerAt}$SEPARATOR${planned.candidate.lineIndex}$SEPARATOR${planned.candidate.fromProfile}$SEPARATOR" +

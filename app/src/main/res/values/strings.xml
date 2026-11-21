@@ -522,4 +522,30 @@
     </plurals>
     <string name="settings_index_rebuild_done">Index rebuilt from your notes.</string>
     <string name="settings_index_failed">That did not work. Please try again.</string>
+    <string name="settings_excluded_folders">Exclude folders</string>
+    <string name="settings_excluded_folders_none">None; all notes are read</string>
+    <string name="settings_excluded_folders_hint">Notes in these folders do not appear in lists, the calendar, widgets or reminders. Paths are relative to the notes folder, e.g. Archive or Journal/2024.</string>
+    <string name="settings_excluded_folders_placeholder">Folder, e.g. Archive</string>
+    <string name="settings_excluded_folders_add">Add folder</string>
+    <string name="settings_excluded_folders_remove">Remove %1$s</string>
+    <string name="settings_hide_empty_notes">Hide notes without tasks</string>
+    <string name="settings_hide_empty_notes_subtitle">The home screen only shows notes that hold tasks</string>
+    <string name="settings_deleted_note">Note with reminders deleted</string>
+    <string name="settings_deleted_note_silent">Cancel its reminders silently</string>
+    <string name="settings_deleted_note_notify">Cancel its reminders and tell me</string>
+    <string name="notification_deleted_note_channel_name">Deleted notes</string>
+    <string name="notification_deleted_note_channel_description">Tells when a note with reminders was deleted outside the app</string>
+    <string name="notification_deleted_note_title">Note \"%1$s\" was deleted</string>
+    <string name="notification_deleted_note_unknown">Unknown note</string>
+    <plurals name="notification_deleted_note_text">
+        <item quantity="one">%1$d reminder was cancelled.</item>
+        <item quantity="other">%1$d reminders were cancelled.</item>
+    </plurals>
+    <string name="home_index_first_build">Reading notes · %1$d of %2$d</string>
+    <plurals name="home_sync_reading">
+        <item quantity="one">Reading %1$d changed note</item>
+        <item quantity="other">Reading %1$d changed notes</item>
+    </plurals>
+    <string name="home_conflict_title">Conflict in %1$s</string>
+    <string name="home_conflict_text">Syncthing kept two versions of this note. The tasks of the copy are not shown. Merge them in Obsidian and delete the conflict copy.</string>
 </resources>

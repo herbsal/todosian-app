@@ -49,6 +49,12 @@ interface AppSettingsRepository {
 
     fun setDeepCheckMode(mode: DeepCheckMode) {}
 
+    fun setExcludedFolders(folders: Set<String>) {}
+
+    fun setHideEmptyNotes(enabled: Boolean) {}
+
+    fun setDeletedNoteReminders(mode: DeletedNoteReminders) {}
+
     fun setProfileRemindersEnabled(enabled: Boolean)
 
     /** How keyword tags appear in task rows (encoded [com.isotjs.todosian.utils.TagDisplaySettings]). */
@@ -182,6 +188,18 @@ class SharedPrefsAppSettingsRepository(
         prefs.edit { putString(KEY_DEEP_CHECK_MODE, mode.name) }
     }
 
+    override fun setExcludedFolders(folders: Set<String>) {
+        prefs.edit { putStringSet(KEY_EXCLUDED_FOLDERS, folders.map(::normalizeFolderPath).filter { it.isNotEmpty() }.toSet()) }
+    }
+
+    override fun setHideEmptyNotes(enabled: Boolean) {
+        prefs.edit { putBoolean(KEY_HIDE_EMPTY_NOTES, enabled) }
+    }
+
+    override fun setDeletedNoteReminders(mode: DeletedNoteReminders) {
+        prefs.edit { putString(KEY_DELETED_NOTE_REMINDERS, mode.name) }
+    }
+
     override fun setProfileRemindersEnabled(enabled: Boolean) {
         prefs.edit { putBoolean(KEY_PROFILE_REMINDERS, enabled) }
     }
@@ -268,6 +286,11 @@ class SharedPrefsAppSettingsRepository(
             deepCheckMode = prefs.getString(KEY_DEEP_CHECK_MODE, null)?.let { raw ->
                 runCatching { DeepCheckMode.valueOf(raw) }.getOrNull()
             } ?: DeepCheckMode.DAILY_CHARGING,
+            excludedFolders = prefs.getStringSet(KEY_EXCLUDED_FOLDERS, emptySet()).orEmpty().toSet(),
+            hideEmptyNotes = prefs.getBoolean(KEY_HIDE_EMPTY_NOTES, true),
+            deletedNoteReminders = prefs.getString(KEY_DELETED_NOTE_REMINDERS, null)?.let { raw ->
+                runCatching { DeletedNoteReminders.valueOf(raw) }.getOrNull()
+            } ?: DeletedNoteReminders.CANCEL_SILENTLY,
             profileRemindersEnabled = prefs.getBoolean(KEY_PROFILE_REMINDERS, true),
             tagDisplay = prefs.getString(KEY_TAG_DISPLAY, null).orEmpty(),
             tagRecognition = prefs.getBoolean(KEY_TAG_RECOGNITION, true),
@@ -279,7 +302,7 @@ class SharedPrefsAppSettingsRepository(
         )
     }
 
-    private companion object {
+    companion object {
         private const val PREFS_NAME = "todosian_settings"
 
         private const val KEY_THEME_MODE = "theme_mode"
@@ -310,6 +333,17 @@ class SharedPrefsAppSettingsRepository(
         private const val KEY_REMINDER_REPEAT = "reminder_repeat"
         private const val KEY_FOLDER_WATCH_MODE = "folder_watch_mode"
         private const val KEY_DEEP_CHECK_MODE = "deep_check_mode"
+        private const val KEY_EXCLUDED_FOLDERS = "excluded_folders"
+        private const val KEY_HIDE_EMPTY_NOTES = "hide_empty_notes"
+        private const val KEY_DELETED_NOTE_REMINDERS = "deleted_note_reminders"
+
+        /**
+         * The excluded folders without waiting for the settings flow; the note index needs them
+         * before anything is read.
+         */
+        fun excludedFolders(context: Context): Set<String> =
+            context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .getStringSet(KEY_EXCLUDED_FOLDERS, emptySet()).orEmpty().toSet()
         private const val KEY_PROFILE_REMINDERS = "profile_reminders_enabled"
         private const val KEY_TAG_DISPLAY = "tag_display"
         private const val KEY_TAG_RECOGNITION = "tag_recognition"
@@ -320,3 +354,11 @@ class SharedPrefsAppSettingsRepository(
         private const val KEY_TODO_SORT_GROUP = "todo_sort_group"
     }
 }
+
+/** `/Archiv/ 2024/` becomes `Archiv/ 2024`: no slashes at the ends, `\` read as `/`. */
+fun normalizeFolderPath(path: String): String =
+    path.replace('\\', '/').trim().trim('/').trim()
+
+/** Whether the note [relPath] (relative to its note folder) lies in one of [excluded]. */
+fun isInExcludedFolder(relPath: String, excluded: Collection<String>): Boolean =
+    excluded.any { folder -> folder.isNotEmpty() && relPath.startsWith("$folder/", ignoreCase = true) }

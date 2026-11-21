@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import android.provider.DocumentsContract
 import android.util.Log
+import com.isotjs.todosian.data.index.ConflictNames
 import com.isotjs.todosian.data.index.IndexedNote
 import com.isotjs.todosian.data.index.ListedNote
 import com.isotjs.todosian.data.index.NoteIndexer
@@ -11,6 +12,11 @@ import com.isotjs.todosian.data.index.NoteState
 import com.isotjs.todosian.data.index.ReconcileResult
 import com.isotjs.todosian.data.index.Reconciler
 import com.isotjs.todosian.data.index.VaultIndex
+import com.isotjs.todosian.data.settings.SharedPrefsAppSettingsRepository
+import com.isotjs.todosian.data.settings.isInExcludedFolder
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import java.io.File
 
 /** A note of the vault together with what the index knows about it. */
@@ -21,6 +27,17 @@ internal data class SyncedNote(val entry: MarkdownEntry<Uri>, val note: IndexedN
     /** False when the note could not be read yet; its tasks are then unknown. */
     val isKnown: Boolean get() = note != null && note.hash.isNotEmpty()
 }
+
+/** A look at the folders in progress, for the loading indicator. */
+internal data class SyncProgress(
+    val done: Int,
+    val total: Int,
+    /** The index knew nothing about this folder yet (new install, rebuild, new folder). */
+    val firstBuild: Boolean,
+)
+
+/** A Syncthing conflict: the note [relPath] of [folder] has a conflict copy [copyPath] next to it. */
+internal data class NoteConflict(val folder: String, val relPath: String, val copyPath: String)
 
 /** What the settings show about the note index. Times in ms since 1970. */
 internal data class IndexStats(
@@ -81,6 +98,33 @@ internal class VaultSync(private val context: Context, private val index: VaultI
 
     @Volatile private var lastSync = 0L
 
+    private fun updateConflicts(folder: String, copies: List<String>) {
+        val found = copies.mapNotNull { copy ->
+            ConflictNames.originalOf(copy)?.let { NoteConflict(folder, it, copy) }
+        }
+        val others = _conflicts.value.filter { it.folder != folder }
+        if (others.size + found.size != _conflicts.value.size || !_conflicts.value.containsAll(found)) {
+            _conflicts.value = (others + found).sortedBy { it.relPath.lowercase() }
+        }
+    }
+
+    /** Conflicts of folders that are no longer selected go away with them. */
+    private fun retainConflicts(folders: Set<String>) {
+        if (_conflicts.value.any { it.folder !in folders }) _conflicts.value = _conflicts.value.filter { it.folder in folders }
+    }
+
+    /**
+     * The notes of [folder] as the index knows them, without looking at the folder: what the home
+     * screen shows right away while the look runs.
+     */
+    fun indexedNotes(folder: Uri): List<SyncedNote> {
+        val key = folder.toString()
+        val excluded = SharedPrefsAppSettingsRepository.excludedFolders(context)
+        return index.notes()
+            .filter { it.folder == key && !isInExcludedFolder(it.relPath, excluded) }
+            .map { SyncedNote(MarkdownEntry(Uri.parse(it.uri), it.relPath), it) }
+    }
+
     private fun sync(
         folder: Uri,
         recursive: Boolean,
@@ -88,15 +132,35 @@ internal class VaultSync(private val context: Context, private val index: VaultI
         onProgress: (done: Int, total: Int) -> Unit = { _, _ -> },
     ): Pair<List<SyncedNote>, ReconcileResult> {
         val started = System.currentTimeMillis()
-        val tree = scanMarkdownTree(context, folder, recursive)
         val key = folder.toString()
+        val excluded = SharedPrefsAppSettingsRepository.excludedFolders(context)
+        val scanned = scanMarkdownTree(context, folder, recursive)
+        // Notes in excluded folders do not exist for the app: not listed, not indexed, no reminders.
+        val tree = scanned.copy(
+            files = scanned.files.filter { !isInExcludedFolder(it.relativePath, excluded) },
+            conflictPaths = scanned.conflictPaths.filter { !isInExcludedFolder(it, excluded) },
+        )
         val listed = tree.files.map { it.toListed() }
         val result: ReconcileResult
         synchronized(lock) {
             if (readAll) invalidateFolder(key)
-            result = reconciler.reconcile(key, listed, ::readBytes, conflictPaths = tree.conflictPaths, onProgress = onProgress)
+            val before = index.notes().filter { it.folder == key }.associate { it.uri to it.relPath }
+            val firstBuild = before.isEmpty()
+            result = try {
+                reconciler.reconcile(key, listed, ::readBytes, conflictPaths = tree.conflictPaths) { done, total ->
+                    // Shown only while there is something to read; a look without changes shows nothing.
+                    _progress.value = if (total == 0 || done >= total) null else SyncProgress(done, total, firstBuild)
+                    onProgress(done, total)
+                }
+            } finally {
+                _progress.value = null
+            }
             noteRenames(result.renamed)
+            // Gone from the vault, not just left out by an excluded folder.
+            val excludedUris = scanned.files.filter { isInExcludedFolder(it.relativePath, excluded) }.mapTo(HashSet()) { it.ref.toString() }
+            noteDeletions(result.removed.filter { it !in excludedUris }.associateWith { before[it].orEmpty() })
         }
+        updateConflicts(key, tree.conflictPaths)
         lastSync = System.currentTimeMillis()
         if (result.read > 0) {
             Log.d(
@@ -122,7 +186,9 @@ internal class VaultSync(private val context: Context, private val index: VaultI
 
     /** Drops notes of folders that are no longer selected. */
     fun retainFolders(folders: Collection<Uri>) {
-        synchronized(lock) { reconciler.retainFolders(folders.mapTo(HashSet()) { it.toString() }) }
+        val keys = folders.mapTo(HashSet()) { it.toString() }
+        synchronized(lock) { reconciler.retainFolders(keys) }
+        retainConflicts(keys)
     }
 
     /**
@@ -160,6 +226,22 @@ internal class VaultSync(private val context: Context, private val index: VaultI
         val renames = decodeRenames(index.meta(KEY_RENAMES))
         if (renames.isNotEmpty()) index.setMeta(KEY_RENAMES, null)
         renames
+    }
+
+    /**
+     * Notes deleted outside the app since the last call, URI to path, and forgets them. Reminders
+     * use it to say which note's reminders were cancelled.
+     */
+    fun takeDeletions(): Map<String, String> = synchronized(lock) {
+        val deletions = decodeRenames(index.meta(KEY_DELETIONS))
+        if (deletions.isNotEmpty()) index.setMeta(KEY_DELETIONS, null)
+        deletions
+    }
+
+    private fun noteDeletions(deleted: Map<String, String>) {
+        if (deleted.isEmpty()) return
+        val all = decodeRenames(index.meta(KEY_DELETIONS)) + deleted
+        index.setMeta(KEY_DELETIONS, all.entries.toList().takeLast(MAX_RENAMES).joinToString("\n") { "${it.key}\u001F${it.value}" })
     }
 
     private fun noteRenames(renamed: Map<String, String>) {
@@ -202,10 +284,12 @@ internal class VaultSync(private val context: Context, private val index: VaultI
     fun checkFiles(folder: Uri, paths: Collection<String>, recursive: Boolean): ReconcileResult? {
         if (paths.any { it.contains("sync-conflict", ignoreCase = true) }) return null
         // The same notes a folder listing would yield: no hidden folders, not Todosian's own notes.
+        val excluded = SharedPrefsAppSettingsRepository.excludedFolders(context)
         val notes = paths.filter { path ->
             val folders = path.split('/').dropLast(1)
             (recursive || folders.isEmpty()) && folders.none { it.startsWith('.') } &&
-                folders.firstOrNull()?.equals(CONFIG_FOLDER_NAME, ignoreCase = true) != true
+                folders.firstOrNull()?.equals(CONFIG_FOLDER_NAME, ignoreCase = true) != true &&
+                !isInExcludedFolder(path, excluded)
         }
         if (notes.isEmpty()) return ReconcileResult()
         val treeId = DocumentsContract.getTreeDocumentId(folder)
@@ -220,7 +304,11 @@ internal class VaultSync(private val context: Context, private val index: VaultI
             listed += ListedNote(uri.toString().substringAfterLast("/document/"), uri.toString(), path.dropLast(3), stamp.lastModified, stamp.size)
         }
         return synchronized(lock) {
-            reconciler.reconcile(key, listed, ::readBytes, scope = scope).also { noteRenames(it.renamed) }
+            val names = scope.associateWith { index.note(it)?.relPath.orEmpty() }
+            reconciler.reconcile(key, listed, ::readBytes, scope = scope).also { result ->
+                noteRenames(result.renamed)
+                noteDeletions(result.removed.associateWith { names[it].orEmpty() })
+            }
         }
     }
 
@@ -261,9 +349,20 @@ internal class VaultSync(private val context: Context, private val index: VaultI
 
     companion object {
         private const val TAG = "VaultSync"
+
+        private val _progress = MutableStateFlow<SyncProgress?>(null)
+
+        /** The look at the folders that is running now, or null. */
+        val progress: StateFlow<SyncProgress?> = _progress.asStateFlow()
+
+        private val _conflicts = MutableStateFlow<List<NoteConflict>>(emptyList())
+
+        /** Notes with a Syncthing conflict copy, as of the last look at their folder. */
+        val conflicts: StateFlow<List<NoteConflict>> = _conflicts.asStateFlow()
         private const val OLD_INDEX_FILE = "note-index.bin"
         private const val KEY_RENAMES = "pending_renames"
         private const val KEY_LAST_DEEP_CHECK = "last_deep_check"
+        private const val KEY_DELETIONS = "pending_deletions"
         private const val MAX_RENAMES = 200
 
         @Volatile private var instance: VaultSync? = null

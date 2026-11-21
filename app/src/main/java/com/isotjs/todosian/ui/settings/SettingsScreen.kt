@@ -69,6 +69,9 @@ import androidx.compose.material.icons.filled.Sell
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.DeleteSweep
+import androidx.compose.material.icons.filled.FilterListOff
+import androidx.compose.material.icons.filled.FolderOff
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.VerticalAlignTop
@@ -136,6 +139,7 @@ import com.isotjs.todosian.data.settings.AppSettings
 import com.isotjs.todosian.data.settings.AppSettingsRepository
 import com.isotjs.todosian.data.settings.CategorySort
 import com.isotjs.todosian.data.settings.HomeLayout
+import com.isotjs.todosian.data.settings.DeletedNoteReminders
 import com.isotjs.todosian.data.settings.FolderWatchMode
 import com.isotjs.todosian.data.settings.ReminderRepeat
 import com.isotjs.todosian.sync.FolderWatchScheduler
@@ -233,6 +237,8 @@ fun SettingsScreen(
     var showReminderRepeatDialog by remember { mutableStateOf(false) }
     var showFolderWatchDialog by remember { mutableStateOf(false) }
     var showIndexDialog by remember { mutableStateOf(false) }
+    var showExcludedFoldersDialog by remember { mutableStateOf(false) }
+    var showDeletedNoteDialog by remember { mutableStateOf(false) }
     var showReminderProfilesDialog by remember { mutableStateOf(false) }
     var showNewTaskAlertDialog by remember { mutableStateOf(false) }
     var newTaskAlertFiles by remember { mutableStateOf(preferencesManager.getNewTaskAlertFiles()) }
@@ -383,6 +389,24 @@ fun SettingsScreen(
             deepCheckMode = settings.deepCheckMode,
             onDeepCheckModeChange = { appSettingsRepository.setDeepCheckMode(it) },
             onDismiss = { showIndexDialog = false },
+        )
+    }
+
+    if (showExcludedFoldersDialog) {
+        ExcludedFoldersDialog(
+            folders = settings.excludedFolders,
+            onChange = { appSettingsRepository.setExcludedFolders(it) },
+            onDismiss = { showExcludedFoldersDialog = false },
+        )
+    }
+
+    if (showDeletedNoteDialog) {
+        SingleChoiceDialog(
+            title = stringResource(R.string.settings_deleted_note),
+            options = DeletedNoteReminders.entries.map { ChoiceOption(it, deletedNoteRemindersLabel(it)) },
+            selected = settings.deletedNoteReminders,
+            onSelected = { appSettingsRepository.setDeletedNoteReminders(it) },
+            onDismiss = { showDeletedNoteDialog = false },
         )
     }
 
@@ -875,6 +899,28 @@ fun SettingsScreen(
                         SettingsDivider()
 
                         SettingsNavRow(
+                            icon = Icons.Filled.FolderOff,
+                            title = stringResource(R.string.settings_excluded_folders),
+                            subtitle = if (settings.excludedFolders.isEmpty()) {
+                                stringResource(R.string.settings_excluded_folders_none)
+                            } else {
+                                settings.excludedFolders.sortedBy { it.lowercase() }.joinToString(", ")
+                            },
+                            onClick = { showExcludedFoldersDialog = true },
+                        )
+
+                        SettingsDivider()
+
+                        SettingsNavRow(
+                            icon = Icons.Filled.DeleteSweep,
+                            title = stringResource(R.string.settings_deleted_note),
+                            subtitle = deletedNoteRemindersLabel(settings.deletedNoteReminders),
+                            onClick = { showDeletedNoteDialog = true },
+                        )
+
+                        SettingsDivider()
+
+                        SettingsNavRow(
                             icon = Icons.Filled.NotificationsActive,
                             title = stringResource(R.string.settings_reminder_profiles),
                             subtitle = if (settings.profileRemindersEnabled) {
@@ -945,6 +991,14 @@ fun SettingsScreen(
                                 else R.string.settings_home_layout_tiles,
                             ),
                             onClick = { showHomeLayoutDialog = true },
+                        )
+
+                        SettingsSwitchRow(
+                            icon = Icons.Filled.FilterListOff,
+                            title = stringResource(R.string.settings_hide_empty_notes),
+                            subtitle = stringResource(R.string.settings_hide_empty_notes_subtitle),
+                            checked = settings.hideEmptyNotes,
+                            onCheckedChange = { appSettingsRepository.setHideEmptyNotes(it) },
                         )
 
                         if (settings.homeLayout == HomeLayout.TASKS) {

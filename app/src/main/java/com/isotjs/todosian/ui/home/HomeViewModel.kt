@@ -23,6 +23,8 @@ data class HomeUiState(
     val isLoading: Boolean = false,
     val isRefreshing: Boolean = false,
     val categories: List<Category> = emptyList(),
+    /** Lists created in this session; they stay visible even while they hold no tasks. */
+    val createdHere: Set<Uri> = emptySet(),
 ) {
     fun remainingFor(mode: com.isotjs.todosian.data.settings.DailyFocusMode): Int {
         return when (mode) {
@@ -69,7 +71,11 @@ class HomeViewModel(
                     _uiState.value = _uiState.value.copy(isLoading = true)
                 }
                 val markers = appSettingsRepository.settings.first().toTaskMarkers()
-                // Pulling to refresh reads every note again, past the note index.
+                if (_uiState.value.categories.isEmpty()) {
+                    // What the note index knows shows right away; the look at the folders follows.
+                    val indexed = fileRepository.getIndexedCategories(markers)
+                    if (indexed.isNotEmpty()) _uiState.value = _uiState.value.copy(isLoading = false, categories = indexed)
+                }
                 val result = fileRepository.getCategories(markers, fresh = showRefreshing)
                 if (result.isFailure) {
                     fileRepository.clearFolderUri()
@@ -125,6 +131,7 @@ class HomeViewModel(
                 _events.emit(Event.ShowMessage(R.string.error_write_failed))
                 return@launch
             }
+            _uiState.value = _uiState.value.copy(createdHere = _uiState.value.createdHere + created.getOrThrow())
             refresh()
         }
     }

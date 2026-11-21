@@ -29,6 +29,12 @@ data class AppSettings(
     val folderWatchMode: FolderWatchMode = FolderWatchMode.PERIODIC,
     /** How often every note is read again to find anything the note index missed. */
     val deepCheckMode: DeepCheckMode = DeepCheckMode.DAILY_CHARGING,
+    /** Folders (paths relative to a note folder) whose notes the app leaves out completely. */
+    val excludedFolders: Set<String> = emptySet(),
+    /** Home screen: leave out notes without tasks. */
+    val hideEmptyNotes: Boolean = true,
+    /** What happens to the reminders of a note that was deleted outside the app. */
+    val deletedNoteReminders: DeletedNoteReminders = DeletedNoteReminders.CANCEL_SILENTLY,
     /** Main switch for reminders from reminder profiles; ⏰ in a line always rings. */
     val profileRemindersEnabled: Boolean = true,
     /** Encoded [com.isotjs.todosian.utils.TagDisplaySettings]; empty = defaults. */
@@ -107,6 +113,13 @@ enum class FolderWatchMode {
 
     /** Foreground service with file observers; needs "All files access". */
     INSTANT,
+}
+
+enum class DeletedNoteReminders {
+    CANCEL_SILENTLY,
+
+    /** Cancel them and say so in a notification. */
+    NOTIFY,
 }
 
 enum class DeepCheckMode {
