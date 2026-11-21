@@ -81,7 +81,7 @@ object ObsidianMarkdown {
     private fun escape(text: String): String = text.replace("[", "\\[").replace("]", "\\]")
 
     private fun stripFrontMatter(text: String): String {
-        val normalized = text.removePrefix("﻿")
+        val normalized = text.removePrefix("\uFEFF")
         if (!normalized.startsWith("---")) return normalized
         val lines = normalized.lines()
         if (lines.first().trim() != "---") return normalized
