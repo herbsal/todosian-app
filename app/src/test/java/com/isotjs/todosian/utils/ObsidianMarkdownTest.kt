@@ -28,12 +28,27 @@ class ObsidianMarkdownTest {
     @Test
     fun calloutsBecomeQuotesAndFrontMatterAndCommentsGo() {
         val text = "---\ntags: [a]\n---\n# Titel\n> [!tip]- Merken\n> Inhalt\n> [!note]\nText %%geheim%% weiter"
-        assertEquals("# Titel\n> **Merken**\n> Inhalt\n> **Note**\nText  weiter", prepare(text))
+        assertEquals("# Titel\n> **Merken**  \n> Inhalt  \n> **Note**  \nText  weiter", prepare(text))
     }
 
     @Test
-    fun leavesTasksAndPlainTextAlone() {
-        val text = "- [ ] Müll 📅 2026-11-21\n- [x] Fertig\nNormal [Link](https://example.org)"
+    fun leavesTasksAlone() {
+        val text = "- [ ] Müll 📅 2026-11-21"
         assertEquals(text, prepare(text))
+    }
+
+    @Test
+    fun aLineAfterATaskIsItsOwnParagraphAndLineBreaksStay() {
+        val text = "Bla\nVhjjd\nNnko\n\n- [ ] Impfpass #30min #person/partner 📅 2026-11-25\nHhkbgjm\n  - [ ] Unteraufgabe\n- [ ] Zweite"
+        assertEquals(
+            "Bla  \nVhjjd  \nNnko\n\n- [ ] Impfpass `#30min` `#person/partner` 📅 2026-11-25\n\nHhkbgjm  \n  - [ ] Unteraufgabe  \n- [ ] Zweite",
+            prepare(text),
+        )
+    }
+
+    @Test
+    fun codeHeadingsAndLinksKeepTheirHash() {
+        val text = "# Titel\n```\n#nichtTag\n```\nSiehe [x](#abschnitt) und `#code` und #2026"
+        assertEquals("# Titel\n```\n#nichtTag\n```\nSiehe [x](#abschnitt) und `#code` und #2026", prepare(text))
     }
 }

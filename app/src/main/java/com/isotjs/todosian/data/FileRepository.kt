@@ -171,6 +171,12 @@ interface FileRepository {
      */
     suspend fun getTagDefinitions(noteUri: Uri?): TagDefinitions
 
+    /**
+     * The tags last read for the folder of [noteUri], at once and without touching the folder, so a
+     * screen shows tag symbols right away instead of `#tag` first; null when never read.
+     */
+    fun cachedTagDefinitions(noteUri: Uri?): TagDefinitions? = null
+
     /** Names of the reminder profiles in `Todosian/Reminders/` of [folderUri]. */
     suspend fun getReminderProfileNames(folderUri: Uri): List<String>
 
@@ -614,20 +620,51 @@ class SafFileRepository(
     }
 
     override suspend fun getTagDefinitions(noteUri: Uri?): TagDefinitions = withContext(Dispatchers.IO) {
+        val folder = tagFolderOf(noteUri) ?: return@withContext TagDefinitions.EMPTY
+        runCatching {
+            val lines = findTagNote(appContext, folder)?.let { readLinesInternal(it) }.orEmpty()
+            rememberTagNote(folder, lines)
+            TagDefinitionParser.parse(lines)
+        }.onFailure { Log.w(TAG, "Reading the keyword note failed", it) }
+            .getOrElse { cachedTagDefinitions(noteUri) ?: TagDefinitions.EMPTY }
+    }
+
+    override fun cachedTagDefinitions(noteUri: Uri?): TagDefinitions? {
+        val folder = tagFolderOf(noteUri) ?: return null
+        val key = folder.toString()
+        tagCache[key]?.let { return it }
+        // After a restart: the copy of the tag note from the last read (a few hundred bytes).
+        val lines = runCatching { tagCacheFile(key).takeIf { it.exists() }?.readLines() }.getOrNull() ?: return null
+        return TagDefinitionParser.parse(lines).also { tagCache[key] = it }
+    }
+
+    private val tagCache = java.util.concurrent.ConcurrentHashMap<String, TagDefinitions>()
+
+    private fun rememberTagNote(folder: Uri, lines: List<String>) {
+        val key = folder.toString()
+        tagCache[key] = TagDefinitionParser.parse(lines)
+        runCatching {
+            val file = tagCacheFile(key)
+            val text = lines.joinToString("\n")
+            if (!file.exists() || file.readText() != text) {
+                file.parentFile?.mkdirs()
+                file.writeText(text)
+            }
+        }
+    }
+
+    private fun tagCacheFile(folderKey: String): java.io.File =
+        java.io.File(appContext.noBackupFilesDir, "tag-notes/${folderKey.hashCode().toUInt()}.md")
+
+    private fun tagFolderOf(noteUri: Uri?): Uri? {
         val folders = allFolderUris()
-        val folder = noteUri
+        return noteUri
             ?.let { uri -> runCatching { DocumentsContract.getDocumentId(uri) }.getOrNull() }
             ?.let { documentId ->
                 val byTreeId = folders.associateBy { runCatching { DocumentsContract.getTreeDocumentId(it) }.getOrNull().orEmpty() }
                 treeIdForDocument(documentId, byTreeId.keys.filter { it.isNotEmpty() }.toList())?.let(byTreeId::get)
             }
             ?: getFolderUri()
-            ?: return@withContext TagDefinitions.EMPTY
-        runCatching {
-            val note = findTagNote(appContext, folder) ?: return@runCatching TagDefinitions.EMPTY
-            TagDefinitionParser.parse(readLinesInternal(note))
-        }.onFailure { Log.w(TAG, "Reading the keyword note failed", it) }
-            .getOrDefault(TagDefinitions.EMPTY)
     }
 
     override suspend fun getReminderProfileNames(folderUri: Uri): List<String> = withContext(Dispatchers.IO) {

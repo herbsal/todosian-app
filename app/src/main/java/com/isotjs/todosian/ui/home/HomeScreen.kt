@@ -196,8 +196,15 @@ fun HomeScreen(
     val shownTab = if (tab == HomeTab.FOCUS && !settings.showDailyFocus) HomeTab.LISTS else tab
     val tagDisplay = remember(settings.tagDisplay) { TagDisplaySettings.decode(settings.tagDisplay) }
     // Tags per list (from the Tags note of its folder), for the symbols in the task rows.
-    val tagDefinitionsByList by produceState(emptyMap<android.net.Uri, TagDefinitions>(), uiState.categories) {
-        value = uiState.categories.associate { category -> category.uri to fileRepository.getTagDefinitions(category.uri) }
+    val tagDefinitionsByList by produceState(
+        uiState.categories.associate { it.uri to (fileRepository.cachedTagDefinitions(it.uri) ?: TagDefinitions.EMPTY) },
+        uiState.categories,
+    ) {
+        // The tags last read first (symbols at once), then fresh from the tag note if they changed.
+        val cached = uiState.categories.associate { it.uri to (fileRepository.cachedTagDefinitions(it.uri) ?: TagDefinitions.EMPTY) }
+        if (cached != value) value = cached
+        val fresh = uiState.categories.associate { category -> category.uri to fileRepository.getTagDefinitions(category.uri) }
+        if (fresh != value) value = fresh
     }
 
     var showNewCategorySheet by remember { mutableStateOf(false) }
