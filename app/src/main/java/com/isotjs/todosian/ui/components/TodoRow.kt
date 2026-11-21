@@ -499,32 +499,28 @@ fun TasksMetaEditor(
             onClear = { onMetaChange(meta.copy(createdDate = null)) },
         )
 
-        DateMetaRow(
+        DueMetaRow(
             label = if (useEmojisInUi) stringResource(R.string.category_tasks_due) else stringResource(R.string.category_tasks_due_label),
             icon = if (useEmojisInUi) null else Icons.Outlined.Event,
-            value = meta.dueDate,
-            allowClear = true,
-            // A ⏰ on the old due day moves with it, so "due at 14:00" stays together.
-            onPick = { picked ->
-                val reminder = TodoDates.parseReminder(meta.reminder)
-                val moved = if (reminder != null && reminder.toLocalDate().toString() == meta.dueDate) {
-                    TodoDates.parseDate(picked)?.let { MarkdownParser.formatReminder(it.atTime(reminder.toLocalTime())) }
-                } else {
-                    null
+            dueDate = meta.dueDate,
+            reminder = meta.reminder,
+            // The time is the ⏰ on the due day; a ⏰ on another day is a separate reminder and stays.
+            onPick = { day, time ->
+                val old = TodoDates.parseReminder(meta.reminder)
+                val wasDueTime = old != null && old.toLocalDate().toString() == meta.dueDate
+                val reminder = when {
+                    time != null -> MarkdownParser.formatReminder(day.atTime(time))
+                    wasDueTime -> null
+                    else -> meta.reminder
                 }
-                onMetaChange(meta.copy(dueDate = picked, reminder = moved ?: meta.reminder))
+                onMetaChange(meta.copy(dueDate = day.toString(), reminder = reminder))
             },
-            onClear = { onMetaChange(meta.copy(dueDate = null)) },
+            onClear = {
+                val old = TodoDates.parseReminder(meta.reminder)
+                val wasDueTime = old != null && old.toLocalDate().toString() == meta.dueDate
+                onMetaChange(meta.copy(dueDate = null, reminder = if (wasDueTime) null else meta.reminder))
+            },
         )
-
-        meta.dueDate?.let { due -> TodoDates.parseDate(due) }?.let { dueDay ->
-            DueTimeRow(
-                dueDay = dueDay,
-                reminder = meta.reminder,
-                onPick = { time -> onMetaChange(meta.copy(reminder = MarkdownParser.formatReminder(dueDay.atTime(time)))) },
-                onClear = { onMetaChange(meta.copy(reminder = null)) },
-            )
-        }
 
         ReminderMetaRow(
             label = if (useEmojisInUi) {
@@ -654,49 +650,84 @@ private fun DateMetaRow(
 }
 
 /**
- * Time of the due date. Obsidian Tasks dates have no time, so it is stored as ⏰ on the due day,
- * which also reminds at that time.
+ * Due date with an optional time in one row: a date picker, then a time picker whose
+ * "No time" keeps just the date. Obsidian Tasks dates have no time, so the time is stored
+ * as ⏰ on the due day, which also reminds at that time.
  */
 @Composable
-private fun DueTimeRow(
-    dueDay: LocalDate,
+private fun DueMetaRow(
+    label: String,
+    icon: ImageVector?,
+    dueDate: String?,
     reminder: String?,
-    onPick: (java.time.LocalTime) -> Unit,
+    onPick: (LocalDate, java.time.LocalTime?) -> Unit,
     onClear: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
     val locale = LocalConfiguration.current.locales[0]
-    val onDueDay = TodoDates.parseReminder(reminder)?.takeIf { it.toLocalDate() == dueDay }
+    val dueDay = TodoDates.parseDate(dueDate)
+    val dueTime = TodoDates.parseReminder(reminder)?.takeIf { dueDay != null && it.toLocalDate() == dueDay }?.toLocalTime()
+    val noTime = stringResource(R.string.category_tasks_due_no_time)
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
     ) {
-        Text(
-            text = stringResource(R.string.category_tasks_due_time),
-            style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier
-                .weight(1f)
-                .padding(start = 26.dp),
-        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.weight(1f),
+        ) {
+            if (icon != null) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
+
         TextButton(
             onClick = {
-                val initial = onDueDay?.toLocalTime() ?: java.time.LocalTime.of(9, 0)
-                TimePickerDialog(
+                val initialDay = dueDay ?: LocalDate.now()
+                val initialTime = dueTime ?: java.time.LocalTime.of(9, 0)
+                DatePickerDialog(
                     context,
-                    { _, hour, minute -> onPick(java.time.LocalTime.of(hour, minute)) },
-                    initial.hour,
-                    initial.minute,
-                    DateFormat.is24HourFormat(context),
+                    { _, year, month, dayOfMonth ->
+                        val day = LocalDate.of(year, month + 1, dayOfMonth)
+                        TimePickerDialog(
+                            context,
+                            { _, hour, minute -> onPick(day, java.time.LocalTime.of(hour, minute)) },
+                            initialTime.hour,
+                            initialTime.minute,
+                            DateFormat.is24HourFormat(context),
+                        ).apply {
+                            setButton(android.content.DialogInterface.BUTTON_NEUTRAL, noTime) { _, _ -> onPick(day, null) }
+                        }.show()
+                    },
+                    initialDay.year,
+                    initialDay.monthValue - 1,
+                    initialDay.dayOfMonth,
                 ).show()
             },
         ) {
+            val time = dueTime?.format(DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT).withLocale(locale))
             Text(
-                text = onDueDay?.toLocalTime()?.format(DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT).withLocale(locale))
-                    ?: stringResource(R.string.action_set),
+                text = when {
+                    dueDate == null -> stringResource(R.string.action_set)
+                    time != null -> stringResource(R.string.date_with_time, dueDate, time)
+                    else -> dueDate
+                },
             )
         }
-        if (onDueDay != null) {
+
+        if (dueDate != null) {
             TextButton(onClick = onClear) {
                 Text(text = stringResource(R.string.action_clear))
             }

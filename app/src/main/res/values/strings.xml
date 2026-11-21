@@ -508,7 +508,7 @@
         <item quantity="one">+ %1$d more</item>
         <item quantity="other">+ %1$d more</item>
     </plurals>
-    <string name="category_tasks_due_time">Time</string>
+    <string name="category_tasks_due_no_time">No time</string>
     <string name="settings_index">Note index</string>
     <plurals name="settings_index_notes">
         <item quantity="one">%1$d note</item>
