@@ -47,6 +47,8 @@ interface AppSettingsRepository {
 
     fun setFolderWatchMode(mode: FolderWatchMode)
 
+    fun setDeepCheckMode(mode: DeepCheckMode) {}
+
     fun setProfileRemindersEnabled(enabled: Boolean)
 
     /** How keyword tags appear in task rows (encoded [com.isotjs.todosian.utils.TagDisplaySettings]). */
@@ -176,6 +178,10 @@ class SharedPrefsAppSettingsRepository(
         prefs.edit { putString(KEY_FOLDER_WATCH_MODE, mode.name) }
     }
 
+    override fun setDeepCheckMode(mode: DeepCheckMode) {
+        prefs.edit { putString(KEY_DEEP_CHECK_MODE, mode.name) }
+    }
+
     override fun setProfileRemindersEnabled(enabled: Boolean) {
         prefs.edit { putBoolean(KEY_PROFILE_REMINDERS, enabled) }
     }
@@ -259,6 +265,9 @@ class SharedPrefsAppSettingsRepository(
             folderWatchMode = prefs.getString(KEY_FOLDER_WATCH_MODE, null)?.let { raw ->
                 runCatching { FolderWatchMode.valueOf(raw) }.getOrNull()
             } ?: FolderWatchMode.PERIODIC,
+            deepCheckMode = prefs.getString(KEY_DEEP_CHECK_MODE, null)?.let { raw ->
+                runCatching { DeepCheckMode.valueOf(raw) }.getOrNull()
+            } ?: DeepCheckMode.DAILY_CHARGING,
             profileRemindersEnabled = prefs.getBoolean(KEY_PROFILE_REMINDERS, true),
             tagDisplay = prefs.getString(KEY_TAG_DISPLAY, null).orEmpty(),
             tagRecognition = prefs.getBoolean(KEY_TAG_RECOGNITION, true),
@@ -300,6 +309,7 @@ class SharedPrefsAppSettingsRepository(
         private const val KEY_REMINDER_TIME_MINUTE = "reminder_time_minute"
         private const val KEY_REMINDER_REPEAT = "reminder_repeat"
         private const val KEY_FOLDER_WATCH_MODE = "folder_watch_mode"
+        private const val KEY_DEEP_CHECK_MODE = "deep_check_mode"
         private const val KEY_PROFILE_REMINDERS = "profile_reminders_enabled"
         private const val KEY_TAG_DISPLAY = "tag_display"
         private const val KEY_TAG_RECOGNITION = "tag_recognition"

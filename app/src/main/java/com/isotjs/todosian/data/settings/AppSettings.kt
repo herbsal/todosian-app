@@ -27,6 +27,8 @@ data class AppSettings(
     val reminderTimeMinute: Int = 0,
     val reminderRepeat: ReminderRepeat = ReminderRepeat.OFF,
     val folderWatchMode: FolderWatchMode = FolderWatchMode.PERIODIC,
+    /** How often every note is read again to find anything the note index missed. */
+    val deepCheckMode: DeepCheckMode = DeepCheckMode.DAILY_CHARGING,
     /** Main switch for reminders from reminder profiles; ⏰ in a line always rings. */
     val profileRemindersEnabled: Boolean = true,
     /** Encoded [com.isotjs.todosian.utils.TagDisplaySettings]; empty = defaults. */
@@ -105,6 +107,15 @@ enum class FolderWatchMode {
 
     /** Foreground service with file observers; needs "All files access". */
     INSTANT,
+}
+
+enum class DeepCheckMode {
+    OFF,
+
+    /** Once a day while the phone charges and is not in use. */
+    DAILY_CHARGING,
+
+    WEEKLY,
 }
 
 enum class ReminderRepeat {

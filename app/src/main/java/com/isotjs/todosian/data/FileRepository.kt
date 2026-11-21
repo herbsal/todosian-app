@@ -108,7 +108,8 @@ interface FileRepository {
 
     /**
      * All notes with their tasks. Notes unchanged since the last look come from the note index;
-     * [fresh] reads every note again (pull to refresh).
+     * [fresh] is kept for callers; a normal look already reads every changed note, and the deep
+     * check in the settings reads all of them.
      */
     suspend fun getCategories(markers: TaskMarkers = TaskMarkers.Default, fresh: Boolean = false): Result<List<Category>>
 
@@ -348,7 +349,7 @@ class SafFileRepository(
                 vaultSync.retainFolders(folders.map { it.uri })
                 val today = LocalDate.now().toString()
                 folders
-                    .flatMap { folder -> syncFolderOrEmpty(folder, recursive, fresh) }
+                    .flatMap { folder -> syncFolderOrEmpty(folder, recursive) }
                     .map { (folder, synced) ->
                         // Lists come from the note index; only notes that changed were read.
                         val todos = MarkdownParser.parse(synced.lines, markers)
@@ -444,11 +445,11 @@ class SafFileRepository(
     }
 
     /** The main folder must be readable; an extra folder that went missing is skipped. */
-    private fun syncFolderOrEmpty(folder: NoteFolder, recursive: Boolean, fresh: Boolean): List<Pair<NoteFolder, SyncedNote>> {
+    private fun syncFolderOrEmpty(folder: NoteFolder, recursive: Boolean): List<Pair<NoteFolder, SyncedNote>> {
         val notes = if (folder.prefix.isEmpty()) {
-            vaultSync.notes(folder.uri, recursive, fresh)
+            vaultSync.notes(folder.uri, recursive)
         } else {
-            runCatching { vaultSync.notes(folder.uri, recursive, fresh) }
+            runCatching { vaultSync.notes(folder.uri, recursive) }
                 .onFailure { Log.w(TAG, "Skipping unreadable extra folder", it) }
                 .getOrDefault(emptyList())
         }

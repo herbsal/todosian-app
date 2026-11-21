@@ -69,6 +69,7 @@ import androidx.compose.material.icons.filled.Sell
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.VerticalAlignTop
 import androidx.compose.material.icons.filled.ViewDay
@@ -231,6 +232,7 @@ fun SettingsScreen(
     var showReminderTimeDialog by remember { mutableStateOf(false) }
     var showReminderRepeatDialog by remember { mutableStateOf(false) }
     var showFolderWatchDialog by remember { mutableStateOf(false) }
+    var showIndexDialog by remember { mutableStateOf(false) }
     var showReminderProfilesDialog by remember { mutableStateOf(false) }
     var showNewTaskAlertDialog by remember { mutableStateOf(false) }
     var newTaskAlertFiles by remember { mutableStateOf(preferencesManager.getNewTaskAlertFiles()) }
@@ -373,6 +375,14 @@ fun SettingsScreen(
                 }
             },
             onDismiss = { showFolderWatchDialog = false },
+        )
+    }
+
+    if (showIndexDialog) {
+        IndexDialog(
+            deepCheckMode = settings.deepCheckMode,
+            onDeepCheckModeChange = { appSettingsRepository.setDeepCheckMode(it) },
+            onDismiss = { showIndexDialog = false },
         )
     }
 
@@ -850,6 +860,16 @@ fun SettingsScreen(
                                 },
                             ),
                             onClick = { showFolderWatchDialog = true },
+                        )
+
+                        SettingsDivider()
+
+                        SettingsNavRow(
+                            icon = Icons.Filled.Storage,
+                            title = stringResource(R.string.settings_index),
+                            subtitle = stringResource(R.string.settings_index_deep_check) + ": " +
+                                deepCheckModeLabel(settings.deepCheckMode),
+                            onClick = { showIndexDialog = true },
                         )
 
                         SettingsDivider()
