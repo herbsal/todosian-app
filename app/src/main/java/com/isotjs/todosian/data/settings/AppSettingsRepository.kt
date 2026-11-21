@@ -77,6 +77,7 @@ interface AppSettingsRepository {
     fun setTagRecognitionRemoveWords(enabled: Boolean) {}
 
     fun setHomeLayout(layout: HomeLayout) {}
+    fun setStartTab(tab: StartTab) {}
 
     fun setHomeTasksPerList(count: Int) {}
 
@@ -246,6 +247,10 @@ class SharedPrefsAppSettingsRepository(
         prefs.edit { putString(KEY_HOME_LAYOUT, layout.name) }
     }
 
+    override fun setStartTab(tab: StartTab) {
+        prefs.edit { putString(KEY_START_TAB, tab.name) }
+    }
+
     override fun setHomeTasksPerList(count: Int) {
         prefs.edit { putInt(KEY_HOME_TASKS_PER_LIST, count) }
     }
@@ -326,6 +331,8 @@ class SharedPrefsAppSettingsRepository(
             tagDisplay = prefs.getString(KEY_TAG_DISPLAY, null).orEmpty(),
             tagRecognition = prefs.getBoolean(KEY_TAG_RECOGNITION, true),
             tagRecognitionRemoveWords = prefs.getBoolean(KEY_TAG_RECOGNITION_REMOVE, true),
+            startTab = prefs.getString(KEY_START_TAB, null)
+                ?.let { raw -> runCatching { StartTab.valueOf(raw) }.getOrNull() } ?: StartTab.LISTS,
             homeLayout = prefs.getString(KEY_HOME_LAYOUT, null)
                 ?.let { raw -> runCatching { HomeLayout.valueOf(raw) }.getOrNull() } ?: HomeLayout.TASKS,
             homeTasksPerList = prefs.getInt(KEY_HOME_TASKS_PER_LIST, 3),
@@ -392,6 +399,7 @@ class SharedPrefsAppSettingsRepository(
         private const val KEY_TAG_RECOGNITION = "tag_recognition"
         private const val KEY_TAG_RECOGNITION_REMOVE = "tag_recognition_remove_words"
         private const val KEY_HOME_LAYOUT = "home_layout"
+        private const val KEY_START_TAB = "start_tab"
         private const val KEY_HOME_TASKS_PER_LIST = "home_tasks_per_list"
         private const val KEY_HOME_COLLAPSED = "home_collapsed"
         private const val KEY_TODO_SORT_GROUP = "todo_sort_group"

@@ -58,6 +58,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ColorLens
 import androidx.compose.material.icons.filled.ContentCut
 import androidx.compose.material.icons.filled.Dashboard
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.FormatListNumbered
 import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.Edit
@@ -142,6 +143,7 @@ import com.isotjs.todosian.data.settings.AppSettings
 import com.isotjs.todosian.data.settings.AppSettingsRepository
 import com.isotjs.todosian.data.settings.CategorySort
 import com.isotjs.todosian.data.settings.HomeLayout
+import com.isotjs.todosian.data.settings.StartTab
 import com.isotjs.todosian.data.settings.DeletedNoteReminders
 import com.isotjs.todosian.data.settings.TaskIdMode
 import com.isotjs.todosian.data.settings.ConflictMode
@@ -230,6 +232,7 @@ fun SettingsScreen(
     var showThemeDialog by remember { mutableStateOf(false) }
     var showSortDialog by remember { mutableStateOf(false) }
     var showHomeLayoutDialog by remember { mutableStateOf(false) }
+    var showStartTabDialog by remember { mutableStateOf(false) }
     var showHomeCountDialog by remember { mutableStateOf(false) }
     var showGroupingDialog by remember { mutableStateOf(false) }
     var showTodoSortDialog by remember { mutableStateOf(false) }
@@ -285,6 +288,20 @@ fun SettingsScreen(
             selected = settings.themeMode,
             onSelected = { appSettingsRepository.setThemeMode(it) },
             onDismiss = { showThemeDialog = false },
+        )
+    }
+
+    if (showStartTabDialog) {
+        SingleChoiceDialog(
+            title = stringResource(R.string.settings_start_tab),
+            options = buildList {
+                add(ChoiceOption(StartTab.LISTS, stringResource(R.string.home_tab_lists)))
+                add(ChoiceOption(StartTab.CALENDAR, stringResource(R.string.home_tab_calendar)))
+                if (settings.showDailyFocus) add(ChoiceOption(StartTab.FOCUS, stringResource(R.string.home_daily_focus_title)))
+            },
+            selected = settings.startTab,
+            onSelected = { appSettingsRepository.setStartTab(it) },
+            onDismiss = { showStartTabDialog = false },
         )
     }
 
@@ -1077,6 +1094,21 @@ fun SettingsScreen(
                             checked = settings.tagRecognitionRemoveWords,
                             onCheckedChange = { appSettingsRepository.setTagRecognitionRemoveWords(it) },
                             enabled = settings.tagRecognition,
+                        )
+
+                        SettingsDivider()
+
+                        SettingsNavRow(
+                            icon = Icons.Filled.Home,
+                            title = stringResource(R.string.settings_start_tab),
+                            subtitle = stringResource(
+                                when (settings.startTab) {
+                                    StartTab.FOCUS -> if (settings.showDailyFocus) R.string.home_daily_focus_title else R.string.home_tab_lists
+                                    StartTab.CALENDAR -> R.string.home_tab_calendar
+                                    StartTab.LISTS -> R.string.home_tab_lists
+                                },
+                            ),
+                            onClick = { showStartTabDialog = true },
                         )
 
                         SettingsDivider()

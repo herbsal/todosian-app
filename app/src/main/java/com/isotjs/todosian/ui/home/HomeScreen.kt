@@ -97,6 +97,7 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.runtime.saveable.rememberSaveable
 import com.isotjs.todosian.data.settings.HomeLayout
+import com.isotjs.todosian.data.settings.StartTab
 import com.isotjs.todosian.utils.TagDefinitions
 import com.isotjs.todosian.utils.TagDisplaySettings
 import com.isotjs.todosian.data.FileRepository
@@ -192,7 +193,16 @@ fun HomeScreen(
         if (refreshSignal > 0L) viewModel.refresh()
     }
 
-    var tab by rememberSaveable { mutableStateOf(HomeTab.LISTS) }
+    // Opens with the tab chosen in the settings; afterwards the tab the user picked.
+    var tab by rememberSaveable {
+        mutableStateOf(
+            when (settings.startTab) {
+                StartTab.LISTS -> HomeTab.LISTS
+                StartTab.CALENDAR -> HomeTab.CALENDAR
+                StartTab.FOCUS -> HomeTab.FOCUS
+            },
+        )
+    }
     // Saved view chosen with the chips of the lists and calendar tabs; it filters both in place.
     var viewKey by rememberSaveable { mutableStateOf<String?>(null) }
     val activeView = savedViews.firstOrNull { viewKeyOf(it) == viewKey }
