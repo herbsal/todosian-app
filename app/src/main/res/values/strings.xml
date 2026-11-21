@@ -422,7 +422,7 @@
     <string name="settings_person_scope_group">Group with people</string>
     <string name="settings_person_scope_people">Remind about tasks of</string>
     <string name="widget_configure_view_hint">Quick view: open tasks with these tags from all lists</string>
-    <string name="category_recognized_reminder">⏰ %1$s, %2$s</string>
+    <string name="category_recognized_reminder">📅 %1$s ⏰ %2$s</string>
     <string name="category_recognized_due">📅 %1$s</string>
     <string name="category_recognized_ignore">Keep the date as text</string>
     <string name="category_first_step_add">+ First step</string>
@@ -494,4 +494,5 @@
         <item quantity="one">+ %1$d more</item>
         <item quantity="other">+ %1$d more</item>
     </plurals>
+    <string name="category_tasks_due_time">Time</string>
 </resources>
