@@ -495,4 +495,31 @@
         <item quantity="other">+ %1$d more</item>
     </plurals>
     <string name="category_tasks_due_time">Time</string>
+    <string name="settings_index">Note index</string>
+    <plurals name="settings_index_notes">
+        <item quantity="one">%1$d note</item>
+        <item quantity="other">%1$d notes</item>
+    </plurals>
+    <plurals name="settings_index_tasks">
+        <item quantity="one">%1$d task</item>
+        <item quantity="other">%1$d tasks</item>
+    </plurals>
+    <string name="settings_index_last_sync">Last look at the folders: %1$s</string>
+    <string name="settings_index_last_deep_check">Last deep check: %1$s, %2$d corrected</string>
+    <string name="settings_index_last_deep_check_never">No deep check yet</string>
+    <string name="settings_index_never">not yet</string>
+    <string name="settings_index_deep_check">Deep check</string>
+    <string name="settings_index_deep_check_hint">Reads every note again and corrects what the index missed. Your notes stay as they are.</string>
+    <string name="settings_index_deep_check_off">Off</string>
+    <string name="settings_index_deep_check_daily">Daily while charging</string>
+    <string name="settings_index_deep_check_weekly">Weekly</string>
+    <string name="settings_index_check_now">Check now</string>
+    <string name="settings_index_rebuild">Rebuild index</string>
+    <string name="settings_index_working">Reading notes…</string>
+    <plurals name="settings_index_check_done">
+        <item quantity="one">Done, %1$d note corrected.</item>
+        <item quantity="other">Done, %1$d notes corrected.</item>
+    </plurals>
+    <string name="settings_index_rebuild_done">Index rebuilt from your notes.</string>
+    <string name="settings_index_failed">That did not work. Please try again.</string>
 </resources>

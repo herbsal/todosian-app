@@ -22,6 +22,15 @@ internal data class SyncedNote(val entry: MarkdownEntry<Uri>, val note: IndexedN
     val isKnown: Boolean get() = note != null && note.hash.isNotEmpty()
 }
 
+/** What the settings show about the note index. Times in ms since 1970. */
+internal data class IndexStats(
+    val notes: Int,
+    val tasks: Int,
+    val lastSync: Long?,
+    val lastDeepCheck: Long?,
+    val lastDeepCheckFixed: Int?,
+)
+
 /**
  * Lists a folder, brings the note index in line with it and hands out the notes. Lists,
  * reminders and widgets all go through here, so a note is read once per change, not once per
@@ -31,29 +40,72 @@ internal class VaultSync(private val context: Context, private val index: VaultI
     private val reconciler = Reconciler(index)
     private val lock = Any()
 
-    /**
-     * All Markdown notes of [folder]. [fresh] reads every note again (pull to refresh).
-     * Throws when the folder itself cannot be listed.
-     */
+    /** All Markdown notes of [folder]. Throws when the folder itself cannot be listed. */
     fun notes(
         folder: Uri,
         recursive: Boolean,
-        fresh: Boolean = false,
         onProgress: (done: Int, total: Int) -> Unit = { _, _ -> },
-    ): List<SyncedNote> {
+    ): List<SyncedNote> = sync(folder, recursive, readAll = false, onProgress = onProgress).first
+
+    /**
+     * The deep check: reads every note of [folders] again and returns how many the index had
+     * wrong (or that changed without being noticed). Folders that cannot be listed are skipped.
+     */
+    fun deepCheck(folders: Collection<Uri>, recursive: Boolean): Int {
+        var fixed = 0
+        folders.forEach { folder ->
+            runCatching { sync(folder, recursive, readAll = true).second }
+                .onSuccess { fixed += it.added.size + it.changed.size + it.removed.size + it.renamed.size }
+                .onFailure { Log.w(TAG, "Deep check of $folder failed", it) }
+        }
+        index.setMeta(KEY_LAST_DEEP_CHECK, "${System.currentTimeMillis()}:$fixed")
+        return fixed
+    }
+
+    /** Throws the index away; the next look reads every note again. */
+    fun rebuild() {
+        synchronized(lock) { index.rebuild() }
+    }
+
+    fun stats(): IndexStats {
+        val notes = index.notes()
+        val deep = index.meta(KEY_LAST_DEEP_CHECK)?.split(':')
+        return IndexStats(
+            notes = notes.size,
+            tasks = notes.sumOf { it.taskLines.size },
+            lastSync = lastSync.takeIf { it > 0 },
+            lastDeepCheck = deep?.getOrNull(0)?.toLongOrNull(),
+            lastDeepCheckFixed = deep?.getOrNull(1)?.toIntOrNull(),
+        )
+    }
+
+    @Volatile private var lastSync = 0L
+
+    private fun sync(
+        folder: Uri,
+        recursive: Boolean,
+        readAll: Boolean,
+        onProgress: (done: Int, total: Int) -> Unit = { _, _ -> },
+    ): Pair<List<SyncedNote>, ReconcileResult> {
+        val started = System.currentTimeMillis()
         val tree = scanMarkdownTree(context, folder, recursive)
         val key = folder.toString()
         val listed = tree.files.map { it.toListed() }
         val result: ReconcileResult
         synchronized(lock) {
-            if (fresh) invalidateFolder(key)
+            if (readAll) invalidateFolder(key)
             result = reconciler.reconcile(key, listed, ::readBytes, conflictPaths = tree.conflictPaths, onProgress = onProgress)
             noteRenames(result.renamed)
         }
+        lastSync = System.currentTimeMillis()
         if (result.read > 0) {
-            Log.d(TAG, "sync $key: ${listed.size} notes, read ${result.read}, +${result.added.size} ~${result.changed.size} -${result.removed.size}")
+            Log.d(
+                TAG,
+                "sync $key: ${listed.size} notes, read ${result.read} in ${lastSync - started} ms, " +
+                    "+${result.added.size} ~${result.changed.size} -${result.removed.size}",
+            )
         }
-        return tree.files.map { SyncedNote(it, index.note(it.ref.toString())) }
+        return tree.files.map { SyncedNote(it, index.note(it.ref.toString())) } to result
     }
 
     /**
@@ -211,6 +263,7 @@ internal class VaultSync(private val context: Context, private val index: VaultI
         private const val TAG = "VaultSync"
         private const val OLD_INDEX_FILE = "note-index.bin"
         private const val KEY_RENAMES = "pending_renames"
+        private const val KEY_LAST_DEEP_CHECK = "last_deep_check"
         private const val MAX_RENAMES = 200
 
         @Volatile private var instance: VaultSync? = null

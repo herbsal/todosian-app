@@ -495,4 +495,31 @@
         <item quantity="other">+ %1$d weitere</item>
     </plurals>
     <string name="category_tasks_due_time">Uhrzeit</string>
+    <string name="settings_index">Notiz-Index</string>
+    <plurals name="settings_index_notes">
+        <item quantity="one">%1$d Notiz</item>
+        <item quantity="other">%1$d Notizen</item>
+    </plurals>
+    <plurals name="settings_index_tasks">
+        <item quantity="one">%1$d Aufgabe</item>
+        <item quantity="other">%1$d Aufgaben</item>
+    </plurals>
+    <string name="settings_index_last_sync">Letzter Abgleich: %1$s</string>
+    <string name="settings_index_last_deep_check">Letzte Tiefenprüfung: %1$s, %2$d korrigiert</string>
+    <string name="settings_index_last_deep_check_never">Noch keine Tiefenprüfung</string>
+    <string name="settings_index_never">noch nicht</string>
+    <string name="settings_index_deep_check">Tiefenprüfung</string>
+    <string name="settings_index_deep_check_hint">Liest alle Notizen neu und korrigiert, was der Index übersehen hat. Deine Notizen bleiben unverändert.</string>
+    <string name="settings_index_deep_check_off">Aus</string>
+    <string name="settings_index_deep_check_daily">Täglich beim Laden</string>
+    <string name="settings_index_deep_check_weekly">Wöchentlich</string>
+    <string name="settings_index_check_now">Jetzt prüfen</string>
+    <string name="settings_index_rebuild">Index neu aufbauen</string>
+    <string name="settings_index_working">Notizen werden gelesen …</string>
+    <plurals name="settings_index_check_done">
+        <item quantity="one">Fertig, %1$d Notiz korrigiert.</item>
+        <item quantity="other">Fertig, %1$d Notizen korrigiert.</item>
+    </plurals>
+    <string name="settings_index_rebuild_done">Index aus deinen Notizen neu aufgebaut.</string>
+    <string name="settings_index_failed">Das hat nicht geklappt. Bitte noch einmal versuchen.</string>
 </resources>

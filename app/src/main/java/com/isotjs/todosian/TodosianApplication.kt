@@ -8,6 +8,7 @@ import com.isotjs.todosian.data.settings.AppSettingsRepository
 import com.isotjs.todosian.data.settings.SharedPrefsAppSettingsRepository
 import com.isotjs.todosian.notifications.DueReminderScheduler
 import com.isotjs.todosian.notifications.TaskReminderScheduler
+import com.isotjs.todosian.sync.DeepCheckWorker
 import com.isotjs.todosian.sync.FolderWatchScheduler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -57,6 +58,14 @@ class TodosianApplication : Application() {
                 .map { it.folderWatchMode to it.includeSubfolders }
                 .distinctUntilChanged()
                 .collect { (mode, _) -> FolderWatchScheduler.apply(applicationContext, mode) }
+        }
+
+        appScope.launch {
+            // Reads every note now and then to find anything the note index missed.
+            appSettingsRepository.settings
+                .map { it.deepCheckMode }
+                .distinctUntilChanged()
+                .collect { DeepCheckWorker.apply(applicationContext, it) }
         }
 
         appScope.launch {

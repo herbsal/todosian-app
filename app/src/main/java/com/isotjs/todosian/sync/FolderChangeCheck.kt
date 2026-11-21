@@ -55,6 +55,20 @@ object FolderChangeCheck {
         return if (needsFullLook) run(context) || changed else changed
     }
 
+    /** Reads every note again; returns how many the index had wrong. */
+    suspend fun deepCheck(context: Context): Int {
+        var fixed = 0
+        check(context.applicationContext) { sync, folders, recursive -> fixed = sync.deepCheck(folders, recursive) }
+        Log.d(TAG, "Deep check: $fixed note(s) corrected")
+        return fixed
+    }
+
+    /** Throws the index away and builds it again from the vault. */
+    suspend fun rebuild(context: Context): Boolean {
+        VaultSync.get(context.applicationContext).rebuild()
+        return run(context)
+    }
+
     private suspend fun check(
         appContext: Context,
         update: (sync: VaultSync, folders: List<Uri>, recursive: Boolean) -> Unit,
