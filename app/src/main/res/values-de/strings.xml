@@ -533,6 +533,10 @@
     <string name="settings_deleted_note">Notiz mit Erinnerungen gelöscht</string>
     <string name="settings_deleted_note_silent">Erinnerungen still absagen</string>
     <string name="settings_deleted_note_notify">Erinnerungen absagen und Hinweis zeigen</string>
+    <string name="settings_task_ids">Aufgaben-IDs (🆔)</string>
+    <string name="settings_task_ids_never">Nie vergeben</string>
+    <string name="settings_task_ids_reminders">Bei Aufgaben mit Erinnerung vergeben, wenn die App sie speichert</string>
+    <string name="settings_task_ids_all">Bei allen Aufgaben vergeben, wenn die App sie speichert</string>
     <string name="notification_deleted_note_channel_name">Gelöschte Notizen</string>
     <string name="notification_deleted_note_channel_description">Meldet, wenn eine Notiz mit Erinnerungen außerhalb der App gelöscht wurde</string>
     <string name="notification_deleted_note_title">Notiz „%1$s“ wurde gelöscht</string>

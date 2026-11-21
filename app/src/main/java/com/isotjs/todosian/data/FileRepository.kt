@@ -13,6 +13,8 @@ import com.isotjs.todosian.data.model.Category
 import com.isotjs.todosian.data.settings.AppSettingsRepository
 import com.isotjs.todosian.utils.MarkdownParser
 import com.isotjs.todosian.utils.TaskMarkers
+import com.isotjs.todosian.utils.TaskIds
+import com.isotjs.todosian.data.settings.SharedPrefsAppSettingsRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -441,6 +443,7 @@ class SafFileRepository(
         return withContext(Dispatchers.IO) {
             runCatching {
                 fileMutex.withLock { writeLinesInternal(uri, lines) }
+                Unit
             }
         }
     }
@@ -452,8 +455,7 @@ class SafFileRepository(
                 fileMutex.withLock {
                     val currentLines = readLinesInternal(uri)
                     val newLines = transform(currentLines) ?: return@withLock null
-                    if (newLines != currentLines) writeLinesInternal(uri, newLines)
-                    newLines
+                    if (newLines != currentLines) writeLinesInternal(uri, newLines) else newLines
                 }
             }
         }
@@ -558,6 +560,7 @@ class SafFileRepository(
                     // Target first: if the second write fails the todo exists twice instead of not at all.
                     writeLinesInternal(targetUri, updated.second)
                     writeLinesInternal(sourceUri, updated.first)
+                    Unit
                 }
             }
         }
@@ -584,6 +587,7 @@ class SafFileRepository(
                     ) ?: throw TodoLineChangedException()
 
                     writeLinesInternal(targetUri, updated.second)
+                    Unit
                 }
             }
         }
@@ -874,10 +878,14 @@ class SafFileRepository(
         runCatching { vaultSync.recordOwnWrite(uri, bytes) }.onFailure { Log.w(TAG, "Index update after write failed", it) }
     }
 
-    private fun writeLinesInternal(uri: Uri, lines: List<String>) {
+    /** Writes [requested] and returns the lines as written, which may carry a new `🆔` (step 9). */
+    private fun writeLinesInternal(uri: Uri, requested: List<String>): List<String> {
         // Re-read the file so CRLF and the final newline survive the round trip through readLines().
         val originalBytes = readBytesInternal(uri) ?: ByteArray(0)
         val original = originalBytes.toString(Charsets.UTF_8)
+        val lines = runCatching {
+            TaskIds.assign(original.lines(), requested, SharedPrefsAppSettingsRepository.taskIdMode(appContext))
+        }.getOrDefault(requested)
         // Encode everything before opening the file, so a failure cannot leave it half written.
         val bytes = joinLinesLike(original, lines).toByteArray(Charsets.UTF_8)
         // Old and new content go to the journal first, so an interrupted save can be repaired (D2).
@@ -902,5 +910,6 @@ class SafFileRepository(
             // Ignore
         }
         scheduleWidgetUpdate()
+        return lines
     }
 }

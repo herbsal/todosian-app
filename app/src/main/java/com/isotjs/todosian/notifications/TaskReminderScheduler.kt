@@ -49,6 +49,7 @@ object TaskReminderScheduler {
     const val EXTRA_KEY = "key"
     const val EXTRA_FROM_PROFILE = "from_profile"
     const val EXTRA_DISPLAY_TEXT = "display_text"
+    const val EXTRA_TASK_ID = "task_id"
 
     private const val TAG = "TaskReminderScheduler"
     private const val STATE_PREFS = "task_reminder_state"
@@ -131,7 +132,7 @@ object TaskReminderScheduler {
                 }
                 val direct = open.mapNotNull { todo ->
                     val reminder = MarkdownParser.parseReminder(todo.reminder) ?: return@mapNotNull null
-                    ReminderCandidate(file.ref.toString(), todo.text, reminder, todo.lineIndex)
+                    ReminderCandidate(file.ref.toString(), todo.text, reminder, todo.lineIndex, taskId = todo.taskId)
                 }
                 val fromProfile = profile?.let {
                     ProfileReminderPlanner.candidates(
@@ -144,6 +145,7 @@ object TaskReminderScheduler {
                                 date = (todo.dueDate ?: todo.scheduledDate ?: todo.startDate)
                                     ?.let { raw -> runCatching { LocalDate.parse(raw) }.getOrNull() },
                                 hasOwnReminder = MarkdownParser.parseReminder(todo.reminder) != null,
+                                taskId = todo.taskId,
                             )
                         },
                         profile = it,
@@ -262,6 +264,7 @@ object TaskReminderScheduler {
             putExtras(reminderExtras(key, candidate.fileKey, candidate.text, candidate.reminder, candidate.lineIndex))
             putExtra(EXTRA_FROM_PROFILE, candidate.fromProfile)
             putExtra(EXTRA_DISPLAY_TEXT, candidate.displayText)
+            putExtra(EXTRA_TASK_ID, candidate.taskId)
         }
         return PendingIntent.getBroadcast(
             context,
