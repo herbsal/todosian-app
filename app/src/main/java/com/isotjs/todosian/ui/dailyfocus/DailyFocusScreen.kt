@@ -57,6 +57,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.isotjs.todosian.R
+import com.isotjs.todosian.ui.components.UndoSnackbarEffect
 import com.isotjs.todosian.ui.components.rememberTagDefinitions
 import com.isotjs.todosian.ui.components.TaskItem
 import com.isotjs.todosian.ui.components.TaskSectionHeader
@@ -129,6 +130,7 @@ fun DailyFocusScreen(
 
     val resources = LocalResources.current
     val snackbarHostState = remember { SnackbarHostState() }
+    UndoSnackbarEffect(snackbarHostState, fileRepository) { viewModel.refreshFromDisk(showLoading = false) }
     LaunchedEffect(viewModel) {
         viewModel.events.collectLatest { event ->
             when (event) {

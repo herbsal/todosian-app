@@ -15,6 +15,8 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
+import com.isotjs.todosian.data.undo.UndoKind
+import com.isotjs.todosian.data.undo.recordUndo
 import com.isotjs.todosian.MainActivity
 import com.isotjs.todosian.R
 import com.isotjs.todosian.TodosianApplication
@@ -96,14 +98,16 @@ class TaskReminderReceiver : BroadcastReceiver() {
         val settings = app.appSettingsRepository.settings.first()
         val markers = settings.toTaskMarkers()
         cancelNotification(context, target.key)
-        app.fileRepository.updateLines(target.fileUri.toUri()) { lines ->
-            val index = target.locate(lines, markers) ?: return@updateLines null
-            MarkdownParser.tryToggleLine(
-                lines = lines,
-                lineIndex = index,
-                enableTasksPlugin = settings.enableTasksPluginSupport,
-                markers = markers,
-            )
+        recordUndo(UndoKind.CHECK, target.text) {
+            app.fileRepository.updateLines(target.fileUri.toUri()) { lines ->
+                val index = target.locate(lines, markers) ?: return@updateLines null
+                MarkdownParser.tryToggleLine(
+                    lines = lines,
+                    lineIndex = index,
+                    enableTasksPlugin = settings.enableTasksPluginSupport,
+                    markers = markers,
+                )
+            }
         }
         TaskReminderScheduler.sync(context)
     }
@@ -119,9 +123,11 @@ class TaskReminderReceiver : BroadcastReceiver() {
         val next = newTime(LocalDateTime.now(), target.reminder)
         cancelNotification(context, target.key)
         // Written into the note, so the new time also reaches other devices.
-        app.fileRepository.updateLines(target.fileUri.toUri()) { lines ->
-            val index = target.locate(lines, markers) ?: return@updateLines null
-            MarkdownParser.setReminder(lines, index, next, markers)
+        recordUndo(UndoKind.SNOOZE, target.text) {
+            app.fileRepository.updateLines(target.fileUri.toUri()) { lines ->
+                val index = target.locate(lines, markers) ?: return@updateLines null
+                MarkdownParser.setReminder(lines, index, next, markers)
+            }
         }
         TaskReminderScheduler.sync(context)
     }

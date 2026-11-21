@@ -5,6 +5,8 @@ import androidx.core.net.toUri
 import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.isotjs.todosian.data.undo.UndoKind
+import com.isotjs.todosian.data.undo.recordUndo
 import com.isotjs.todosian.R
 import com.isotjs.todosian.data.FileRepository
 import com.isotjs.todosian.data.model.Todo
@@ -134,7 +136,7 @@ class DailyFocusViewModel(
     }
 
     fun toggleTodo(task: DailyFocusTask) {
-        editTaskLine(task) { lines, index, markers ->
+        editTaskLine(task, (if (task.todo.isDone) UndoKind.UNCHECK else UndoKind.CHECK) to task.todo.text) { lines, index, markers ->
             MarkdownParser.tryToggleLine(
                 lines = lines,
                 lineIndex = index,
@@ -149,7 +151,7 @@ class DailyFocusViewModel(
         newText: String,
         meta: MarkdownParser.TasksMeta?,
     ) {
-        editTaskLine(task) { lines, index, markers ->
+        editTaskLine(task, UndoKind.EDIT to newText) { lines, index, markers ->
             if (enableTasksPluginSupport) {
                 MarkdownParser.editTodo(
                     lines = lines,
@@ -166,7 +168,7 @@ class DailyFocusViewModel(
     }
 
     fun deleteTodo(task: DailyFocusTask) {
-        editTaskLine(task) { lines, index, _ ->
+        editTaskLine(task, UndoKind.DELETE to task.todo.text) { lines, index, _ ->
             MarkdownParser.tryDeleteTodoWithSubtasks(lines, index)
         }
     }
@@ -178,6 +180,7 @@ class DailyFocusViewModel(
      */
     private fun editTaskLine(
         task: DailyFocusTask,
+        undo: Pair<UndoKind, String>,
         edit: (lines: List<String>, lineIndex: Int, markers: TaskMarkers) -> List<String>?,
     ) {
         viewModelScope.launch {
@@ -203,7 +206,9 @@ class DailyFocusViewModel(
 
             inFlightWrites.incrementAndGet()
             try {
-                val result = fileRepository.updateLines(task.categoryUri) { freshLines -> editOf(freshLines) }
+                val result = recordUndo(undo.first, undo.second) {
+                    fileRepository.updateLines(task.categoryUri) { freshLines -> editOf(freshLines) }
+                }
                 result.onSuccess { writtenLines ->
                     when {
                         writtenLines == null -> {

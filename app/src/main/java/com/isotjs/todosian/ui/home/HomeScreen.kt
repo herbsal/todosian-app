@@ -86,6 +86,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.Lifecycle
 import com.isotjs.todosian.BuildConfig
 import com.isotjs.todosian.R
+import com.isotjs.todosian.ui.components.UndoSnackbarEffect
 import com.isotjs.todosian.ui.components.rememberTagDefinitions
 import com.isotjs.todosian.ui.components.TodoSortMenu
 import com.isotjs.todosian.ui.components.sortGroupNames
@@ -199,6 +200,10 @@ fun HomeScreen(
 
     var tab by rememberSaveable { mutableStateOf(HomeTab.LISTS) }
     val shownTab = if (tab == HomeTab.FOCUS && !settings.showDailyFocus) HomeTab.LISTS else tab
+    // "Undo" after an action; on the daily focus tab that tab shows it itself.
+    if (shownTab != HomeTab.FOCUS) {
+        UndoSnackbarEffect(snackbarHostState, fileRepository) { viewModel.refresh(showLoading = false) }
+    }
     val tagDisplay = remember(settings.tagDisplay) { TagDisplaySettings.decode(settings.tagDisplay) }
     // Tags per list (from the Tags note of its folder), for the symbols in the task rows.
     val listUris = remember(uiState.categories) { uiState.categories.map { it.uri } }

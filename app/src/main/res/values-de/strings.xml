@@ -605,4 +605,19 @@
     <string name="search_list">Liste</string>
     <string name="settings_obsidian_vault">Vault-Name in Obsidian</string>
     <string name="settings_obsidian_vault_hint">Damit öffnet die App Notizen und Suchen in Obsidian. Leer lassen, um den Namen des Notizordners zu verwenden.</string>
+    <string name="undo_checked">Erledigt: %1$s</string>
+    <string name="undo_unchecked">Wieder offen: %1$s</string>
+    <string name="undo_edited">Geändert: %1$s</string>
+    <string name="undo_deleted">Gelöscht: %1$s</string>
+    <string name="undo_moved">Verschoben: %1$s</string>
+    <string name="undo_snoozed">Später erinnern: %1$s</string>
+    <string name="undo_action">Rückgängig</string>
+    <string name="redo_action">Wiederholen</string>
+    <string name="undo_done">Rückgängig gemacht: %1$s</string>
+    <string name="undo_changed">Die Notiz wurde inzwischen geändert, deshalb wurde nichts zurückgesetzt.</string>
+    <string name="undo_failed">Rückgängig machen hat nicht geklappt.</string>
+    <string name="undo_history_title">Letzte Aktionen</string>
+    <string name="undo_history_summary">Letzte Aktionen rückgängig machen oder wiederholen</string>
+    <string name="undo_history_empty">Noch keine Aktionen. Die Liste beginnt neu, wenn die App neu startet.</string>
+    <string name="undo_history_undone">Rückgängig gemacht</string>
 </resources>
