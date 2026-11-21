@@ -170,7 +170,10 @@ class TaskReminderReceiver : BroadcastReceiver() {
             text = target.text,
             reminder = target.reminder,
             lineIndex = target.lineIndex,
-        ).apply { putBoolean(TaskReminderScheduler.EXTRA_FROM_PROFILE, target.fromProfile) }
+        ).apply {
+            putBoolean(TaskReminderScheduler.EXTRA_FROM_PROFILE, target.fromProfile)
+            putString(TaskReminderScheduler.EXTRA_TASK_ID, target.taskId)
+        }
 
     private fun laterChoiceIntent(context: Context, target: Target): PendingIntent {
         val intent = Intent(context, SnoozeActivity::class.java).apply {
@@ -236,10 +239,15 @@ class TaskReminderReceiver : BroadcastReceiver() {
         val fromProfile: Boolean,
         /** The task with tags as symbols, only for showing it. */
         val displayText: String? = null,
+        val taskId: String? = null,
     ) {
-        /** Line of this reminder's todo; a profile reminder has no ⏰ in the line, so only the text counts. */
+        /**
+         * Line of this reminder's todo: by its id when it has one, else by text (and ⏰ unless the
+         * reminder comes from a profile).
+         */
         fun locate(lines: List<String>, markers: TaskMarkers): Int? =
-            if (fromProfile) MarkdownParser.locateOpenTodo(lines, text, lineIndex, markers)
+            taskId?.let { MarkdownParser.locateOpenTodoById(lines, it, markers) }
+                ?: if (fromProfile) MarkdownParser.locateOpenTodo(lines, text, lineIndex, markers)
             else MarkdownParser.locateReminderTodo(lines, text, reminderText, lineIndex, markers)
 
         companion object {
@@ -254,6 +262,7 @@ class TaskReminderReceiver : BroadcastReceiver() {
                     lineIndex = intent.getIntExtra(TaskReminderScheduler.EXTRA_LINE_INDEX, -1),
                     fromProfile = intent.getBooleanExtra(TaskReminderScheduler.EXTRA_FROM_PROFILE, false),
                     displayText = intent.getStringExtra(TaskReminderScheduler.EXTRA_DISPLAY_TEXT),
+                    taskId = intent.getStringExtra(TaskReminderScheduler.EXTRA_TASK_ID),
                 )
             }
         }

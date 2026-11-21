@@ -142,6 +142,8 @@ import com.isotjs.todosian.data.settings.AppSettingsRepository
 import com.isotjs.todosian.data.settings.CategorySort
 import com.isotjs.todosian.data.settings.HomeLayout
 import com.isotjs.todosian.data.settings.DeletedNoteReminders
+import com.isotjs.todosian.data.settings.TaskIdMode
+import androidx.compose.material.icons.filled.Fingerprint
 import com.isotjs.todosian.data.settings.FolderWatchMode
 import com.isotjs.todosian.data.settings.ReminderRepeat
 import com.isotjs.todosian.sync.FolderWatchScheduler
@@ -241,6 +243,7 @@ fun SettingsScreen(
     var showIndexDialog by remember { mutableStateOf(false) }
     var showExcludedFoldersDialog by remember { mutableStateOf(false) }
     var showDeletedNoteDialog by remember { mutableStateOf(false) }
+    var showTaskIdDialog by remember { mutableStateOf(false) }
     var showVaultNameDialog by remember { mutableStateOf(false) }
     val mainFolderName = remember(fileRepository) {
         fileRepository.getFolderUri()?.let { folder -> ObsidianLinks.vaultName(context, folder, null, "") }.orEmpty()
@@ -412,6 +415,16 @@ fun SettingsScreen(
             folderName = mainFolderName,
             onSave = { appSettingsRepository.setObsidianVaultName(it) },
             onDismiss = { showVaultNameDialog = false },
+        )
+    }
+
+    if (showTaskIdDialog) {
+        SingleChoiceDialog(
+            title = stringResource(R.string.settings_task_ids),
+            options = TaskIdMode.entries.map { ChoiceOption(it, taskIdModeLabel(it)) },
+            selected = settings.taskIdMode,
+            onSelected = { appSettingsRepository.setTaskIdMode(it) },
+            onDismiss = { showTaskIdDialog = false },
         )
     }
 
@@ -940,6 +953,15 @@ fun SettingsScreen(
                             title = stringResource(R.string.settings_deleted_note),
                             subtitle = deletedNoteRemindersLabel(settings.deletedNoteReminders),
                             onClick = { showDeletedNoteDialog = true },
+                        )
+
+                        SettingsDivider()
+
+                        SettingsNavRow(
+                            icon = Icons.Filled.Fingerprint,
+                            title = stringResource(R.string.settings_task_ids),
+                            subtitle = taskIdModeLabel(settings.taskIdMode),
+                            onClick = { showTaskIdDialog = true },
                         )
 
                         SettingsDivider()

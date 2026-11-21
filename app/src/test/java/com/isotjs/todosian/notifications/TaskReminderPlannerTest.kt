@@ -130,4 +130,18 @@ class TaskReminderPlannerTest {
         val later = candidate("A", now.plusHours(1))
         assertTrue(TaskReminderPlanner.carryOverNotified(mapOf(TaskReminderPlanner.keyOf(candidate("A", time)) to now), listOf(later)).isEmpty())
     }
+
+    @Test
+    fun a_task_with_an_id_keeps_its_state_across_text_changes_and_notes() {
+        val time = now.minusHours(2)
+        val shown = mapOf(TaskReminderPlanner.keyOf(candidate("A", time).copy(taskId = "abc")) to now)
+        // Two tasks with the same time would be ambiguous by text, but the id decides.
+        val moved = listOf(
+            candidate("A ganz anders", time, file = "content://notes/z.md").copy(taskId = "abc"),
+            candidate("B", time),
+        )
+        val result = TaskReminderPlanner.carryOverNotified(shown, moved)
+        assertEquals(mapOf(TaskReminderPlanner.keyOf(moved[0]) to now), result)
+        assertEquals(TaskReminderPlanner.keyOf(moved[0]), TaskReminderPlanner.keyOf(moved[0].copy(text = "noch anders")))
+    }
 }

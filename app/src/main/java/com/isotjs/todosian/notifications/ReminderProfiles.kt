@@ -144,6 +144,7 @@ data class ProfileTodo(
     val tags: List<String>,
     val date: LocalDate?,
     val hasOwnReminder: Boolean,
+    val taskId: String? = null,
 )
 
 /** Turns a profile into reminders for the todos of one note. Free of Android types for tests. */
@@ -168,6 +169,7 @@ object ProfileReminderPlanner {
                         lineIndex = todo.lineIndex,
                         fromProfile = true,
                         repeat = keyword.repeat,
+                        taskId = todo.taskId,
                     )
                 }
             }

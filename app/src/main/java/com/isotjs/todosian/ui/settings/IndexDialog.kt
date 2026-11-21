@@ -43,6 +43,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.ui.text.input.ImeAction
 import com.isotjs.todosian.data.settings.DeletedNoteReminders
+import com.isotjs.todosian.data.settings.TaskIdMode
 import com.isotjs.todosian.data.settings.normalizeFolderPath
 import com.isotjs.todosian.R
 import com.isotjs.todosian.data.IndexStats
@@ -272,6 +273,13 @@ internal fun ExcludedFoldersDialog(
 internal fun deletedNoteRemindersLabel(mode: DeletedNoteReminders): String = when (mode) {
     DeletedNoteReminders.CANCEL_SILENTLY -> stringResource(R.string.settings_deleted_note_silent)
     DeletedNoteReminders.NOTIFY -> stringResource(R.string.settings_deleted_note_notify)
+}
+
+@Composable
+internal fun taskIdModeLabel(mode: TaskIdMode): String = when (mode) {
+    TaskIdMode.NEVER -> stringResource(R.string.settings_task_ids_never)
+    TaskIdMode.REMINDERS -> stringResource(R.string.settings_task_ids_reminders)
+    TaskIdMode.ALL -> stringResource(R.string.settings_task_ids_all)
 }
 
 /** The vault name Obsidian links use; empty means the name of the notes folder. */

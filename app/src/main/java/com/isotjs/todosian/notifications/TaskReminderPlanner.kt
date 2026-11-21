@@ -16,6 +16,8 @@ data class ReminderCandidate(
     val repeat: ReminderRepeat? = null,
     /** The task as the notification shows it, tags as symbols per the display setting. */
     val displayText: String? = null,
+    /** The task's 🆔 (or `^block` id); with it, the reminder survives text changes. */
+    val taskId: String? = null,
 )
 
 data class PlannedReminder(
@@ -34,9 +36,16 @@ object TaskReminderPlanner {
 
     private const val SEPARATOR = '\u001F'
 
-    /** Identifies a reminder by note, text and time, so it survives lines moving around in the file. */
-    fun keyOf(candidate: ReminderCandidate): String =
-        "${candidate.fileKey}$SEPARATOR${candidate.text}$SEPARATOR${candidate.reminder}"
+    /**
+     * Identifies a reminder by note, text and time, so it survives lines moving around in the file.
+     * A task with an id is identified by the id instead of its text.
+     */
+    fun keyOf(candidate: ReminderCandidate): String {
+        val task = candidate.taskId?.let { ID_PREFIX + it } ?: candidate.text
+        return "${candidate.fileKey}$SEPARATOR$task$SEPARATOR${candidate.reminder}"
+    }
+
+    private const val ID_PREFIX = "\u0000id:"
 
     /**
      * Keeps "already shown" across edits that Markdown cannot tell apart from a new task: a note
@@ -62,8 +71,20 @@ object TaskReminderPlanner {
         val unmatchedOld = result.keys.filter { it !in keys }
         val unmatchedNew = keys.keys.filter { it !in result }
         fun slot(key: String): String? = key.split(SEPARATOR).takeIf { it.size == 3 }?.let { "${it[0]}$SEPARATOR${it[2]}" }
-        val oldBySlot = unmatchedOld.groupBy { slot(it) }
-        val newBySlot = unmatchedNew.groupBy { slot(it) }
+        // A task with an id keeps its state when it moves to another note.
+        fun idSlot(key: String): String? = key.split(SEPARATOR)
+            .takeIf { it.size == 3 && it[1].startsWith(ID_PREFIX) }?.let { "${it[1]}$SEPARATOR${it[2]}" }
+        val newById = unmatchedNew.mapNotNull { key -> idSlot(key)?.let { it to key } }.groupBy({ it.first }, { it.second })
+        val takenOld = HashSet<String>()
+        val takenNew = HashSet<String>()
+        unmatchedOld.forEach { old ->
+            val new = newById[idSlot(old) ?: return@forEach]?.singleOrNull() ?: return@forEach
+            result[new] = maxOf(result.getValue(old), result[new] ?: result.getValue(old))
+            takenOld.add(old)
+            takenNew.add(new)
+        }
+        val oldBySlot = unmatchedOld.filter { it !in takenOld }.groupBy { slot(it) }
+        val newBySlot = unmatchedNew.filter { it !in takenNew }.groupBy { slot(it) }
         oldBySlot.forEach { (slot, old) ->
             val new = newBySlot[slot] ?: return@forEach
             if (slot != null && old.size == 1 && new.size == 1) result[new.single()] = result.getValue(old.single())

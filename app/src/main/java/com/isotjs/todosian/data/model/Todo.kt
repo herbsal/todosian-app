@@ -37,4 +37,6 @@ data class Todo(
     val recurrence: String? = null, // 🔁 <text>
     val onCompletion: String? = null, // 🏁 keep|delete
     val reminder: String? = null, // ⏰ yyyy-MM-dd HH:mm
+    /** Stable id of the task: its 🆔 value, or `^id` for an Obsidian block id. Hidden in the app. */
+    val taskId: String? = null,
 )

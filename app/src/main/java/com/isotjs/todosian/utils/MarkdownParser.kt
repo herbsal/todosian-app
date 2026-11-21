@@ -26,6 +26,9 @@ private const val ON_COMPLETION_DELETE = "delete"
 
 /** Todosian's own reminder field, written right after the description: `⏰ 2026-11-24 19:00`. */
 const val REMINDER_MARKER = "⏰"
+
+/** Obsidian Tasks id field: `🆔 a1b2c3`. */
+const val TASK_ID_MARKER = "🆔"
 private val REMINDER_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
 
 object MarkdownParser {
@@ -37,6 +40,12 @@ object MarkdownParser {
     private val onCompletionSuffixRegex = Regex("""\s🏁\s*(keep|delete)\s*$""", RegexOption.IGNORE_CASE)
 
     private val tagSuffixRegex = Regex("""\s#[^\s#]+\s*$""")
+
+    // Obsidian Tasks id field (`🆔 a1b2c3`); also the target of ⛔ dependencies.
+    private val idSuffixRegex = Regex("""\s$TASK_ID_MARKER\s*([A-Za-z0-9_-]+)\s*$""")
+
+    // An Obsidian block id at the very end of the line; it stays part of the text.
+    private val blockIdRegex = Regex("""\s\^([A-Za-z0-9-]+)\s*$""")
 
     // Anywhere in the line, so a reminder typed after the Tasks fields is still found.
     private val reminderRegex = Regex("""(^|\s)⏰\x{FE0F}?\s*(\d{4}-\d{2}-\d{2})[ T](\d{1,2}:\d{2})(?=\s|$)""")
@@ -103,6 +112,13 @@ object MarkdownParser {
         return lines.toMutableList().apply { this[lineIndex] = newLine }
     }
 
+    /** Line of the open todo with this 🆔 (or `^block` id); ids are unique, so no hint is needed. */
+    fun locateOpenTodoById(
+        lines: List<String>,
+        taskId: String,
+        markers: TaskMarkers = TaskMarkers.Default,
+    ): Int? = parse(lines, markers).firstOrNull { !it.isDone && it.taskId == taskId }?.lineIndex
+
     /** Line of the open todo with [text], nearest to [lineIndexHint]; for reminders that come from a profile. */
     fun locateOpenTodo(
         lines: List<String>,
@@ -165,6 +181,7 @@ object MarkdownParser {
                 recurrence = parsed.meta.recurrence,
                 onCompletion = parsed.meta.onCompletion,
                 reminder = parsed.meta.reminder,
+                taskId = parsed.meta.id ?: blockIdRegex.find(parsed.mainText)?.let { "^" + it.groupValues[1] },
             )
         }
     }
@@ -407,7 +424,8 @@ object MarkdownParser {
         val line = sourceLines[lineIndex]
         if (!isTodoLine(line)) return null
 
-        val newTargetLines = targetLines.toMutableList().apply { add(line) }
+        // A copy is a new task: it must not share the 🆔 of the original.
+        val newTargetLines = targetLines.toMutableList().apply { add(withoutTaskId(line)) }
         return sourceLines to newTargetLines
     }
 
@@ -457,6 +475,8 @@ object MarkdownParser {
         val match = todoRegex.matchEntire(line) ?: return lines
         val indentPrefix = match.groupValues[1]
         val mark = match.groupValues[2]
+        // The edit sheet does not know the 🆔; the task keeps it, or dependencies on it would break.
+        val keptId = meta?.id ?: parseRemainder(match.groupValues[3], markers).meta.id
 
         val resolvedMeta = if (enableTasksPlugin) meta else null
         val newLine = buildString {
@@ -465,12 +485,23 @@ object MarkdownParser {
             append(mark)
             append("] ")
             append(cleaned)
-            val suffix = resolvedMeta?.toSuffixString(markers).orEmpty()
+            val suffix = resolvedMeta?.copy(id = keptId)?.toSuffixString(markers)
+                ?: keptId?.let { " $TASK_ID_MARKER $it" }.orEmpty()
             if (suffix.isNotEmpty()) append(suffix)
         }
 
         return lines.toMutableList().apply { this[lineIndex] = newLine }
     }
+
+    /** [line] without its `🆔` field; other lines are returned unchanged. */
+    fun withoutTaskId(line: String): String {
+        if (!line.contains(TASK_ID_MARKER)) return line
+        return line.replace(Regex("""\s$TASK_ID_MARKER\s*[A-Za-z0-9_-]+(?=\s|$)"""), "")
+    }
+
+    /** The `🆔` of the task in [line], or null. */
+    fun taskIdOf(line: String): String? =
+        Regex("""(?:^|\s)$TASK_ID_MARKER\s*([A-Za-z0-9_-]+)(?=\s|$)""").find(line)?.groupValues?.get(1)
 
     private fun todayString(today: LocalDate = LocalDate.now()): String = today.toString()
 
@@ -604,6 +635,8 @@ object MarkdownParser {
         val onCompletion: String? = null,
         /** Todosian reminder, `yyyy-MM-dd HH:mm`; written before the Tasks fields so Obsidian Tasks keeps reading them. */
         val reminder: String? = null,
+        /** Obsidian Tasks `🆔`; written last. The app never shows it. */
+        val id: String? = null,
     ) {
         fun toSuffixString(markers: TaskMarkers = TaskMarkers.Default): String {
             val parts = ArrayList<String>(9)
@@ -619,6 +652,7 @@ object MarkdownParser {
             if (prio != null && prio != TasksPriority.NONE) {
                 parts.add(priorityToEmoji(prio))
             }
+            if (!id.isNullOrBlank()) parts.add("$TASK_ID_MARKER ${id.trim()}")
 
             return if (parts.isEmpty()) {
                 ""
@@ -659,6 +693,7 @@ object MarkdownParser {
         var priority: TasksPriority? = null
         var recurrence: String? = null
         var onCompletion: String? = null
+        var id: String? = null
 
         // Tags found while peeling fields off the end. Tags that sit between fields move into the
         // description (as in Obsidian Tasks); tags left of every field stay exactly as written.
@@ -682,6 +717,7 @@ object MarkdownParser {
             createdRegex.find(working)?.let { createdDate = it.groupValues[1]; peel(it); continue }
             prioritySuffixRegex.find(working)?.let { priority = emojiToPriority(it.groupValues[1]); peel(it); continue }
             onCompletionSuffixRegex.find(working)?.let { onCompletion = it.groupValues[1].lowercase(); peel(it); continue }
+            idSuffixRegex.find(working)?.let { id = it.groupValues[1]; peel(it); continue }
 
             val tag = tagSuffixRegex.find(working)
             if (tag != null) {
@@ -712,6 +748,7 @@ object MarkdownParser {
                 recurrence = recurrence,
                 onCompletion = onCompletion,
                 reminder = reminder,
+                id = id,
             ),
         )
     }

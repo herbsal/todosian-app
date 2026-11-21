@@ -57,6 +57,8 @@ interface AppSettingsRepository {
 
     fun setObsidianVaultName(name: String) {}
 
+    fun setTaskIdMode(mode: TaskIdMode) {}
+
     fun setProfileRemindersEnabled(enabled: Boolean)
 
     /** How keyword tags appear in task rows (encoded [com.isotjs.todosian.utils.TagDisplaySettings]). */
@@ -202,6 +204,10 @@ class SharedPrefsAppSettingsRepository(
         prefs.edit { putString(KEY_DELETED_NOTE_REMINDERS, mode.name) }
     }
 
+    override fun setTaskIdMode(mode: TaskIdMode) {
+        prefs.edit { putString(KEY_TASK_ID_MODE, mode.name) }
+    }
+
     override fun setObsidianVaultName(name: String) {
         prefs.edit { putString(KEY_OBSIDIAN_VAULT_NAME, name.trim()) }
     }
@@ -298,6 +304,7 @@ class SharedPrefsAppSettingsRepository(
                 runCatching { DeletedNoteReminders.valueOf(raw) }.getOrNull()
             } ?: DeletedNoteReminders.CANCEL_SILENTLY,
             obsidianVaultName = prefs.getString(KEY_OBSIDIAN_VAULT_NAME, null).orEmpty(),
+            taskIdMode = readTaskIdMode(prefs),
             profileRemindersEnabled = prefs.getBoolean(KEY_PROFILE_REMINDERS, true),
             tagDisplay = prefs.getString(KEY_TAG_DISPLAY, null).orEmpty(),
             tagRecognition = prefs.getBoolean(KEY_TAG_RECOGNITION, true),
@@ -344,6 +351,16 @@ class SharedPrefsAppSettingsRepository(
         private const val KEY_HIDE_EMPTY_NOTES = "hide_empty_notes"
         private const val KEY_DELETED_NOTE_REMINDERS = "deleted_note_reminders"
         private const val KEY_OBSIDIAN_VAULT_NAME = "obsidian_vault_name"
+        private const val KEY_TASK_ID_MODE = "task_id_mode"
+
+        private fun readTaskIdMode(prefs: SharedPreferences): TaskIdMode =
+            prefs.getString(KEY_TASK_ID_MODE, null)?.let { raw ->
+                runCatching { TaskIdMode.valueOf(raw) }.getOrNull()
+            } ?: TaskIdMode.REMINDERS
+
+        /** The id setting for the write path, which has no settings flow at hand. */
+        fun taskIdMode(context: Context): TaskIdMode =
+            readTaskIdMode(context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE))
 
         /**
          * The excluded folders without waiting for the settings flow; the note index needs them

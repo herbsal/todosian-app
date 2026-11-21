@@ -533,6 +533,10 @@
     <string name="settings_deleted_note">Note with reminders deleted</string>
     <string name="settings_deleted_note_silent">Cancel its reminders silently</string>
     <string name="settings_deleted_note_notify">Cancel its reminders and tell me</string>
+    <string name="settings_task_ids">Task IDs (🆔)</string>
+    <string name="settings_task_ids_never">Never add</string>
+    <string name="settings_task_ids_reminders">Add to tasks with a reminder when the app saves them</string>
+    <string name="settings_task_ids_all">Add to all tasks when the app saves them</string>
     <string name="notification_deleted_note_channel_name">Deleted notes</string>
     <string name="notification_deleted_note_channel_description">Tells when a note with reminders was deleted outside the app</string>
     <string name="notification_deleted_note_title">Note \"%1$s\" was deleted</string>
