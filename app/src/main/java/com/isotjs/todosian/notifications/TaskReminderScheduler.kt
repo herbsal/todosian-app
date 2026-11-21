@@ -53,6 +53,7 @@ object TaskReminderScheduler {
     private const val STATE_PREFS = "task_reminder_state"
     private const val KEY_SCHEDULED = "scheduled"
     private const val KEY_NOTIFIED = "notified"
+    private const val KEY_SIGNATURES = "alarm_signatures"
     private const val RECORD_SEPARATOR = '\u001E'
     private const val SYNC_DEBOUNCE_MS = 750L
 
@@ -154,21 +155,29 @@ object TaskReminderScheduler {
 
         NewTaskAlerts.keepOnly(context, alertFiles)
         val prefs = statePrefs(context)
-        val existingKeys = candidates.map { TaskReminderPlanner.keyOf(it) }.toSet()
-        val notified = readNotified(prefs).filterKeys { it in existingKeys }
+        // "Already shown" stays with a task whose note was renamed or whose text was fixed.
+        val notified = TaskReminderPlanner.carryOverNotified(readNotified(prefs), candidates, sync.takeRenames())
         val plan = TaskReminderPlanner.plan(candidates, LocalDateTime.now(), notified, settings.reminderRepeat)
 
         val alarmManager = context.getSystemService(AlarmManager::class.java)
         val previous = prefs.getStringSet(KEY_SCHEDULED, emptySet()).orEmpty()
+        val previousSignatures = decodeSignatures(prefs.getStringSet(KEY_SIGNATURES, emptySet()).orEmpty())
         val planned = plan.map { it.key }.toSet()
         (previous - planned).forEach { key -> cancelAlarm(context, alarmManager, key) }
-        plan.forEach { setAlarm(context, alarmManager, it) }
+        // Only alarms that are new or changed are set again; the others stay as they are. An alarm
+        // the system dropped (restart, app stopped) has no pending intent any more and is set too.
+        val signatures = plan.associate { it.key to TaskReminderPlanner.signatureOf(it) }
+        val changed = plan.filter {
+            previousSignatures[it.key] != signatures[it.key] || it.key !in previous || !alarmExists(context, it.key)
+        }
+        changed.forEach { setAlarm(context, alarmManager, it) }
 
         prefs.edit {
             putStringSet(KEY_SCHEDULED, planned)
+            putStringSet(KEY_SIGNATURES, encodeSignatures(signatures))
             putStringSet(KEY_NOTIFIED, encode(notified))
         }
-        Log.d(TAG, "Scheduled ${plan.size} reminder(s)")
+        Log.d(TAG, "Planned ${plan.size} reminder(s), set ${changed.size}, cancelled ${(previous - planned).size}")
     }
 
     /** The reminder profile chosen on this device for [folder], or null. */
@@ -201,6 +210,23 @@ object TaskReminderScheduler {
         } catch (e: SecurityException) {
             alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerMillis, pendingIntent)
         }
+    }
+
+    /** An alarm went off: its pending intent is dropped, so the next sync sets it again if still due. */
+    fun onAlarmFired(context: Context, key: String) {
+        val intent = Intent(context, TaskReminderReceiver::class.java).apply {
+            action = ACTION_FIRE
+            data = alarmUri(key)
+        }
+        PendingIntent.getBroadcast(context, 0, intent, PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE)?.cancel()
+    }
+
+    private fun alarmExists(context: Context, key: String): Boolean {
+        val intent = Intent(context, TaskReminderReceiver::class.java).apply {
+            action = ACTION_FIRE
+            data = alarmUri(key)
+        }
+        return PendingIntent.getBroadcast(context, 0, intent, PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE) != null
     }
 
     private fun cancelAlarm(context: Context, alarmManager: AlarmManager, key: String) {
@@ -261,6 +287,16 @@ object TaskReminderScheduler {
             val at = runCatching { LocalDateTime.parse(record.substring(separator + 1)) }.getOrNull()
                 ?: return@mapNotNull null
             record.substring(0, separator) to at
+        }.toMap()
+
+    private fun encodeSignatures(signatures: Map<String, String>): Set<String> =
+        signatures.map { (key, signature) -> "$key$RECORD_SEPARATOR$signature" }.toSet()
+
+    private fun decodeSignatures(records: Set<String>): Map<String, String> =
+        records.mapNotNull { record ->
+            // The key never holds the record separator; the signature comes after the first one.
+            val separator = record.indexOf(RECORD_SEPARATOR)
+            if (separator <= 0) null else record.substring(0, separator) to record.substring(separator + 1)
         }.toMap()
 
     private fun encode(notified: Map<String, LocalDateTime>): Set<String> =

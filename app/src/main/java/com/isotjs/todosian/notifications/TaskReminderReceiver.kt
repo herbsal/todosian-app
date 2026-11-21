@@ -76,6 +76,7 @@ class TaskReminderReceiver : BroadcastReceiver() {
 
     private suspend fun showReminder(context: Context, intent: Intent) {
         val target = Target.from(intent) ?: return
+        TaskReminderScheduler.onAlarmFired(context, target.key)
         val app = context.applicationContext as? TodosianApplication ?: return
         val markers = app.appSettingsRepository.settings.first().toTaskMarkers()
         val lines = app.fileRepository.readLines(target.fileUri.toUri()).getOrNull()

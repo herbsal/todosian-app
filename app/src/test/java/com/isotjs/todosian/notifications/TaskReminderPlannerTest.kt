@@ -97,4 +97,37 @@ class TaskReminderPlannerTest {
         assertEquals(now.plusMinutes(1), plan.first().triggerAt)
         assertEquals(plan.sortedBy { it.triggerAt }, plan)
     }
+
+    @Test
+    fun shown_state_survives_a_text_edit_and_a_rename() {
+        val at = now.minusHours(1)
+        val old = candidate("Arzt anrufen", now.minusHours(2))
+        val shown = mapOf(TaskReminderPlanner.keyOf(old) to at)
+
+        // Text fixed in place, same note and same ⏰: still shown, so no second alarm.
+        val edited = candidate("Arzt anrufen wegen Termin", now.minusHours(2))
+        val afterEdit = TaskReminderPlanner.carryOverNotified(shown, listOf(edited))
+        assertEquals(mapOf(TaskReminderPlanner.keyOf(edited) to at), afterEdit)
+        assertTrue(TaskReminderPlanner.plan(listOf(edited), now, afterEdit, ReminderRepeat.OFF).isEmpty())
+
+        // Note renamed (A to B to C): the state moves along.
+        val renamed = candidate("Arzt anrufen", now.minusHours(2), file = "content://notes/c.md")
+        val renames = mapOf("content://notes/a.md" to "content://notes/b.md", "content://notes/b.md" to "content://notes/c.md")
+        assertEquals(mapOf(TaskReminderPlanner.keyOf(renamed) to at), TaskReminderPlanner.carryOverNotified(shown, listOf(renamed), renames))
+    }
+
+    @Test
+    fun shown_state_is_not_guessed_when_tasks_could_be_mixed_up() {
+        val time = now.minusHours(2)
+        val shown = mapOf(
+            TaskReminderPlanner.keyOf(candidate("A", time)) to now,
+            TaskReminderPlanner.keyOf(candidate("B", time)) to now,
+        )
+        val changed = listOf(candidate("A2", time), candidate("B2", time))
+        assertTrue(TaskReminderPlanner.carryOverNotified(shown, changed).isEmpty())
+
+        // A new ⏰ time is a new reminder.
+        val later = candidate("A", now.plusHours(1))
+        assertTrue(TaskReminderPlanner.carryOverNotified(mapOf(TaskReminderPlanner.keyOf(candidate("A", time)) to now), listOf(later)).isEmpty())
+    }
 }

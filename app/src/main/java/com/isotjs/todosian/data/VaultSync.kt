@@ -48,6 +48,7 @@ internal class VaultSync(private val context: Context, private val index: VaultI
         synchronized(lock) {
             if (fresh) invalidateFolder(key)
             result = reconciler.reconcile(key, listed, ::readBytes, conflictPaths = tree.conflictPaths, onProgress = onProgress)
+            noteRenames(result.renamed)
         }
         if (result.read > 0) {
             Log.d(TAG, "sync $key: ${listed.size} notes, read ${result.read}, +${result.added.size} ~${result.changed.size} -${result.removed.size}")
@@ -99,8 +100,32 @@ internal class VaultSync(private val context: Context, private val index: VaultI
         )
     }
 
+    /**
+     * Notes renamed since the last call, old URI to new URI, and forgets them. Reminders use it to
+     * keep "already shown" with a renamed note.
+     */
+    fun takeRenames(): Map<String, String> = synchronized(lock) {
+        val renames = decodeRenames(index.meta(KEY_RENAMES))
+        if (renames.isNotEmpty()) index.setMeta(KEY_RENAMES, null)
+        renames
+    }
+
+    private fun noteRenames(renamed: Map<String, String>) {
+        if (renamed.isEmpty()) return
+        val all = decodeRenames(index.meta(KEY_RENAMES)) + renamed
+        // Only the latest matter; a rename nobody asked for in a while is dropped.
+        index.setMeta(KEY_RENAMES, all.entries.toList().takeLast(MAX_RENAMES).joinToString("\n") { "${it.key}\u001F${it.value}" })
+    }
+
+    private fun decodeRenames(value: String?): Map<String, String> =
+        value.orEmpty().lineSequence().mapNotNull { line ->
+            val parts = line.split('\u001F')
+            if (parts.size == 2) parts[0] to parts[1] else null
+        }.toMap(LinkedHashMap())
+
     /** The app renamed a note to [newName] (no `.md`): it keeps its entry under the new URI. */
     fun recordRename(oldUri: Uri, newUri: Uri, newName: String) {
+        synchronized(lock) { noteRenames(mapOf(oldUri.toString() to newUri.toString())) }
         val old = index.note(oldUri.toString()) ?: return
         index.remove(oldUri.toString())
         index.put(
@@ -142,7 +167,9 @@ internal class VaultSync(private val context: Context, private val index: VaultI
             val stamp = runCatching { queryStamp(uri) }.getOrNull() ?: return@forEach
             listed += ListedNote(uri.toString().substringAfterLast("/document/"), uri.toString(), path.dropLast(3), stamp.lastModified, stamp.size)
         }
-        return synchronized(lock) { reconciler.reconcile(key, listed, ::readBytes, scope = scope) }
+        return synchronized(lock) {
+            reconciler.reconcile(key, listed, ::readBytes, scope = scope).also { noteRenames(it.renamed) }
+        }
     }
 
     /** Time and size of one file; throws when it does not exist (any more). */
@@ -183,6 +210,8 @@ internal class VaultSync(private val context: Context, private val index: VaultI
     companion object {
         private const val TAG = "VaultSync"
         private const val OLD_INDEX_FILE = "note-index.bin"
+        private const val KEY_RENAMES = "pending_renames"
+        private const val MAX_RENAMES = 200
 
         @Volatile private var instance: VaultSync? = null
 

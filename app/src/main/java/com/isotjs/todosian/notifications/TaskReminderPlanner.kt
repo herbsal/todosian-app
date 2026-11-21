@@ -38,6 +38,51 @@ object TaskReminderPlanner {
     fun keyOf(candidate: ReminderCandidate): String =
         "${candidate.fileKey}$SEPARATOR${candidate.text}$SEPARATOR${candidate.reminder}"
 
+    /**
+     * Keeps "already shown" across edits that Markdown cannot tell apart from a new task: a note
+     * that was renamed ([renamedFiles], old to new key) and a task whose text changed while its
+     * note and reminder time stayed. The second only counts when exactly one shown reminder and
+     * one new reminder share note and time, so two tasks are never mixed up.
+     */
+    fun carryOverNotified(
+        lastNotified: Map<String, LocalDateTime>,
+        candidates: List<ReminderCandidate>,
+        renamedFiles: Map<String, String> = emptyMap(),
+    ): Map<String, LocalDateTime> {
+        if (lastNotified.isEmpty()) return lastNotified
+        val result = HashMap<String, LocalDateTime>()
+        // Old keys under the note's current name.
+        lastNotified.forEach { (key, at) ->
+            val parts = key.split(SEPARATOR)
+            val file = finalName(parts[0], renamedFiles)
+            val moved = if (file != parts[0] && parts.size == 3) "$file$SEPARATOR${parts[1]}$SEPARATOR${parts[2]}" else key
+            result[moved] = maxOf(at, result[moved] ?: at)
+        }
+        val keys = candidates.distinctBy { keyOf(it) }.associateBy { keyOf(it) }
+        val unmatchedOld = result.keys.filter { it !in keys }
+        val unmatchedNew = keys.keys.filter { it !in result }
+        fun slot(key: String): String? = key.split(SEPARATOR).takeIf { it.size == 3 }?.let { "${it[0]}$SEPARATOR${it[2]}" }
+        val oldBySlot = unmatchedOld.groupBy { slot(it) }
+        val newBySlot = unmatchedNew.groupBy { slot(it) }
+        oldBySlot.forEach { (slot, old) ->
+            val new = newBySlot[slot] ?: return@forEach
+            if (slot != null && old.size == 1 && new.size == 1) result[new.single()] = result.getValue(old.single())
+        }
+        return result.filterKeys { it in keys }
+    }
+
+    /** Follows a chain of renames (A to B, then B to C) to the last name. */
+    private fun finalName(file: String, renamedFiles: Map<String, String>): String {
+        var current = file
+        repeat(renamedFiles.size) { current = renamedFiles[current] ?: return current }
+        return current
+    }
+
+    /** What an alarm carries; an alarm whose signature did not change is left as it is. */
+    fun signatureOf(planned: PlannedReminder): String =
+        "${planned.triggerAt}$SEPARATOR${planned.candidate.lineIndex}$SEPARATOR${planned.candidate.fromProfile}$SEPARATOR" +
+            "${planned.candidate.displayText}$SEPARATOR${planned.candidate.text}"
+
     fun plan(
         candidates: List<ReminderCandidate>,
         now: LocalDateTime,
