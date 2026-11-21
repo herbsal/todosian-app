@@ -418,7 +418,7 @@
     <string name="keyword_editor_edit_view">Edit quick view</string>
     <string name="keyword_editor_view_title_add">New quick view</string>
     <string name="keyword_editor_view_all">All of these tags</string>
-    <string name="keyword_editor_view_or">or</string>
+    <string name="keyword_editor_view_or">OR</string>
     <string name="keyword_editor_view_add_or">Or …</string>
     <string name="keyword_editor_view_remove_or">Remove this alternative</string>
     <string name="keyword_editor_view_choice_hint">Tap tags to select them; a task needs all selected tags. “Or …” adds another set of tags that is enough on its own.</string>

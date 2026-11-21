@@ -1055,7 +1055,7 @@ private fun ViewPrompt(
                 alternatives.forEachIndexed { index, tags ->
                     if (index > 0) {
                         Text(
-                            text = stringResource(R.string.keyword_editor_view_or).uppercase(Locale.getDefault()),
+                            text = stringResource(R.string.keyword_editor_view_or),
                             style = MaterialTheme.typography.labelLarge,
                             color = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.align(Alignment.CenterHorizontally),

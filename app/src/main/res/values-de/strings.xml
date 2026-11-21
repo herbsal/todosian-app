@@ -418,7 +418,7 @@
     <string name="keyword_editor_edit_view">Schnellansicht bearbeiten</string>
     <string name="keyword_editor_view_title_add">Neue Schnellansicht</string>
     <string name="keyword_editor_view_all">Alle diese Tags</string>
-    <string name="keyword_editor_view_or">oder</string>
+    <string name="keyword_editor_view_or">ODER</string>
     <string name="keyword_editor_view_add_or">Oder …</string>
     <string name="keyword_editor_view_remove_or">Diese Möglichkeit entfernen</string>
     <string name="keyword_editor_view_choice_hint">Tippe Tags an, um sie auszuwählen; eine Aufgabe braucht alle ausgewählten Tags. „Oder …“ fügt eine weitere Auswahl hinzu, die allein schon reicht.</string>
