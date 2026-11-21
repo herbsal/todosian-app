@@ -136,7 +136,13 @@ internal fun QuickAddSheet(
         openingFull = true
         // List words go, the list is chosen; date and tag words stay for the task sheet to recognize.
         val rest = firstPass.list?.let { ListRecognition.remove(text, it) } ?: text
-        onOpenFullAdd(target?.uri, rest.trim())
+        val list = target
+        if (list != null) {
+            onOpenFullAdd(list.uri, rest.trim())
+        } else {
+            // No list yet: the Inbox, as when saving here, so the same task form opens and not the list picker.
+            scope.launch { onOpenFullAdd(fileRepository.createCategoryByName(INBOX_NAME).getOrNull(), rest.trim()) }
+        }
     }
     val currentOpenFull by rememberUpdatedState(::openFull)
     val pullDistance = with(LocalDensity.current) { PULL_UP_DISTANCE.toPx() }
