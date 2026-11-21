@@ -337,45 +337,34 @@ class SafFileRepository(
         }
     }
 
-    private val noteIndex by lazy { NoteIndex.get(appContext) }
+    private val vaultSync by lazy { VaultSync.get(appContext) }
 
     override suspend fun getCategories(markers: TaskMarkers, fresh: Boolean): Result<List<Category>> {
         if (getFolderUri() == null) return Result.success(emptyList())
         return withContext(Dispatchers.IO) {
             val recursive = includeSubfolders()
             runCatching {
-                val files = noteFolders().flatMap { folder -> scanFolderOrEmpty(folder, recursive) }
-                noteIndex.retainOnly(files.map { it.second.ref.toString() }.toSet())
-                files
-                    .asSequence()
-                    .map { (folder, file) ->
-                        val displayName = folder.prefix + file.relativePath
-                        val lines = noteIndex.lines(file.ref.toString(), file.stamp, fresh) { readLinesInternal(file.ref) }
-                        val todos = MarkdownParser.parse(lines, markers)
-                        val doneCount = todos.count { it.isDone }
-                        val today = LocalDate.now().toString()
+                val folders = noteFolders()
+                vaultSync.retainFolders(folders.map { it.uri })
+                val today = LocalDate.now().toString()
+                folders
+                    .flatMap { folder -> syncFolderOrEmpty(folder, recursive, fresh) }
+                    .map { (folder, synced) ->
+                        // Lists come from the note index; only notes that changed were read.
+                        val todos = MarkdownParser.parse(synced.lines, markers)
                         val activeTodos = todos.filter { !it.isDone }
-                        val dueTodayCount = activeTodos.count { it.dueDate == today }
-                        val overdueCount = activeTodos.count { todo ->
-                            todo.dueDate?.let { it < today } == true
-                        }
                         Category(
-                            displayName = displayName,
-                            uri = file.ref,
+                            displayName = folder.prefix + synced.entry.relativePath,
+                            uri = synced.entry.ref,
                             todoCount = todos.size,
-                            doneCount = doneCount,
-                            dueTodayCount = dueTodayCount,
-                            overdueCount = overdueCount,
+                            doneCount = todos.count { it.isDone },
+                            dueTodayCount = activeTodos.count { it.dueDate == today },
+                            overdueCount = activeTodos.count { todo -> todo.dueDate?.let { it < today } == true },
                             openTodos = activeTodos,
                             todos = todos,
                         )
                     }
                     .sortedBy { it.displayName.lowercase() }
-                    .toList()
-                    .also {
-                        Log.d(TAG, "getCategories: ${files.size} notes, index hits=${noteIndex.hits} misses=${noteIndex.misses}")
-                        noteIndex.save()
-                    }
             }
         }
     }
@@ -455,15 +444,15 @@ class SafFileRepository(
     }
 
     /** The main folder must be readable; an extra folder that went missing is skipped. */
-    private fun scanFolderOrEmpty(folder: NoteFolder, recursive: Boolean): List<Pair<NoteFolder, MarkdownEntry<Uri>>> {
-        val files = if (folder.prefix.isEmpty()) {
-            scanMarkdownTree(appContext, folder.uri, recursive).files
+    private fun syncFolderOrEmpty(folder: NoteFolder, recursive: Boolean, fresh: Boolean): List<Pair<NoteFolder, SyncedNote>> {
+        val notes = if (folder.prefix.isEmpty()) {
+            vaultSync.notes(folder.uri, recursive, fresh)
         } else {
-            runCatching { scanMarkdownTree(appContext, folder.uri, recursive).files }
+            runCatching { vaultSync.notes(folder.uri, recursive, fresh) }
                 .onFailure { Log.w(TAG, "Skipping unreadable extra folder", it) }
                 .getOrDefault(emptyList())
         }
-        return files.map { folder to it }
+        return notes.map { folder to it }
     }
 
     override suspend fun createCategoryByName(name: String): Result<Uri> {
@@ -855,7 +844,7 @@ class SafFileRepository(
 
     private fun writeBytesInternal(uri: Uri, bytes: ByteArray) {
         // Own writes may keep size and time (same second); the next look reads the note itself.
-        noteIndex.forget(uri.toString())
+        vaultSync.invalidate(uri)
         openTruncatingOutputStream(uri)?.use { out ->
             runCatching { (out as? FileOutputStream)?.channel?.truncate(0) }
             out.write(bytes)

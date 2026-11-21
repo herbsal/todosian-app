@@ -4,6 +4,9 @@ import android.content.Context
 import android.net.Uri
 import android.provider.DocumentsContract
 
+/** Last-modified time (ms) and size of a note, as the folder listing reports them. */
+internal data class FileStamp(val lastModified: Long, val size: Long)
+
 internal data class DocumentEntry(
     val id: String,
     val name: String,

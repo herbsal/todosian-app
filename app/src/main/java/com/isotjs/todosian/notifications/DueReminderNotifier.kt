@@ -17,9 +17,9 @@ import androidx.core.content.edit
 import com.isotjs.todosian.MainActivity
 import com.isotjs.todosian.R
 import com.isotjs.todosian.data.MarkdownEntry
-import com.isotjs.todosian.data.NoteIndex
 import com.isotjs.todosian.data.PreferencesManager
-import com.isotjs.todosian.data.scanMarkdownTree
+import com.isotjs.todosian.data.SyncedNote
+import com.isotjs.todosian.data.VaultSync
 import com.isotjs.todosian.data.model.Todo
 import com.isotjs.todosian.data.settings.SharedPrefsAppSettingsRepository
 import com.isotjs.todosian.utils.MarkdownParser
@@ -163,39 +163,28 @@ object DueReminderNotifier {
         tagDisplay: TagDisplaySettings,
     ): List<DueTodo> {
         val today = LocalDate.now()
-        fun todosIn(uri: Uri, files: List<MarkdownEntry<Uri>>): List<DueTodo> {
-            if (files.isEmpty()) return emptyList()
+        val sync = VaultSync.get(context)
+        fun todosIn(uri: Uri, notes: List<SyncedNote>): List<DueTodo> {
+            if (notes.isEmpty()) return emptyList()
             val definitions = TaskReminderScheduler.loadTagDefinitions(context, uri)
-            return files.flatMap { file -> parseDueTodosFromFile(context, file, today, markers) }
+            return notes.flatMap { synced -> parseDueTodos(synced, today, markers) }
                 .map { it.copy(displayText = TagDisplay.plainText(it.text, definitions, tagDisplay)) }
         }
         // An extra folder that went missing must not hide the reminders of the others.
         val extraTodos = extraFolderUris.flatMap { uri ->
-            todosIn(uri, runCatching { scanMarkdownTree(context, uri, includeSubfolders).files }.getOrDefault(emptyList()))
+            todosIn(uri, runCatching { sync.notes(uri, includeSubfolders) }.getOrDefault(emptyList()))
         }
 
-        val all = todosIn(folderUri, scanMarkdownTree(context, folderUri, includeSubfolders).files) + extraTodos
-        NoteIndex.get(context).save()
+        val all = todosIn(folderUri, sync.notes(folderUri, includeSubfolders)) + extraTodos
         return all
             .asSequence()
             .sortedWith(compareBy<DueTodo> { it.dueDate }.thenBy { it.text.lowercase() })
             .toList()
     }
 
-    private fun parseDueTodosFromFile(
-        context: Context,
-        file: MarkdownEntry<Uri>,
-        today: LocalDate,
-        markers: TaskMarkers,
-    ): List<DueTodo> {
-        val lines = runCatching {
-            NoteIndex.get(context).lines(file.ref.toString(), file.stamp) {
-                context.contentResolver.openInputStream(file.ref)?.use { input -> input.bufferedReader().readLines() }
-                    ?: throw java.io.FileNotFoundException(file.ref.toString())
-            }
-        }.getOrElse { return emptyList() }
-
-        return MarkdownParser.parse(lines, markers)
+    private fun parseDueTodos(synced: SyncedNote, today: LocalDate, markers: TaskMarkers): List<DueTodo> {
+        val file = synced.entry
+        return MarkdownParser.parse(synced.lines, markers)
             .asSequence()
             .filter { !it.isDone }
             .mapNotNull { todo -> mapDueTodo(todo, file, today) }
