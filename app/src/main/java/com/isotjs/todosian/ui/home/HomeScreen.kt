@@ -113,6 +113,13 @@ import com.isotjs.todosian.ui.components.TodosianLinearProgress
 import com.isotjs.todosian.ui.components.TodosianPullToRefreshBox
 import com.isotjs.todosian.ui.components.todosianFabShape
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.withTimeoutOrNull
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarResult
+import com.isotjs.todosian.data.NoteConflict
+import com.isotjs.todosian.data.conflict.ConflictResolver
+import com.isotjs.todosian.data.conflict.MergeOutcome
+import com.isotjs.todosian.data.settings.ConflictMode
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.foundation.layout.WindowInsets
@@ -197,6 +204,7 @@ fun HomeScreen(
     var showQuickAdd by remember { mutableStateOf(false) }
     var showSearch by remember { mutableStateOf(false) }
     var previewUri by remember { mutableStateOf<Uri?>(null) }
+    var conflictToMerge by remember { mutableStateOf<NoteConflict?>(null) }
     val localContext = androidx.compose.ui.platform.LocalContext.current
     var newCategoryName by remember { mutableStateOf("") }
 
@@ -424,6 +432,65 @@ fun HomeScreen(
         )
     }
 
+    val conflictResolver = remember { ConflictResolver(localContext.applicationContext, fileRepository) }
+    // Ten seconds "Undo" after a merge; it puts back note and copy from the backup.
+    fun offerUndo(text: String, backupId: String) {
+        scope.launch {
+            val answer = withTimeoutOrNull(UNDO_MS) {
+                snackbarHostState.showSnackbar(
+                    message = text,
+                    actionLabel = resources.getString(R.string.conflict_undo),
+                    duration = SnackbarDuration.Indefinite,
+                )
+            }
+            if (answer == SnackbarResult.ActionPerformed) {
+                val restored = conflictResolver.restore(backupId)
+                viewModel.refresh(showLoading = false)
+                snackbarHostState.showSnackbar(
+                    resources.getString(if (restored) R.string.conflict_undone else R.string.settings_merged_restore_failed),
+                )
+            }
+        }
+    }
+
+    conflictToMerge?.let { conflict ->
+        ConflictSheet(
+            conflict = conflict,
+            resolver = conflictResolver,
+            markers = settings.toTaskMarkers(),
+            onDismiss = { conflictToMerge = null },
+            onMerged = { backupId ->
+                conflictToMerge = null
+                viewModel.refresh(showLoading = false)
+                offerUndo(resources.getString(R.string.conflict_merged, conflict.relPath.substringAfterLast('/')), backupId)
+            },
+            onOpenInObsidian = {
+                val folder = Uri.parse(conflict.folder)
+                val vault = ObsidianLinks.vaultName(localContext, folder, fileRepository.getFolderUri(), settings.obsidianVaultName)
+                if (!ObsidianLinks.launch(localContext, ObsidianLinks.openNoteUri(vault, conflict.relPath))) {
+                    scope.launch { snackbarHostState.showSnackbar(resources.getString(R.string.preview_obsidian_missing)) }
+                }
+            },
+        )
+    }
+
+    // "Merge clear cases automatically": only with a known base and nothing to ask, once per copy.
+    val autoTried = remember { mutableSetOf<String>() }
+    LaunchedEffect(conflicts, settings.conflictMode) {
+        if (settings.conflictMode != ConflictMode.AUTO) return@LaunchedEffect
+        val markers = settings.toTaskMarkers()
+        for (conflict in conflicts.distinctBy { it.folder to it.relPath }) {
+            if (!autoTried.add(conflict.folder + "/" + conflict.copyPath)) continue
+            val prepared = conflictResolver.prepare(conflict, markers) ?: continue
+            if (!prepared.result.isClean) continue
+            val outcome = conflictResolver.apply(prepared, emptyMap(), markers)
+            if (outcome is MergeOutcome.Done) {
+                viewModel.refresh(showLoading = false)
+                offerUndo(resources.getString(R.string.conflict_merged_auto, conflict.relPath.substringAfterLast('/')), outcome.backupId)
+            }
+        }
+    }
+
     if (showChangelogSheet) {
         ChangelogBottomSheet(
             onDismissRequest = {
@@ -628,8 +695,9 @@ fun HomeScreen(
                             }
 
                             // Syncthing conflicts: the copy's tasks are not shown, so say it here.
-                            conflicts.forEach { conflict ->
-                                ConflictCard(conflict = conflict)
+                            // Several copies of one note are merged one after the other, the oldest first.
+                            conflicts.distinctBy { it.folder to it.relPath }.forEach { conflict ->
+                                ConflictCard(conflict = conflict, onClick = { conflictToMerge = conflict })
                                 Spacer(modifier = Modifier.height(12.dp))
                             }
 
@@ -858,3 +926,5 @@ private fun SavedViewsRow(views: List<SavedView>, onOpen: (SavedView) -> Unit) {
         }
     }
 }
+
+private const val UNDO_MS = 10_000L

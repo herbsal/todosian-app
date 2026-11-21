@@ -31,7 +31,12 @@ class VaultIndex(private val store: IndexStore) {
     @Synchronized
     fun put(note: IndexedNote): IndexedNote {
         ensureLoaded()
+        val previous = byUri[note.uri] ?: note.id.takeIf { it != 0L }?.let { id -> byUri.values.firstOrNull { it.id == id } }
         val stored = store.upsert(note)
+        // The state the note had until now is kept as a possible base for merging a conflict copy.
+        if (previous != null && previous.id == stored.id && previous.hash.isNotEmpty() && previous.hash != stored.hash) {
+            runCatching { store.addVersion(stored.id, stored.indexedAt, previous.lineHashes) }
+        }
         byUri.values.removeAll { it.id == stored.id && it.uri != stored.uri }
         byUri[stored.uri] = stored
         return stored
@@ -51,6 +56,10 @@ class VaultIndex(private val store: IndexStore) {
         byUri.clear()
         loaded = true
     }
+
+    /** The oldest remembered state of a note (line hashes), or null. */
+    @Synchronized
+    fun oldestVersion(noteId: Long): LongArray? = runCatching { store.oldestVersion(noteId) }.getOrNull()
 
     @Synchronized
     fun meta(key: String): String? = store.meta(key)

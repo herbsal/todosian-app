@@ -44,6 +44,10 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.ui.text.input.ImeAction
 import com.isotjs.todosian.data.settings.DeletedNoteReminders
 import com.isotjs.todosian.data.settings.TaskIdMode
+import com.isotjs.todosian.data.settings.ConflictMode
+import com.isotjs.todosian.data.FileRepository
+import com.isotjs.todosian.data.conflict.ConflictResolver
+import com.isotjs.todosian.data.conflict.MergeBackup
 import com.isotjs.todosian.data.settings.normalizeFolderPath
 import com.isotjs.todosian.R
 import com.isotjs.todosian.data.IndexStats
@@ -273,6 +277,75 @@ internal fun ExcludedFoldersDialog(
 internal fun deletedNoteRemindersLabel(mode: DeletedNoteReminders): String = when (mode) {
     DeletedNoteReminders.CANCEL_SILENTLY -> stringResource(R.string.settings_deleted_note_silent)
     DeletedNoteReminders.NOTIFY -> stringResource(R.string.settings_deleted_note_notify)
+}
+
+@Composable
+internal fun conflictModeLabel(mode: ConflictMode): String = when (mode) {
+    ConflictMode.SUGGEST -> stringResource(R.string.settings_conflicts_suggest)
+    ConflictMode.AUTO -> stringResource(R.string.settings_conflicts_auto)
+}
+
+/** Merged conflicts of the last 30 days, each with "Restore" (note and copy as before). */
+@Composable
+internal fun MergedConflictsDialog(fileRepository: FileRepository, onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    val resources = LocalResources.current
+    val scope = rememberCoroutineScope()
+    val resolver = remember { ConflictResolver(context.applicationContext, fileRepository) }
+    var backups by remember { mutableStateOf<List<MergeBackup>?>(null) }
+    var refreshes by remember { mutableIntStateOf(0) }
+    var busy by remember { mutableStateOf(false) }
+    var result by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(refreshes) { backups = withContext(Dispatchers.IO) { resolver.backups() } }
+
+    AlertDialog(
+        onDismissRequest = { if (!busy) onDismiss() },
+        title = { Text(stringResource(R.string.settings_merged_conflicts)) },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.settings_merged_conflicts_hint),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                val list = backups
+                if (list != null && list.isEmpty()) {
+                    Text(stringResource(R.string.settings_merged_conflicts_none), style = MaterialTheme.typography.bodyLarge)
+                }
+                list.orEmpty().forEach { backup ->
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(backup.notePath.substringAfterLast('/'), style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                text = DateUtils.getRelativeTimeSpanString(backup.at, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS).toString(),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        TextButton(
+                            enabled = !busy,
+                            onClick = {
+                                busy = true
+                                scope.launch {
+                                    val ok = resolver.restore(backup.id)
+                                    result = resources.getString(if (ok) R.string.settings_merged_restored else R.string.settings_merged_restore_failed)
+                                    busy = false
+                                    refreshes++
+                                }
+                            },
+                        ) { Text(stringResource(R.string.settings_merged_restore)) }
+                    }
+                }
+                result?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss, enabled = !busy) { Text(stringResource(R.string.action_ok)) }
+        },
+    )
 }
 
 @Composable

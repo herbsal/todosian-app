@@ -119,7 +119,8 @@ class Reconciler(
             val base = when {
                 !conflicted -> null
                 note.baseLineHashes != null -> note.baseLineHashes
-                else -> known[note.uri]?.lineHashes ?: note.lineHashes
+                // The oldest kept state: older than the true common state is safe, newer is not.
+                else -> index.oldestVersion(note.id) ?: known[note.uri]?.lineHashes ?: note.lineHashes
             }
             val same = (base == null && note.baseLineHashes == null) ||
                 (base != null && note.baseLineHashes != null && base.contentEquals(note.baseLineHashes))

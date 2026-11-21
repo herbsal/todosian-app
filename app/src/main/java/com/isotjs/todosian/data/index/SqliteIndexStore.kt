@@ -46,6 +46,14 @@ class SqliteIndexStore(context: Context) : IndexStore {
                 )""",
             )
             db.execSQL("CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT)")
+            db.execSQL(
+                """CREATE TABLE versions (
+                    note_id INTEGER NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
+                    at INTEGER NOT NULL,
+                    line_hashes BLOB NOT NULL
+                )""",
+            )
+            db.execSQL("CREATE INDEX versions_note ON versions(note_id, at)")
         }
 
         override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) = rebuild(db)
@@ -53,6 +61,7 @@ class SqliteIndexStore(context: Context) : IndexStore {
         override fun onDowngrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) = rebuild(db)
 
         private fun rebuild(db: SQLiteDatabase) {
+            db.execSQL("DROP TABLE IF EXISTS versions")
             db.execSQL("DROP TABLE IF EXISTS task_lines")
             db.execSQL("DROP TABLE IF EXISTS notes")
             db.execSQL("DROP TABLE IF EXISTS meta")
@@ -174,6 +183,7 @@ class SqliteIndexStore(context: Context) : IndexStore {
         val db = helper.writableDatabase
         db.beginTransaction()
         try {
+            db.delete("versions", null, null)
             db.delete("task_lines", null, null)
             db.delete("notes", null, null)
             db.delete("meta", null, null)
@@ -182,6 +192,39 @@ class SqliteIndexStore(context: Context) : IndexStore {
             db.endTransaction()
         }
     }
+
+    override fun addVersion(noteId: Long, at: Long, hashes: LongArray) {
+        val db = helper.writableDatabase
+        db.beginTransaction()
+        try {
+            db.insertOrThrow(
+                "versions",
+                null,
+                ContentValues().apply {
+                    put("note_id", noteId)
+                    put("at", at)
+                    put("line_hashes", hashes.toBytes())
+                },
+            )
+            val rows = ArrayList<Pair<Long, Long>>()
+            db.rawQuery("SELECT rowid, at FROM versions WHERE note_id = ? ORDER BY at, rowid", arrayOf(noteId.toString())).use { c ->
+                while (c.moveToNext()) rows += c.getLong(0) to c.getLong(1)
+            }
+            val keep = NoteVersions.keep(rows.map { it.second }, System.currentTimeMillis())
+            rows.forEachIndexed { index, (rowId, _) ->
+                if (index !in keep) db.delete("versions", "rowid = ?", arrayOf(rowId.toString()))
+            }
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+    }
+
+    override fun oldestVersion(noteId: Long): LongArray? =
+        helper.readableDatabase.rawQuery(
+            "SELECT line_hashes FROM versions WHERE note_id = ? ORDER BY at, rowid LIMIT 1",
+            arrayOf(noteId.toString()),
+        ).use { c -> if (c.moveToFirst()) c.getBlob(0).toLongs() else null }
 
     private fun LongArray.toBytes(): ByteArray = ByteBuffer.allocate(size * 8).also { buffer -> forEach { buffer.putLong(it) } }.array()
 
@@ -192,6 +235,6 @@ class SqliteIndexStore(context: Context) : IndexStore {
 
     companion object {
         private const val DB_NAME = "note-index.db"
-        private const val DB_VERSION = 1
+        private const val DB_VERSION = 2
     }
 }

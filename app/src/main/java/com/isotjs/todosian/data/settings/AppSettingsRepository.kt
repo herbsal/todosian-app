@@ -59,6 +59,8 @@ interface AppSettingsRepository {
 
     fun setTaskIdMode(mode: TaskIdMode) {}
 
+    fun setConflictMode(mode: ConflictMode) {}
+
     fun setProfileRemindersEnabled(enabled: Boolean)
 
     /** How keyword tags appear in task rows (encoded [com.isotjs.todosian.utils.TagDisplaySettings]). */
@@ -204,6 +206,10 @@ class SharedPrefsAppSettingsRepository(
         prefs.edit { putString(KEY_DELETED_NOTE_REMINDERS, mode.name) }
     }
 
+    override fun setConflictMode(mode: ConflictMode) {
+        prefs.edit { putString(KEY_CONFLICT_MODE, mode.name) }
+    }
+
     override fun setTaskIdMode(mode: TaskIdMode) {
         prefs.edit { putString(KEY_TASK_ID_MODE, mode.name) }
     }
@@ -305,6 +311,9 @@ class SharedPrefsAppSettingsRepository(
             } ?: DeletedNoteReminders.CANCEL_SILENTLY,
             obsidianVaultName = prefs.getString(KEY_OBSIDIAN_VAULT_NAME, null).orEmpty(),
             taskIdMode = readTaskIdMode(prefs),
+            conflictMode = prefs.getString(KEY_CONFLICT_MODE, null)?.let { raw ->
+                runCatching { ConflictMode.valueOf(raw) }.getOrNull()
+            } ?: ConflictMode.SUGGEST,
             profileRemindersEnabled = prefs.getBoolean(KEY_PROFILE_REMINDERS, true),
             tagDisplay = prefs.getString(KEY_TAG_DISPLAY, null).orEmpty(),
             tagRecognition = prefs.getBoolean(KEY_TAG_RECOGNITION, true),
@@ -352,6 +361,7 @@ class SharedPrefsAppSettingsRepository(
         private const val KEY_DELETED_NOTE_REMINDERS = "deleted_note_reminders"
         private const val KEY_OBSIDIAN_VAULT_NAME = "obsidian_vault_name"
         private const val KEY_TASK_ID_MODE = "task_id_mode"
+        private const val KEY_CONFLICT_MODE = "conflict_mode"
 
         private fun readTaskIdMode(prefs: SharedPreferences): TaskIdMode =
             prefs.getString(KEY_TASK_ID_MODE, null)?.let { raw ->
