@@ -3,8 +3,10 @@ package com.isotjs.todosian.utils
 /**
  * One keyword with its synonyms, e.g. "Low energy" = `#energy/low`, `#energie/niedrig`.
  * The app writes [primaryTag]; every tag in [tags] counts as the same keyword when reading.
+ * [words] are the user's own phrases that also set this keyword when a task is entered,
+ * e.g. "dreißig Minuten" for `#30min`; they are written in quotes in the note.
  */
-data class TagTerm(val label: String, val tags: List<String>) {
+data class TagTerm(val label: String, val tags: List<String>, val words: List<String> = emptyList()) {
     val primaryTag: String get() = tags.first()
 
     fun matches(tag: String): Boolean = tags.any { it.equals(tag, ignoreCase = true) }
@@ -64,13 +66,15 @@ data class TagDefinitions(val groups: List<TagGroup>) {
  *
  * A heading of level 2 or deeper starts a group; the `#` title does not. Each list item is one keyword: the text before `:` is its label, the
  * tags after it are synonyms, the first one is written by the app. Without a label the first tag
- * is used as label. Lines without tags and code blocks are ignored.
+ * is used as label. Words in quotes after the tags are own recognition words:
+ * `- 30 minutes: #30min "dreißig Minuten", "halbe Stunde"`. Lines without tags and code blocks are ignored.
  */
 object TagDefinitionParser {
     private val headingRegex = Regex("""^\s{0,3}(#{1,6})\s+(.+?)\s*#*\s*$""")
     private val itemRegex = Regex("""^\s*(?:[-*+]|\d+[.)])\s+(.*)$""")
     private val tagRegex = Regex("""(?<![\p{L}\p{N}_])#([\p{L}\p{N}_/\-]*[\p{L}_/\-][\p{L}\p{N}_/\-]*)""")
     private val separatorRegex = Regex("""[,;\s]""")
+    private val wordRegex = Regex(""""([^"]*)"|„([^“”"]*)[“”"]|“([^”"]*)”""")
 
     fun parse(lines: List<String>): TagDefinitions = parseNote(lines).definitions
 
@@ -111,7 +115,9 @@ object TagDefinitionParser {
             if (item.startsWith("[")) return@forEachIndexed // a task, not a keyword
             val colon = item.indexOf(':')
             val labelPart = if (colon >= 0) item.substring(0, colon).trim() else ""
-            val tagPart = if (colon >= 0) item.substring(colon + 1) else item
+            val rest = if (colon >= 0) item.substring(colon + 1) else item
+            val words = TagWords.clean(wordRegex.findAll(rest).map { m -> m.groupValues.drop(1).firstOrNull { it.isNotEmpty() }.orEmpty() }.toList())
+            val tagPart = wordRegex.replace(rest, " ")
             val tags = tagRegex.findAll(tagPart).map { "#" + it.groupValues[1].trimEnd('/') }.distinctBy { it.lowercase() }.toList()
             if (tags.isEmpty()) {
                 problems.add(NoteProblem(index, raw, NoteProblemKind.NO_TAG))
@@ -121,7 +127,7 @@ object TagDefinitionParser {
                 problems.add(NoteProblem(index, raw, NoteProblemKind.UNKNOWN_TEXT))
             }
             val label = labelPart.takeIf { it.isNotEmpty() && !it.startsWith("#") } ?: tags.first().removePrefix("#")
-            currentTerms.add(TagNoteTerm(TagTerm(label, tags), index))
+            currentTerms.add(TagNoteTerm(TagTerm(label, tags, words), index))
         }
         flush()
         return TagNote(lines, groups, problems)
@@ -184,7 +190,11 @@ object TagNoteEdits {
     private val headingHashesRegex = Regex("""^(\s{0,3}#{1,6})\s""")
     private val titleRegex = Regex("""^\s{0,3}#\s+\S.*$""")
 
-    fun termLine(term: TagTerm): String = "- ${term.label}: ${term.tags.joinToString(", ")}"
+    fun termLine(term: TagTerm): String {
+        val words = TagWords.clean(term.words)
+        val suffix = if (words.isEmpty()) "" else " " + words.joinToString(", ") { "\"$it\"" }
+        return "- ${term.label}: ${term.tags.joinToString(", ")}$suffix"
+    }
 
     fun addTerm(lines: List<String>, note: TagNote, group: TagNoteGroup?, term: TagTerm): List<String>? {
         val anchor = group?.lastLine
@@ -225,5 +235,15 @@ object TagNoteEdits {
             .filter { it.isNotEmpty() }
             .map { "#" + it.replace(Regex("""[^\p{L}\p{N}_/\-]"""), "") }
             .filter { it.length > 1 && it.drop(1).any { c -> !c.isDigit() } }
+            .distinctBy { it.lowercase() }
+}
+
+/** Own recognition words of a keyword, as typed in the editor: "dreißig Minuten, halbe Stunde". */
+object TagWords {
+    fun parseInput(input: String): List<String> = clean(input.split(',', ';', '\n'))
+
+    fun clean(words: List<String>): List<String> =
+        words.map { it.replace(Regex("""["„“”]"""), "").replace(Regex("""\s+"""), " ").trim() }
+            .filter { it.length >= 2 }
             .distinctBy { it.lowercase() }
 }

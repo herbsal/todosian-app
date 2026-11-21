@@ -363,6 +363,10 @@
     <string name="keyword_editor_keyword_label">Name</string>
     <string name="keyword_editor_keyword_tags">Schreibweisen</string>
     <string name="keyword_editor_keyword_tags_hint">Mit Komma getrennt, das erste wird geschrieben</string>
+    <string name="keyword_editor_words">Eigene Erkennungswörter</string>
+    <string name="keyword_editor_words_example">z. B. dreißig Minuten, halbe Stunde</string>
+    <string name="keyword_editor_words_hint">Beim Erfassen setzen auch diese Wörter den Tag. Mit Komma getrennt.</string>
+    <string name="keyword_editor_words_automatic">Wird schon erkannt: %1$s</string>
     <string name="keyword_editor_delete">Löschen</string>
     <string name="keyword_editor_profiles">Erinnerungsprofile</string>
     <string name="keyword_editor_profiles_hint">Regeln pro Tag, z. B. einen Tag vorher um 18:00.</string>
@@ -458,6 +462,7 @@
     <string name="recognition_toggle_on">Tag-Erkennung an, tippen zum Ausschalten</string>
     <string name="recognition_toggle_off">Tag-Erkennung aus, tippen zum Einschalten</string>
     <string name="quick_add_title">Schnell erfassen</string>
+    <string name="quick_add_all_options">Alle Optionen</string>
     <string name="quick_add_hint">z. B. Milch kaufen morgen 17 Uhr auf die Einkaufsliste</string>
     <string name="quick_add_list_chip">📥 %1$s</string>
     <string name="quick_add_list_not_recognized">Liste im Text ignorieren</string>

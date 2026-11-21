@@ -85,6 +85,7 @@ import com.isotjs.todosian.ui.components.RecognizedDateChip
 import com.isotjs.todosian.ui.components.RecognizedTagChips
 import com.isotjs.todosian.ui.components.TaskInputRecognizer
 import com.isotjs.todosian.ui.components.applyRecognizedDate
+import com.isotjs.todosian.ui.components.TaskTextField
 import com.isotjs.todosian.utils.TagFilter
 import com.isotjs.todosian.ui.components.TasksMetaEditor
 import com.isotjs.todosian.ui.components.TodoRow
@@ -255,8 +256,9 @@ fun CategoryScreen(
                 Spacer(modifier = Modifier.height(12.dp))
                 OutlinedTextField(
                     value = sheetText,
-                    onValueChange = { sheetText = it },
-                    singleLine = true,
+                    onValueChange = { sheetText = TaskTextField.oneLine(it) },
+                    maxLines = TaskTextField.MAX_LINES,
+                    keyboardOptions = TaskTextField.keyboardOptions,
                     label = { Text(text = stringResource(hintRes)) },
                     trailingIcon = if (isNewTask && !uiState.tagDefinitions.isEmpty) {
                         {
@@ -303,8 +305,9 @@ fun CategoryScreen(
                         Spacer(modifier = Modifier.height(8.dp))
                         OutlinedTextField(
                             value = firstStep,
-                            onValueChange = { sheetFirstStep = it },
-                            singleLine = true,
+                            onValueChange = { sheetFirstStep = TaskTextField.oneLine(it) },
+                            maxLines = TaskTextField.MAX_LINES,
+                            keyboardOptions = TaskTextField.keyboardOptions,
                             label = { Text(text = stringResource(R.string.category_first_step)) },
                             placeholder = { Text(text = stringResource(R.string.category_first_step_hint)) },
                             modifier = Modifier.fillMaxWidth(),
