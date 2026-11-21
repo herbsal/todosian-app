@@ -35,6 +35,8 @@ data class AppSettings(
     val hideEmptyNotes: Boolean = true,
     /** What happens to the reminders of a note that was deleted outside the app. */
     val deletedNoteReminders: DeletedNoteReminders = DeletedNoteReminders.CANCEL_SILENTLY,
+    /** Syncthing conflict copies: show the merge first, or merge clear cases right away. */
+    val conflictMode: ConflictMode = ConflictMode.SUGGEST,
     /** Which tasks get a stable `🆔` when the app writes their line anyway. */
     val taskIdMode: TaskIdMode = TaskIdMode.REMINDERS,
     /** Name of the vault in Obsidian for `obsidian://` links; empty means the folder's name. */
@@ -117,6 +119,13 @@ enum class FolderWatchMode {
 
     /** Foreground service with file observers; needs "All files access". */
     INSTANT,
+}
+
+enum class ConflictMode {
+    SUGGEST,
+
+    /** Merge and delete the copy without asking when nothing contradicts. */
+    AUTO,
 }
 
 enum class TaskIdMode {

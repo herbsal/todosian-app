@@ -172,6 +172,34 @@ class ReconcilerTest {
     }
 
     @Test
+    fun theBaseIsTheOldestKeptStateNotTheLastLocalOne() {
+        vault.write("Einkauf", "- [ ] Milch\n- [ ] Brot\n", at = start - 90_000)
+        pass()
+        val synced = index.note("uri:Einkauf")!!.lineHashes
+        // Two edits on this phone before Syncthing notices the other side.
+        vault.write("Einkauf", "- [x] Milch\n- [ ] Brot\n", at = start - 60_000)
+        pass()
+        vault.write("Einkauf", "- [x] Milch\n- [x] Brot\n", at = start - 50_000)
+        pass()
+        vault.write("Einkauf", "- [ ] Milch\n- [ ] Brot\n- [ ] Eier\n", at = start - 30_000)
+        vault.write("Einkauf.sync-conflict-20261121-142233-ABCDEF7", "- [x] Milch\n- [x] Brot\n", at = start - 30_000)
+        pass()
+        assertArrayEquals(synced, index.note("uri:Einkauf")!!.baseLineHashes)
+    }
+
+    @Test
+    fun noteVersionsKeepTheAnchorAndTheNewest() {
+        val day = 24 * 60 * 60 * 1000L
+        val now = 100 * day
+        val times = listOf(now - 20 * day, now - 9 * day, now - 3 * day, now - day)
+        assertEquals(setOf(1, 2, 3), NoteVersions.keep(times, now))
+        val many = (0 until 60).map { now - it * 1000L }.reversed()
+        val kept = NoteVersions.keep(many, now)
+        assertEquals(NoteVersions.MAX, kept.size)
+        assertTrue(0 in kept)
+    }
+
+    @Test
     fun foldersNoLongerSelectedAreDropped() {
         vault.write("A", "- [ ] A\n", at = start - 60_000)
         pass()

@@ -143,6 +143,9 @@ import com.isotjs.todosian.data.settings.CategorySort
 import com.isotjs.todosian.data.settings.HomeLayout
 import com.isotjs.todosian.data.settings.DeletedNoteReminders
 import com.isotjs.todosian.data.settings.TaskIdMode
+import com.isotjs.todosian.data.settings.ConflictMode
+import androidx.compose.material.icons.automirrored.filled.CallMerge
+import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material.icons.filled.Fingerprint
 import com.isotjs.todosian.data.settings.FolderWatchMode
 import com.isotjs.todosian.data.settings.ReminderRepeat
@@ -244,6 +247,8 @@ fun SettingsScreen(
     var showExcludedFoldersDialog by remember { mutableStateOf(false) }
     var showDeletedNoteDialog by remember { mutableStateOf(false) }
     var showTaskIdDialog by remember { mutableStateOf(false) }
+    var showConflictModeDialog by remember { mutableStateOf(false) }
+    var showMergedConflictsDialog by remember { mutableStateOf(false) }
     var showVaultNameDialog by remember { mutableStateOf(false) }
     val mainFolderName = remember(fileRepository) {
         fileRepository.getFolderUri()?.let { folder -> ObsidianLinks.vaultName(context, folder, null, "") }.orEmpty()
@@ -416,6 +421,20 @@ fun SettingsScreen(
             onSave = { appSettingsRepository.setObsidianVaultName(it) },
             onDismiss = { showVaultNameDialog = false },
         )
+    }
+
+    if (showConflictModeDialog) {
+        SingleChoiceDialog(
+            title = stringResource(R.string.settings_conflicts),
+            options = ConflictMode.entries.map { ChoiceOption(it, conflictModeLabel(it)) },
+            selected = settings.conflictMode,
+            onSelected = { appSettingsRepository.setConflictMode(it) },
+            onDismiss = { showConflictModeDialog = false },
+        )
+    }
+
+    if (showMergedConflictsDialog) {
+        MergedConflictsDialog(fileRepository = fileRepository, onDismiss = { showMergedConflictsDialog = false })
     }
 
     if (showTaskIdDialog) {
@@ -962,6 +981,24 @@ fun SettingsScreen(
                             title = stringResource(R.string.settings_task_ids),
                             subtitle = taskIdModeLabel(settings.taskIdMode),
                             onClick = { showTaskIdDialog = true },
+                        )
+
+                        SettingsDivider()
+
+                        SettingsNavRow(
+                            icon = Icons.AutoMirrored.Filled.CallMerge,
+                            title = stringResource(R.string.settings_conflicts),
+                            subtitle = conflictModeLabel(settings.conflictMode),
+                            onClick = { showConflictModeDialog = true },
+                        )
+
+                        SettingsDivider()
+
+                        SettingsNavRow(
+                            icon = Icons.Filled.Restore,
+                            title = stringResource(R.string.settings_merged_conflicts),
+                            subtitle = stringResource(R.string.settings_merged_conflicts_hint),
+                            onClick = { showMergedConflictsDialog = true },
                         )
 
                         SettingsDivider()

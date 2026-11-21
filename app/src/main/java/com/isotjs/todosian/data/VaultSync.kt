@@ -36,8 +36,21 @@ internal data class SyncProgress(
     val firstBuild: Boolean,
 )
 
-/** A Syncthing conflict: the note [relPath] of [folder] has a conflict copy [copyPath] next to it. */
-internal data class NoteConflict(val folder: String, val relPath: String, val copyPath: String)
+/**
+ * A Syncthing conflict: the note [relPath] of [folder] has a conflict copy [copyPath] next to it.
+ * [copyUri] is the copy's document, [dirUri] the folder it lies in, [noteUri] the note (if indexed).
+ */
+internal data class NoteConflict(
+    val folder: String,
+    val relPath: String,
+    val copyPath: String,
+    val copyUri: String? = null,
+    val dirUri: String? = null,
+    val noteUri: String? = null,
+) {
+    /** File name of the copy, e.g. `Einkauf.sync-conflict-20261121-142233-ABCDEF7.md`. */
+    val copyName: String get() = copyPath.substringAfterLast('/') + ".md"
+}
 
 /** What the settings show about the note index. Times in ms since 1970. */
 internal data class IndexStats(
@@ -98,19 +111,40 @@ internal class VaultSync(private val context: Context, private val index: VaultI
 
     @Volatile private var lastSync = 0L
 
-    private fun updateConflicts(folder: String, copies: List<String>) {
+    private fun updateConflicts(folder: String, copies: List<String>, docs: Map<String, Pair<Uri, Uri>>) {
+        val notes = index.notes().filter { it.folder == folder }.associateBy { it.relPath }
         val found = copies.mapNotNull { copy ->
-            ConflictNames.originalOf(copy)?.let { NoteConflict(folder, it, copy) }
-        }
+            ConflictNames.originalOf(copy)?.let { original ->
+                NoteConflict(
+                    folder = folder,
+                    relPath = original,
+                    copyPath = copy,
+                    copyUri = docs[copy]?.first?.toString(),
+                    dirUri = docs[copy]?.second?.toString(),
+                    noteUri = notes[original]?.uri,
+                )
+            }
+        }.sortedBy { it.copyPath } // oldest copy of a note first: the name holds the time
         val others = _conflicts.value.filter { it.folder != folder }
         if (others.size + found.size != _conflicts.value.size || !_conflicts.value.containsAll(found)) {
-            _conflicts.value = (others + found).sortedBy { it.relPath.lowercase() }
+            _conflicts.value = (others + found).sortedWith(compareBy({ it.relPath.lowercase() }, { it.copyPath }))
         }
     }
 
     /** Conflicts of folders that are no longer selected go away with them. */
     private fun retainConflicts(folders: Set<String>) {
         if (_conflicts.value.any { it.folder !in folders }) _conflicts.value = _conflicts.value.filter { it.folder in folders }
+    }
+
+    /**
+     * The common state of a note with a conflict copy, as line hashes; null when the index has
+     * none (then the merge keeps both sides).
+     */
+    fun conflictBase(noteUri: String): LongArray? = index.note(noteUri)?.baseLineHashes
+
+    /** A conflict is gone from the list right away once its copy was merged and deleted. */
+    fun dropConflict(conflict: NoteConflict) {
+        _conflicts.value = _conflicts.value.filter { it.copyPath != conflict.copyPath || it.folder != conflict.folder }
     }
 
     /** Folder and path of a note as the index knows them, or null. */
@@ -154,6 +188,7 @@ internal class VaultSync(private val context: Context, private val index: VaultI
         val tree = scanned.copy(
             files = scanned.files.filter { !isInExcludedFolder(it.relativePath, excluded) },
             conflictPaths = scanned.conflictPaths.filter { !isInExcludedFolder(it, excluded) },
+            conflictDocs = scanned.conflictDocs.filterKeys { !isInExcludedFolder(it, excluded) },
         )
         val listed = tree.files.map { it.toListed() }
         val result: ReconcileResult
@@ -175,7 +210,7 @@ internal class VaultSync(private val context: Context, private val index: VaultI
             val excludedUris = scanned.files.filter { isInExcludedFolder(it.relativePath, excluded) }.mapTo(HashSet()) { it.ref.toString() }
             noteDeletions(result.removed.filter { it !in excludedUris }.associateWith { before[it].orEmpty() })
         }
-        updateConflicts(key, tree.conflictPaths)
+        updateConflicts(key, tree.conflictPaths, tree.conflictDocs)
         lastSync = System.currentTimeMillis()
         if (result.read > 0) {
             Log.d(

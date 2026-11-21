@@ -1,5 +1,6 @@
 package com.isotjs.todosian.ui.home
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -91,12 +92,12 @@ internal fun FirstBuildProgress(progress: SyncProgress, modifier: Modifier = Mod
     }
 }
 
-/** A Syncthing conflict copy next to a note; its tasks are not shown twice. */
+/** A Syncthing conflict copy next to a note; its tasks are not shown twice. A tap opens the merge. */
 @Composable
-internal fun ConflictCard(conflict: NoteConflict, modifier: Modifier = Modifier) {
+internal fun ConflictCard(conflict: NoteConflict, onClick: () -> Unit, modifier: Modifier = Modifier) {
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth().clickable(onClick = onClick),
     ) {
         Row(
             modifier = Modifier.padding(16.dp),

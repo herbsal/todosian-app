@@ -83,6 +83,33 @@ interface IndexStore {
 
     /** Drops everything; the next look rebuilds the index from the vault. */
     fun clear()
+
+    /** Remembers the line hashes [hashes] a note had until [at]; old ones are dropped per [NoteVersions]. */
+    fun addVersion(noteId: Long, at: Long, hashes: LongArray)
+
+    /** The oldest remembered line hashes of a note: the base for merging a conflict copy. */
+    fun oldestVersion(noteId: Long): LongArray?
+}
+
+/**
+ * Which earlier states of a note the index keeps, as line hashes only. A conflict copy is merged
+ * against the oldest one: a base older than the true common state is safe (changes made on both
+ * sides look like the same change), a newer one could undo changes. So the index keeps every
+ * state of the last [WINDOW_MS] plus the newest one before, at most [MAX] in all.
+ */
+object NoteVersions {
+    const val WINDOW_MS = 7L * 24 * 60 * 60 * 1000
+    const val MAX = 40
+
+    /** Indexes into [times] (oldest first) of the versions to keep at [now]. */
+    fun keep(times: List<Long>, now: Long): Set<Int> {
+        if (times.isEmpty()) return emptySet()
+        val recent = times.indices.filter { now - times[it] < WINDOW_MS }
+        val anchor = times.indices.lastOrNull { now - times[it] >= WINDOW_MS }
+        // The oldest (the anchor, or the oldest recent one) always stays, then the newest recent ones.
+        val oldest = anchor ?: recent.first()
+        return (recent.filter { it != oldest }.takeLast(MAX - 1) + oldest).toSet()
+    }
 }
 
 class InMemoryIndexStore : IndexStore {
@@ -102,6 +129,7 @@ class InMemoryIndexStore : IndexStore {
 
     @Synchronized override fun delete(id: Long) {
         notes.remove(id)
+        versions.remove(id)
     }
 
     @Synchronized override fun meta(key: String): String? = metas[key]
@@ -110,8 +138,24 @@ class InMemoryIndexStore : IndexStore {
         if (value == null) metas.remove(key) else metas[key] = value
     }
 
+    private val versions = HashMap<Long, MutableList<Pair<Long, LongArray>>>()
+    var clock: () -> Long = System::currentTimeMillis
+
     @Synchronized override fun clear() {
         notes.clear()
         metas.clear()
+        versions.clear()
     }
+
+    @Synchronized override fun addVersion(noteId: Long, at: Long, hashes: LongArray) {
+        val list = versions.getOrPut(noteId) { mutableListOf() }
+        list.add(at to hashes)
+        list.sortBy { it.first }
+        val keep = NoteVersions.keep(list.map { it.first }, clock())
+        val kept = list.filterIndexed { index, _ -> index in keep }
+        list.clear()
+        list.addAll(kept)
+    }
+
+    @Synchronized override fun oldestVersion(noteId: Long): LongArray? = versions[noteId]?.firstOrNull()?.second
 }

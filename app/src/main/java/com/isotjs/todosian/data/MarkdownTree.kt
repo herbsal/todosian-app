@@ -17,11 +17,15 @@ internal data class DocumentEntry(
 /** A Markdown note; [relativePath] is relative to the selected folder and has no `.md` suffix, e.g. `Projects/Move`. */
 internal data class MarkdownEntry<T>(val ref: T, val relativePath: String, val stamp: FileStamp? = null)
 
-/** [conflictPaths] are the paths (no `.md`) of Syncthing conflict copies; they deliver no tasks. */
+/**
+ * [conflictPaths] are the paths (no `.md`) of Syncthing conflict copies; they deliver no tasks.
+ * [conflictDocs] gives each of them its document and the folder it lies in.
+ */
 internal data class MarkdownTree<T>(
     val files: List<MarkdownEntry<T>>,
     val folderIds: List<String>,
     val conflictPaths: List<String> = emptyList(),
+    val conflictDocs: Map<String, Pair<T, T>> = emptyMap(),
 )
 
 /** Folder at the root of a notes folder that holds Todosian's own notes (keywords, reminder profiles). */
@@ -62,6 +66,7 @@ internal fun walkMarkdownTree(
     val files = mutableListOf<MarkdownEntry<String>>()
     val folderIds = mutableListOf<String>()
     val conflicts = mutableListOf<String>()
+    val conflictDocs = LinkedHashMap<String, Pair<String, String>>()
     val pending = ArrayDeque(listOf(rootId to ""))
     while (pending.isNotEmpty()) {
         val (folderId, prefix) = pending.removeFirst()
@@ -73,11 +78,13 @@ internal fun walkMarkdownTree(
             } else if (isMarkdownNoteName(child.name)) {
                 files.add(MarkdownEntry(child.id, prefix + child.name.dropLast(MD_SUFFIX_LENGTH), child.stamp))
             } else if (child.name.endsWith(".md", ignoreCase = true)) {
-                conflicts.add(prefix + child.name.dropLast(MD_SUFFIX_LENGTH))
+                val path = prefix + child.name.dropLast(MD_SUFFIX_LENGTH)
+                conflicts.add(path)
+                conflictDocs[path] = child.id to folderId
             }
         }
     }
-    return MarkdownTree(files, folderIds, conflicts)
+    return MarkdownTree(files, folderIds, conflicts, conflictDocs)
 }
 
 /** SAF version of [walkMarkdownTree]: one query per folder, instead of DocumentFile's several queries per child. */
@@ -101,6 +108,10 @@ internal fun scanMarkdownTree(context: Context, treeUri: Uri, recursive: Boolean
         files = tree.files.map { MarkdownEntry(DocumentsContract.buildDocumentUriUsingTree(treeUri, it.ref), it.relativePath, it.stamp) },
         folderIds = tree.folderIds,
         conflictPaths = tree.conflictPaths,
+        conflictDocs = tree.conflictDocs.mapValues { (_, doc) ->
+            DocumentsContract.buildDocumentUriUsingTree(treeUri, doc.first) to
+                DocumentsContract.buildDocumentUriUsingTree(treeUri, doc.second)
+        },
     )
 }
 
