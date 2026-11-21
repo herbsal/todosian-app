@@ -244,7 +244,7 @@ Switch(
 1. **Do not load entire files into memory**: For large Markdown files, use streaming or line-by-line processing.
 
 Current implementation note:
-The current SAF reader uses `readLines()` and loads the whole document into memory. Keep an eye on very large Markdown files when changing parsing or I/O behavior. 2. **Do not assume file structure**: Users may have arbitrary folder structures, nested folders, and file naming conventions. 3. **Do not cache file contents**: Always re-read files when displaying to the user (they may have been modified externally). 4. **Do not block the UI thread**: File I/O operations must be done on background threads (coroutines). 5. **Do not introduce dependencies** that require network permissions, analytics, crash reporting, or closed-source libraries.
+The current SAF reader uses `readLines()` and loads the whole document into memory. Keep an eye on very large Markdown files when changing parsing or I/O behavior. 2. **Do not assume file structure**: Users may have arbitrary folder structures, nested folders, and file naming conventions. 3. **The vault is the truth, the note index only a disposable copy**: Lists, reminders and widgets read task lines from the note index (`data/index`, SQLite), which re-reads every note whose time, size or content hash changed. Editing, saving and the note preview always read the file itself; writes never use the index as a template. 4. **Do not block the UI thread**: File I/O operations must be done on background threads (coroutines). 5. **Do not introduce dependencies** that require network permissions, analytics, crash reporting, or closed-source libraries.
 
 ## Testing Checklist
 
