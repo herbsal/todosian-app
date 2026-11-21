@@ -185,7 +185,6 @@
     <string name="settings_dynamic_color_subtitle">Farben aus dem System übernehmen (ab Android 12).</string>
     <string name="settings_dynamic_color_unavailable">Nur ab Android 12 verfügbar.</string>
 
-    <string name="settings_behaviour">Verhalten</string>
     <string name="settings_show_daily_focus">Tagesfokus-Banner</string>
     <string name="settings_show_daily_focus_subtitle">Offene Aufgaben auf dem Startbildschirm zeigen.</string>
     <string name="settings_daily_focus_mode">Inhalt des Tagesfokus</string>
@@ -495,6 +494,21 @@
     <string name="calendar_tomorrow_with_date">Morgen, %1$s</string>
     <string name="calendar_previous_month">Vorheriger Monat</string>
     <string name="calendar_next_month">Nächster Monat</string>
+    <string name="settings_section_home">Startseite</string>
+    <string name="settings_section_vault">Vault &amp; Ordner</string>
+    <string name="settings_section_vault_summary">Ordner, Unterordner, Obsidian-Vault</string>
+    <string name="settings_section_view">Ansicht</string>
+    <string name="settings_section_view_summary">Design, Ansicht beim Start, Startseite, Tagesfokus</string>
+    <string name="settings_section_tasks">Aufgaben</string>
+    <string name="settings_section_tasks_summary">Sortierung, Gruppierung, neue Aufgaben, Unteraufgaben</string>
+    <string name="settings_section_reminders">Erinnerungen</string>
+    <string name="settings_section_reminders_summary">Wiederholen, Profile, Hinweise zu neuen Aufgaben</string>
+    <string name="settings_section_tags">Tags &amp; Schnellansichten</string>
+    <string name="settings_section_tags_summary">Tag-Editor, Anzeige, Erkennung</string>
+    <string name="settings_section_sync">Sync &amp; Konflikte</string>
+    <string name="settings_section_sync_summary">Ordnerüberwachung, Index, Konflikte, Letzte Aktionen</string>
+    <string name="settings_section_expert">Experte</string>
+    <string name="settings_section_expert_summary">Tasks-Plugin-Format, Markierungen, Aufgaben-IDs</string>
     <string name="settings_start_tab">Ansicht beim Start</string>
     <string name="settings_home_layout">Startseite</string>
     <string name="settings_home_layout_tasks">Aufgaben je Liste</string>
