@@ -522,4 +522,30 @@
     </plurals>
     <string name="settings_index_rebuild_done">Index aus deinen Notizen neu aufgebaut.</string>
     <string name="settings_index_failed">Das hat nicht geklappt. Bitte noch einmal versuchen.</string>
+    <string name="settings_excluded_folders">Ordner ausschließen</string>
+    <string name="settings_excluded_folders_none">Keine, alle Notizen werden gelesen</string>
+    <string name="settings_excluded_folders_hint">Notizen in diesen Ordnern erscheinen nicht in Listen, Kalender, Widgets und Erinnerungen. Pfade relativ zum Notizordner, z. B. Archiv oder Tagebuch/2024.</string>
+    <string name="settings_excluded_folders_placeholder">Ordner, z. B. Archiv</string>
+    <string name="settings_excluded_folders_add">Ordner hinzufügen</string>
+    <string name="settings_excluded_folders_remove">%1$s entfernen</string>
+    <string name="settings_hide_empty_notes">Notizen ohne Aufgaben ausblenden</string>
+    <string name="settings_hide_empty_notes_subtitle">Die Startseite zeigt nur Notizen, die Aufgaben enthalten</string>
+    <string name="settings_deleted_note">Notiz mit Erinnerungen gelöscht</string>
+    <string name="settings_deleted_note_silent">Erinnerungen still absagen</string>
+    <string name="settings_deleted_note_notify">Erinnerungen absagen und Hinweis zeigen</string>
+    <string name="notification_deleted_note_channel_name">Gelöschte Notizen</string>
+    <string name="notification_deleted_note_channel_description">Meldet, wenn eine Notiz mit Erinnerungen außerhalb der App gelöscht wurde</string>
+    <string name="notification_deleted_note_title">Notiz „%1$s“ wurde gelöscht</string>
+    <string name="notification_deleted_note_unknown">Unbekannte Notiz</string>
+    <plurals name="notification_deleted_note_text">
+        <item quantity="one">%1$d Erinnerung wurde abgesagt.</item>
+        <item quantity="other">%1$d Erinnerungen wurden abgesagt.</item>
+    </plurals>
+    <string name="home_index_first_build">Notizen werden eingelesen · %1$d von %2$d</string>
+    <plurals name="home_sync_reading">
+        <item quantity="one">%1$d geänderte Notiz wird gelesen</item>
+        <item quantity="other">%1$d geänderte Notizen werden gelesen</item>
+    </plurals>
+    <string name="home_conflict_title">Konflikt in %1$s</string>
+    <string name="home_conflict_text">Syncthing hat zwei Fassungen dieser Notiz gespeichert. Die Aufgaben der Kopie werden nicht angezeigt. Führe sie in Obsidian zusammen und lösche danach die Konfliktkopie.</string>
 </resources>

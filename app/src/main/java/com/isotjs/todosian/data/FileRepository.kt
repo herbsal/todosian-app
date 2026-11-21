@@ -113,6 +113,9 @@ interface FileRepository {
      */
     suspend fun getCategories(markers: TaskMarkers = TaskMarkers.Default, fresh: Boolean = false): Result<List<Category>>
 
+    /** The lists as the note index knows them, without looking at the folders; empty if unknown. */
+    suspend fun getIndexedCategories(markers: TaskMarkers = TaskMarkers.Default): List<Category> = emptyList()
+
     suspend fun readLines(uri: Uri): Result<List<String>>
 
     suspend fun getDisplayName(uri: Uri): Result<String>
@@ -347,27 +350,39 @@ class SafFileRepository(
             runCatching {
                 val folders = noteFolders()
                 vaultSync.retainFolders(folders.map { it.uri })
-                val today = LocalDate.now().toString()
-                folders
-                    .flatMap { folder -> syncFolderOrEmpty(folder, recursive) }
-                    .map { (folder, synced) ->
-                        // Lists come from the note index; only notes that changed were read.
-                        val todos = MarkdownParser.parse(synced.lines, markers)
-                        val activeTodos = todos.filter { !it.isDone }
-                        Category(
-                            displayName = folder.prefix + synced.entry.relativePath,
-                            uri = synced.entry.ref,
-                            todoCount = todos.size,
-                            doneCount = todos.count { it.isDone },
-                            dueTodayCount = activeTodos.count { it.dueDate == today },
-                            overdueCount = activeTodos.count { todo -> todo.dueDate?.let { it < today } == true },
-                            openTodos = activeTodos,
-                            todos = todos,
-                        )
-                    }
-                    .sortedBy { it.displayName.lowercase() }
+                // Lists come from the note index; only notes that changed were read.
+                categoriesOf(folders.flatMap { folder -> syncFolderOrEmpty(folder, recursive) }, markers)
             }
         }
+    }
+
+    override suspend fun getIndexedCategories(markers: TaskMarkers): List<Category> {
+        if (getFolderUri() == null) return emptyList()
+        return withContext(Dispatchers.IO) {
+            runCatching {
+                categoriesOf(noteFolders().flatMap { folder -> vaultSync.indexedNotes(folder.uri).map { folder to it } }, markers)
+            }.getOrDefault(emptyList())
+        }
+    }
+
+    private fun categoriesOf(notes: List<Pair<NoteFolder, SyncedNote>>, markers: TaskMarkers): List<Category> {
+        val today = LocalDate.now().toString()
+        return notes
+            .map { (folder, synced) ->
+                val todos = MarkdownParser.parse(synced.lines, markers)
+                val activeTodos = todos.filter { !it.isDone }
+                Category(
+                    displayName = folder.prefix + synced.entry.relativePath,
+                    uri = synced.entry.ref,
+                    todoCount = todos.size,
+                    doneCount = todos.count { it.isDone },
+                    dueTodayCount = activeTodos.count { it.dueDate == today },
+                    overdueCount = activeTodos.count { todo -> todo.dueDate?.let { it < today } == true },
+                    openTodos = activeTodos,
+                    todos = todos,
+                )
+            }
+            .sortedBy { it.displayName.lowercase() }
     }
 
     override suspend fun readLines(uri: Uri): Result<List<String>> {

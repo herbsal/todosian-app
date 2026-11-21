@@ -33,6 +33,17 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.ui.text.input.ImeAction
+import com.isotjs.todosian.data.settings.DeletedNoteReminders
+import com.isotjs.todosian.data.settings.normalizeFolderPath
 import com.isotjs.todosian.R
 import com.isotjs.todosian.data.IndexStats
 import com.isotjs.todosian.data.VaultSync
@@ -197,3 +208,68 @@ private fun relative(time: Long?): String =
     } else {
         DateUtils.getRelativeTimeSpanString(time, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS).toString()
     }
+
+/** The folders whose notes the app leaves out: a list with remove buttons and a field to add one. */
+@Composable
+internal fun ExcludedFoldersDialog(
+    folders: Set<String>,
+    onChange: (Set<String>) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var input by remember { mutableStateOf("") }
+    fun add() {
+        val path = normalizeFolderPath(input)
+        if (path.isNotEmpty()) onChange(folders + path)
+        input = ""
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.settings_excluded_folders)) },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.settings_excluded_folders_hint),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                folders.sortedBy { it.lowercase() }.forEach { folder ->
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                        Text(text = folder, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                        IconButton(onClick = { onChange(folders - folder) }) {
+                            Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.settings_excluded_folders_remove, folder))
+                        }
+                    }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedTextField(
+                        value = input,
+                        onValueChange = { input = it },
+                        singleLine = true,
+                        placeholder = { Text(stringResource(R.string.settings_excluded_folders_placeholder)) },
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                        keyboardActions = KeyboardActions(onDone = { add() }),
+                        modifier = Modifier.weight(1f),
+                    )
+                    IconButton(onClick = { add() }, enabled = normalizeFolderPath(input).isNotEmpty()) {
+                        Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.settings_excluded_folders_add))
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                add()
+                onDismiss()
+            }) { Text(stringResource(R.string.action_ok)) }
+        },
+    )
+}
+
+@Composable
+internal fun deletedNoteRemindersLabel(mode: DeletedNoteReminders): String = when (mode) {
+    DeletedNoteReminders.CANCEL_SILENTLY -> stringResource(R.string.settings_deleted_note_silent)
+    DeletedNoteReminders.NOTIFY -> stringResource(R.string.settings_deleted_note_notify)
+}

@@ -83,6 +83,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.Lifecycle
 import com.isotjs.todosian.BuildConfig
 import com.isotjs.todosian.R
+import com.isotjs.todosian.data.VaultSync
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material3.Badge
@@ -131,6 +132,8 @@ fun HomeScreen(
         factory = HomeViewModelFactory(fileRepository, appSettingsRepository),
     )
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val syncProgress by VaultSync.progress.collectAsStateWithLifecycle()
+    val conflicts by VaultSync.conflicts.collectAsStateWithLifecycle()
     // Saved views from the views notes; read again whenever the home data refreshes.
     val savedViews by produceState(emptyList<SavedView>(), uiState, refreshSignal) {
         value = fileRepository.getSavedViews()
@@ -393,6 +396,8 @@ fun HomeScreen(
             TopAppBar(
                 title = { Text(text = stringResource(R.string.home_title)) },
                 actions = {
+                    // Shown only while changed notes are read for more than half a second.
+                    if (!(syncProgress?.firstBuild == true && uiState.categories.isEmpty())) SyncIndicator(syncProgress)
                     IconButton(onClick = onOpenSettings) {
                         Icon(
                             imageVector = Icons.Filled.Settings,
@@ -492,6 +497,11 @@ fun HomeScreen(
             }
         }
 
+        // Notes without tasks are left out of the lists (switchable); a list made here stays.
+        val listedCategories = remember(categories, settings.hideEmptyNotes, uiState.createdHere) {
+            if (settings.hideEmptyNotes) categories.filter { it.todoCount > 0 || it.uri in uiState.createdHere } else categories
+        }
+
         val contentState = remember(uiState.isLoading, categories.isEmpty()) {
             when {
                 uiState.isLoading -> HomeContentState.LOADING
@@ -520,11 +530,16 @@ fun HomeScreen(
             ) { state ->
                 when (state) {
                     HomeContentState.LOADING -> {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            TodosianLoadingIndicator()
+                        val firstBuild = syncProgress?.takeIf { it.firstBuild }
+                        if (firstBuild != null) {
+                            FirstBuildProgress(progress = firstBuild, modifier = Modifier.fillMaxSize())
+                        } else {
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                TodosianLoadingIndicator()
+                            }
                         }
                     }
 
@@ -568,9 +583,15 @@ fun HomeScreen(
                                 Spacer(modifier = Modifier.height(12.dp))
                             }
 
+                            // Syncthing conflicts: the copy's tasks are not shown, so say it here.
+                            conflicts.forEach { conflict ->
+                                ConflictCard(conflict = conflict)
+                                Spacer(modifier = Modifier.height(12.dp))
+                            }
+
                             if (settings.homeLayout == HomeLayout.TASKS) {
                                 HomeTaskSections(
-                                    categories = categories,
+                                    categories = listedCategories,
                                     settings = settings,
                                     tagDefinitions = tagDefinitionsByList,
                                     tagDisplay = tagDisplay,
@@ -591,7 +612,7 @@ fun HomeScreen(
                                 modifier = Modifier.fillMaxSize(),
                             ) {
                                 items(
-                                    items = categories,
+                                    items = listedCategories,
                                     key = { it.uri.toString() },
                                 ) { category ->
                                     CategoryCard(
