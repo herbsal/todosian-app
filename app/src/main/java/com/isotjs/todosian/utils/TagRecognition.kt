@@ -11,7 +11,8 @@ data class TagHit(val group: TagGroup, val term: TagTerm, val start: Int, val en
  * are found. Words that match:
  * - the term's name ("Alex", "5 Min") and its tags without # ("5min", "energie niedrig"),
  * - durations in other spellings ("5 Minuten", "2 Std.", "halbe Stunde"),
- * - name and group together, also with common words ("Energie niedrig", "wenig Energie").
+ * - name and group together, also with common words ("Energie niedrig", "wenig Energie"),
+ * - the user's own words for the term in the note ("dreißig Minuten").
  *
  * In a group where only one tag may be set, only the first one found counts.
  */
@@ -80,6 +81,7 @@ object TagRecognition {
         // A bare "niedrig" or "hoch" says too little; those need the group name ("Energie niedrig").
         words += bases.filter { it.lowercase() !in levelWords }
         bases.forEach { words += durationSpellings(it) }
+        words += term.words
         val name = group.name?.trim()?.takeIf { it.isNotEmpty() && !group.isPerson }
         if (name != null) {
             val levels = (listOf(term.label) + term.tags.map { it.substringAfterLast('/').removePrefix("#") })

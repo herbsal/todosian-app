@@ -363,6 +363,10 @@
     <string name="keyword_editor_keyword_label">Name</string>
     <string name="keyword_editor_keyword_tags">Spellings</string>
     <string name="keyword_editor_keyword_tags_hint">Separated by commas, the first is written</string>
+    <string name="keyword_editor_words">Own recognition words</string>
+    <string name="keyword_editor_words_example">e.g. thirty minutes, half an hour</string>
+    <string name="keyword_editor_words_hint">When you enter a task, these words also set this tag. Separated by commas.</string>
+    <string name="keyword_editor_words_automatic">Already recognized: %1$s</string>
     <string name="keyword_editor_delete">Delete</string>
     <string name="keyword_editor_profiles">Reminder profiles</string>
     <string name="keyword_editor_profiles_hint">Rules per tag, e.g. one day before at 18:00.</string>
@@ -458,6 +462,7 @@
     <string name="recognition_toggle_on">Tag recognition on, tap to turn off</string>
     <string name="recognition_toggle_off">Tag recognition off, tap to turn on</string>
     <string name="quick_add_title">Quick capture</string>
+    <string name="quick_add_all_options">All options</string>
     <string name="quick_add_hint">e.g. Buy milk tomorrow 5 pm @Shopping</string>
     <string name="quick_add_list_chip">📥 %1$s</string>
     <string name="quick_add_list_not_recognized">Ignore the list in the text</string>

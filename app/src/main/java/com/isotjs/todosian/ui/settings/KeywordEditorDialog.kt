@@ -78,11 +78,14 @@ import com.isotjs.todosian.utils.NoteProblem
 import com.isotjs.todosian.utils.NoteProblemKind
 import com.isotjs.todosian.utils.TagDefinitionParser
 import com.isotjs.todosian.utils.TagDefinitions
+import com.isotjs.todosian.utils.TagGroup
 import com.isotjs.todosian.utils.TagNote
 import com.isotjs.todosian.utils.TagNoteEdits
 import com.isotjs.todosian.utils.TagNoteGroup
 import com.isotjs.todosian.utils.TagNoteTerm
+import com.isotjs.todosian.utils.TagRecognition
 import com.isotjs.todosian.utils.TagTerm
+import com.isotjs.todosian.utils.TagWords
 import java.time.LocalTime
 import java.util.Locale
 import kotlinx.coroutines.launch
@@ -375,6 +378,7 @@ internal fun KeywordEditorDialog(
             TermPrompt(
                 term = current.term?.term,
                 view = current.view,
+                groupName = current.group?.name,
                 onDismiss = { prompt = null },
                 onConfirm = { updated ->
                     prompt = null
@@ -780,17 +784,32 @@ private fun TextPrompt(
     )
 }
 
+private const val MAX_AUTOMATIC = 10
+
 @Composable
 private fun TermPrompt(
     term: TagTerm?,
     view: Boolean,
+    groupName: String?,
     onDismiss: () -> Unit,
     onConfirm: (TagTerm) -> Unit,
     onDelete: (() -> Unit)?,
 ) {
     var label by remember { mutableStateOf(term?.label.orEmpty()) }
     var tags by remember { mutableStateOf(term?.tags?.joinToString(", ").orEmpty()) }
+    var words by remember { mutableStateOf(term?.words?.joinToString(", ").orEmpty()) }
     val parsed = TagNoteEdits.parseTagInput(tags)
+    val parsedWords = TagWords.parseInput(words)
+    // What the app already recognizes without own words, so the user only adds what is missing.
+    val automatic = remember(label, parsed, groupName) {
+        if (view || parsed.isEmpty()) {
+            emptyList()
+        } else {
+            val cleanLabel = label.replace(":", "").trim().ifEmpty { parsed.first().removePrefix("#") }
+            TagRecognition.phrasesFor(TagGroup.fromHeading(groupName, emptyList()), TagTerm(cleanLabel, parsed))
+                .distinctBy { it.lowercase() }
+        }
+    }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
@@ -803,7 +822,7 @@ private fun TermPrompt(
             Text(text = stringResource(title))
         },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.verticalScroll(rememberScrollState())) {
                 OutlinedTextField(
                     value = label,
                     onValueChange = { label = it },
@@ -818,6 +837,23 @@ private fun TermPrompt(
                         Text(stringResource(if (view) R.string.keyword_editor_view_tags_hint else R.string.keyword_editor_keyword_tags_hint))
                     },
                 )
+                if (!view) {
+                    OutlinedTextField(
+                        value = words,
+                        onValueChange = { words = it },
+                        label = { Text(stringResource(R.string.keyword_editor_words)) },
+                        placeholder = { Text(stringResource(R.string.keyword_editor_words_example)) },
+                        supportingText = { Text(stringResource(R.string.keyword_editor_words_hint)) },
+                    )
+                    if (automatic.isNotEmpty()) {
+                        Text(
+                            text = stringResource(R.string.keyword_editor_words_automatic, automatic.take(MAX_AUTOMATIC).joinToString(", ")) +
+                                if (automatic.size > MAX_AUTOMATIC) " …" else "",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
             }
         },
         confirmButton = {
@@ -825,7 +861,7 @@ private fun TermPrompt(
                 enabled = parsed.isNotEmpty(),
                 onClick = {
                     val cleanLabel = label.replace(":", "").trim().ifEmpty { parsed.first().removePrefix("#") }
-                    onConfirm(TagTerm(cleanLabel, parsed))
+                    onConfirm(TagTerm(cleanLabel, parsed, if (view) term?.words.orEmpty() else parsedWords))
                 },
             ) { Text(text = stringResource(R.string.action_ok)) }
         },

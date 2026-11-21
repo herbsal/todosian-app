@@ -136,6 +136,7 @@ fun HomeScreen(
     onOpenCategory: (android.net.Uri) -> Unit,
     onOpenSettings: () -> Unit,
     onOpenView: (SavedView) -> Unit,
+    onOpenAddTask: (listUri: android.net.Uri?, text: String) -> Unit,
     refreshSignal: Long,
     onRequireOnboarding: () -> Unit,
     modifier: Modifier = Modifier,
@@ -235,6 +236,10 @@ fun HomeScreen(
             },
             onFailed = {
                 scope.launch { snackbarHostState.showSnackbar(resources.getString(R.string.quick_add_failed)) }
+            },
+            onOpenFullAdd = { uri, text ->
+                showQuickAdd = false
+                onOpenAddTask(uri, text)
             },
         )
     }

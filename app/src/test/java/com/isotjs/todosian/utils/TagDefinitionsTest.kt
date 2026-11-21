@@ -108,4 +108,28 @@ class TagDefinitionsTest {
         assertEquals("Kita anrufen #person/alex #person/sam", both)
         assertEquals("Kita anrufen #person/sam", TagText.toggle(both, who, who.terms[0]))
     }
+
+    @Test
+    fun `words in quotes are own recognition words, not unknown text`() {
+        val note = TagDefinitionParser.parseNote(listOf("## ⏱ Aufwand", "- 30 Min: #30min, #halbestunde \"dreißig Minuten\", „halbe Std“"))
+        val term = note.definitions.groups.single().terms.single()
+        assertEquals(listOf("#30min", "#halbestunde"), term.tags)
+        assertEquals(listOf("dreißig Minuten", "halbe Std"), term.words)
+        assertTrue(note.problems.isEmpty())
+    }
+
+    @Test
+    fun `own words are written in quotes and read back`() {
+        val term = TagTerm("30 Min", listOf("#30min"), listOf("dreißig Minuten", " halbe  Stunde ", "DREIßIG MINUTEN"))
+        val line = TagNoteEdits.termLine(term)
+        assertEquals("- 30 Min: #30min \"dreißig Minuten\", \"halbe Stunde\"", line)
+        val read = TagDefinitionParser.parse(listOf("## Aufwand", line)).groups.single().terms.single()
+        assertEquals(listOf("dreißig Minuten", "halbe Stunde"), read.words)
+        assertEquals("- 5 Min: #5min", TagNoteEdits.termLine(TagTerm("5 Min", listOf("#5min"))))
+    }
+
+    @Test
+    fun `typed words are split at commas`() {
+        assertEquals(listOf("dreißig Minuten", "halbe Stunde"), TagWords.parseInput("dreißig Minuten, halbe Stunde,, \"x\"; "))
+    }
 }

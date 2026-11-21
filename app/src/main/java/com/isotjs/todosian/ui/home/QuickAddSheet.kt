@@ -1,6 +1,17 @@
 package com.isotjs.todosian.ui.home
 
 import android.net.Uri
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material3.Icon
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import com.isotjs.todosian.utils.ListRecognition
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -46,10 +57,14 @@ import com.isotjs.todosian.ui.components.RecognizedDateChip
 import com.isotjs.todosian.ui.components.RecognizedTagChips
 import com.isotjs.todosian.ui.components.RemovableChip
 import com.isotjs.todosian.ui.components.TaskInputRecognizer
+import com.isotjs.todosian.ui.components.TaskTextField
 import com.isotjs.todosian.utils.MarkdownParser
 import com.isotjs.todosian.utils.TagDefinitions
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+
+/** How far the sheet is pulled up to open the normal task sheet. */
+private val PULL_UP_DISTANCE = 56.dp
 
 /** Name of the list quick tasks go to when no list is named and no default list is set. */
 private const val INBOX_NAME = "Inbox"
@@ -58,6 +73,7 @@ private const val INBOX_NAME = "Inbox"
  * ⚡ Quick capture from the home screen: one text field. The list comes from the words
  * ("@Haushalt", "auf die Einkaufsliste"), else the default list from the settings, else "Inbox"
  * (created when missing). Dates and tags are recognized as in the task sheet.
+ * Pulling the sheet up (or "All options") opens the normal task sheet of that list with the text.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -70,6 +86,7 @@ internal fun QuickAddSheet(
     onDismiss: () -> Unit,
     onSaved: (listName: String) -> Unit,
     onFailed: () -> Unit,
+    onOpenFullAdd: (listUri: Uri?, text: String) -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
@@ -111,6 +128,17 @@ internal fun QuickAddSheet(
     val recognition = firstPass
 
     LaunchedEffect(Unit) { runCatching { focusRequester.requestFocus() } }
+
+    var openingFull by remember { mutableStateOf(false) }
+    fun openFull() {
+        if (openingFull) return
+        openingFull = true
+        // List words go, the list is chosen; date and tag words stay for the task sheet to recognize.
+        val rest = firstPass.list?.let { ListRecognition.remove(text, it) } ?: text
+        onOpenFullAdd(target?.uri, rest.trim())
+    }
+    val currentOpenFull by rememberUpdatedState(::openFull)
+    val pullDistance = with(LocalDensity.current) { PULL_UP_DISTANCE.toPx() }
 
     fun save() {
         if (text.isBlank() || saving) return
@@ -154,14 +182,32 @@ internal fun QuickAddSheet(
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp)
                 .windowInsetsPadding(WindowInsets.ime)
-                .padding(bottom = 16.dp),
+                .padding(bottom = 16.dp)
+                // The sheet is already fully open, so a pull upwards means "more": the normal task sheet.
+                // Only watched, never consumed, so pulling down still closes the sheet.
+                .pointerInput(Unit) {
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                        var dragged = 0f
+                        while (true) {
+                            val change = awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull { it.id == down.id } ?: break
+                            if (!change.pressed) break
+                            dragged += change.position.y - change.previousPosition.y
+                            if (dragged < -pullDistance) {
+                                currentOpenFull()
+                                break
+                            }
+                        }
+                    }
+                },
         ) {
             Text(text = stringResource(R.string.quick_add_title), style = MaterialTheme.typography.titleLarge)
             Spacer(modifier = Modifier.height(12.dp))
             OutlinedTextField(
                 value = text,
-                onValueChange = { text = it },
-                singleLine = true,
+                onValueChange = { text = TaskTextField.oneLine(it) },
+                maxLines = TaskTextField.MAX_LINES,
+                keyboardOptions = TaskTextField.keyboardOptions,
                 label = { Text(text = stringResource(R.string.quick_add_hint)) },
                 trailingIcon = {
                     RecognitionToggle(
@@ -213,7 +259,12 @@ internal fun QuickAddSheet(
                 RecognizedTagChips(hits = recognition.tags, onRemove = { hit -> ignoredTags = ignoredTags + hit.term.primaryTag })
             }
             Spacer(modifier = Modifier.height(16.dp))
-            Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                TextButton(onClick = { openFull() }) {
+                    Icon(Icons.Filled.KeyboardArrowUp, contentDescription = null)
+                    Text(text = stringResource(R.string.quick_add_all_options))
+                }
+                Spacer(modifier = Modifier.weight(1f))
                 TextButton(onClick = onDismiss) { Text(text = stringResource(R.string.action_cancel)) }
                 TextButton(onClick = { save() }, enabled = text.isNotBlank() && !saving) {
                     Text(text = stringResource(R.string.action_save))

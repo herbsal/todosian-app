@@ -66,6 +66,7 @@ import com.isotjs.todosian.data.settings.AppSettingsRepository
 import com.isotjs.todosian.data.settings.DailyFocusMode
 import com.isotjs.todosian.ui.components.TagFilterBar
 import com.isotjs.todosian.ui.components.TagQuickPicker
+import com.isotjs.todosian.ui.components.TaskTextField
 import com.isotjs.todosian.utils.SavedView
 import com.isotjs.todosian.utils.TagFilter
 import com.isotjs.todosian.ui.components.TasksMetaEditor
@@ -205,8 +206,9 @@ fun DailyFocusScreen(
                 Spacer(modifier = Modifier.height(12.dp))
                 OutlinedTextField(
                     value = sheetText,
-                    onValueChange = { sheetText = it },
-                    singleLine = true,
+                    onValueChange = { sheetText = TaskTextField.oneLine(it) },
+                    maxLines = TaskTextField.MAX_LINES,
+                    keyboardOptions = TaskTextField.keyboardOptions,
                     label = { Text(text = stringResource(R.string.category_edit_todo_hint)) },
                     modifier = Modifier
                         .fillMaxWidth()

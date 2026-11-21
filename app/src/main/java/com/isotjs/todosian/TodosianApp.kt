@@ -142,6 +142,10 @@ fun TodosianApp(
                 onOpenView = { view ->
                     navController.navigate(Routes.savedView(view.folder, view.name))
                 },
+                onOpenAddTask = { uri, text ->
+                    val initial = text.ifBlank { null }
+                    navController.navigate(if (uri != null) Routes.category(uri, addTodo = true, text = initial) else Routes.addTask(initial))
+                },
                 refreshSignal = refreshSignal,
                 onRequireOnboarding = {
                     navController.navigate(Routes.Onboarding) {

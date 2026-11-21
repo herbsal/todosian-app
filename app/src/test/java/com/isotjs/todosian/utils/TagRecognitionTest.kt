@@ -59,4 +59,16 @@ class TagRecognitionTest {
     fun noDefinitionsNoHits() {
         assertEquals(emptyList<TagHit>(), TagRecognition.find("Alex 5 Minuten", TagDefinitions.EMPTY))
     }
+
+    @Test
+    fun ownWordsSetTheTag() {
+        val own = TagDefinitionParser.parse(
+            listOf("## ⏱ Aufwand", "- 30 Min: #30min \"dreißig Minuten\", \"kurz mal\"", "## 👤 Person", "- Alex: #person/alex \"Papa\""),
+        )
+        val text = "Papa Rasen mähen dreißig Minuten"
+        val hits = TagRecognition.find(text, own)
+        assertEquals(listOf("Alex", "30 Min"), hits.map { it.term.label })
+        assertEquals("Papa Rasen mähen #person/alex #30min", TagRecognition.apply(text, hits, removeWords = true))
+        assertEquals(listOf("30 Min"), TagRecognition.find("Kurz mal aufräumen", own).map { it.term.label })
+    }
 }
