@@ -86,6 +86,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.Lifecycle
 import com.isotjs.todosian.BuildConfig
 import com.isotjs.todosian.R
+import com.isotjs.todosian.ui.components.rememberTagDefinitions
 import com.isotjs.todosian.data.VaultSync
 import com.isotjs.todosian.ui.preview.NotePreviewSheet
 import com.isotjs.todosian.utils.ObsidianLinks
@@ -148,8 +149,9 @@ fun HomeScreen(
     val syncProgress by VaultSync.progress.collectAsStateWithLifecycle()
     val conflicts by VaultSync.conflicts.collectAsStateWithLifecycle()
     // Saved views from the views notes; read again whenever the home data refreshes.
-    val savedViews by produceState(emptyList<SavedView>(), uiState, refreshSignal) {
-        value = fileRepository.getSavedViews()
+    val savedViews by produceState(fileRepository.cachedSavedViews() ?: emptyList(), uiState, refreshSignal) {
+        val read = fileRepository.getSavedViews()
+        if (read != value) value = read
     }
 
     var showChangelogSheet by remember { mutableStateOf(false) }
@@ -186,7 +188,7 @@ fun HomeScreen(
     }
 
     val settings by appSettingsRepository.settings.collectAsStateWithLifecycle(
-        initialValue = com.isotjs.todosian.data.settings.AppSettings(),
+        initialValue = remember { appSettingsRepository.current },
     )
 
     LaunchedEffect(refreshSignal) {
@@ -197,16 +199,8 @@ fun HomeScreen(
     val shownTab = if (tab == HomeTab.FOCUS && !settings.showDailyFocus) HomeTab.LISTS else tab
     val tagDisplay = remember(settings.tagDisplay) { TagDisplaySettings.decode(settings.tagDisplay) }
     // Tags per list (from the Tags note of its folder), for the symbols in the task rows.
-    val tagDefinitionsByList by produceState(
-        uiState.categories.associate { it.uri to (fileRepository.cachedTagDefinitions(it.uri) ?: TagDefinitions.EMPTY) },
-        uiState.categories,
-    ) {
-        // The tags last read first (symbols at once), then fresh from the tag note if they changed.
-        val cached = uiState.categories.associate { it.uri to (fileRepository.cachedTagDefinitions(it.uri) ?: TagDefinitions.EMPTY) }
-        if (cached != value) value = cached
-        val fresh = uiState.categories.associate { category -> category.uri to fileRepository.getTagDefinitions(category.uri) }
-        if (fresh != value) value = fresh
-    }
+    val listUris = remember(uiState.categories) { uiState.categories.map { it.uri } }
+    val tagDefinitionsByList = rememberTagDefinitions(fileRepository, listUris)
 
     var showNewCategorySheet by remember { mutableStateOf(false) }
     var showQuickAdd by remember { mutableStateOf(false) }

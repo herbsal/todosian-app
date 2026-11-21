@@ -136,7 +136,7 @@ fun CategoryScreen(
     }
 
     val settings by appSettingsRepository.settings.collectAsStateWithLifecycle(
-        initialValue = com.isotjs.todosian.data.settings.AppSettings(),
+        initialValue = remember { appSettingsRepository.current },
     )
 
     val tagDisplay = remember(settings.tagDisplay) { TagDisplaySettings.decode(settings.tagDisplay) }
