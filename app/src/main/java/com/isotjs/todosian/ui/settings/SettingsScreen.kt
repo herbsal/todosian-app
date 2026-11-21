@@ -18,6 +18,8 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
 import android.text.format.DateFormat
+import androidx.activity.compose.BackHandler
+import androidx.annotation.StringRes
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -77,6 +79,7 @@ import androidx.compose.material.icons.filled.FilterListOff
 import androidx.compose.material.icons.filled.FolderOff
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.VerticalAlignTop
 import androidx.compose.material.icons.filled.ViewDay
 import androidx.compose.material3.AlertDialog
@@ -113,6 +116,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -659,6 +663,10 @@ fun SettingsScreen(
         )
     }
 
+    // Main page with the sections; each section opens as its own page, "back" returns to the main page.
+    var section by rememberSaveable { mutableStateOf<SettingsSection?>(null) }
+    BackHandler(enabled = section != null) { section = null }
+
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
 
     Scaffold(
@@ -667,9 +675,9 @@ fun SettingsScreen(
             .nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
             LargeTopAppBar(
-                title = { Text(text = stringResource(R.string.settings_title)) },
+                title = { Text(text = stringResource(section?.title ?: R.string.settings_title)) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = { if (section != null) section = null else onBack() }) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = stringResource(R.string.cd_navigate_back),
@@ -695,6 +703,104 @@ fun SettingsScreen(
                 contentPadding = PaddingValues(top = 4.dp, bottom = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
+                when (section) {
+                    null -> {
+                item {
+                    SettingsGroup(title = null) {
+                        SettingsNavRow(
+                            icon = Icons.Filled.Folder,
+                            title = stringResource(SettingsSection.VAULT.title),
+                            subtitle = stringResource(SettingsSection.VAULT.summary),
+                            onClick = { section = SettingsSection.VAULT },
+                        )
+
+                        SettingsDivider()
+
+                        SettingsNavRow(
+                            icon = Icons.Filled.ColorLens,
+                            title = stringResource(SettingsSection.VIEW.title),
+                            subtitle = stringResource(SettingsSection.VIEW.summary),
+                            onClick = { section = SettingsSection.VIEW },
+                        )
+
+                        SettingsDivider()
+
+                        SettingsNavRow(
+                            icon = Icons.AutoMirrored.Filled.Sort,
+                            title = stringResource(SettingsSection.TASKS.title),
+                            subtitle = stringResource(SettingsSection.TASKS.summary),
+                            onClick = { section = SettingsSection.TASKS },
+                        )
+
+                        SettingsDivider()
+
+                        SettingsNavRow(
+                            icon = Icons.Filled.NotificationsActive,
+                            title = stringResource(SettingsSection.REMINDERS.title),
+                            subtitle = stringResource(SettingsSection.REMINDERS.summary),
+                            onClick = { section = SettingsSection.REMINDERS },
+                        )
+
+                        SettingsDivider()
+
+                        SettingsNavRow(
+                            icon = Icons.Filled.Sell,
+                            title = stringResource(SettingsSection.TAGS.title),
+                            subtitle = stringResource(SettingsSection.TAGS.summary),
+                            onClick = { section = SettingsSection.TAGS },
+                        )
+
+                        SettingsDivider()
+
+                        SettingsNavRow(
+                            icon = Icons.Filled.Sync,
+                            title = stringResource(SettingsSection.SYNC.title),
+                            subtitle = stringResource(SettingsSection.SYNC.summary),
+                            onClick = { section = SettingsSection.SYNC },
+                        )
+
+                        SettingsDivider()
+
+                        SettingsNavRow(
+                            icon = Icons.Filled.Tune,
+                            title = stringResource(SettingsSection.EXPERT.title),
+                            subtitle = stringResource(SettingsSection.EXPERT.summary),
+                            onClick = { section = SettingsSection.EXPERT },
+                        )
+                    }
+                }
+                item {
+                    SettingsGroup(title = stringResource(R.string.settings_about)) {
+                        SettingsNavRow(
+                            icon = Icons.Filled.AutoAwesome,
+                            title = stringResource(R.string.settings_whats_new),
+                            subtitle = stringResource(R.string.settings_whats_new_subtitle),
+                            onClick = {
+                                showChangelogSheet = true
+                                preferencesManager.saveLastSeenVersionCode(BuildConfig.VERSION_CODE)
+                            },
+                        )
+
+                        SettingsDivider()
+
+                        SettingsInfoRow(
+                            icon = Icons.Filled.Info,
+                            title = stringResource(R.string.settings_version),
+                            subtitle = "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
+                        )
+
+                        SettingsDivider()
+
+                        SettingsInfoRow(
+                            icon = Icons.Filled.Info,
+                            title = stringResource(R.string.settings_android_sdk),
+                            subtitle = Build.VERSION.SDK_INT.toString(),
+                        )
+                    
+                    }
+                }
+                    }
+                    SettingsSection.VAULT -> {
                 item {
                     SettingsGroup(title = stringResource(R.string.settings_storage)) {
                         val folderText = storageState.folderDisplayName
@@ -811,9 +917,34 @@ fun SettingsScreen(
                             showChevron = false,
                             onClick = { showResetDialog = true },
                         )
+                    
                     }
                 }
+                item {
+                    SettingsGroup(title = null) {
+                        SettingsNavRow(
+                            icon = Icons.AutoMirrored.Filled.OpenInNew,
+                            title = stringResource(R.string.settings_obsidian_vault),
+                            subtitle = settings.obsidianVaultName.ifBlank { mainFolderName },
+                            onClick = { showVaultNameDialog = true },
+                        )
 
+                        SettingsDivider()
+
+                        SettingsNavRow(
+                            icon = Icons.Filled.FolderOff,
+                            title = stringResource(R.string.settings_excluded_folders),
+                            subtitle = if (settings.excludedFolders.isEmpty()) {
+                                stringResource(R.string.settings_excluded_folders_none)
+                            } else {
+                                settings.excludedFolders.sortedBy { it.lowercase() }.joinToString(", ")
+                            },
+                            onClick = { showExcludedFoldersDialog = true },
+                        )
+                    }
+                }
+                    }
+                    SettingsSection.VIEW -> {
                 item {
                     SettingsGroup(title = stringResource(R.string.settings_appearance)) {
                         SettingsNavRow(
@@ -838,266 +969,11 @@ fun SettingsScreen(
                             enabled = dynamicEnabled,
                             onCheckedChange = { appSettingsRepository.setDynamicColorEnabled(it) },
                         )
+                    
                     }
                 }
-
                 item {
-                    SettingsGroup(title = stringResource(R.string.settings_behaviour)) {
-                        SettingsSwitchRow(
-                            icon = Icons.Filled.Info,
-                            title = stringResource(R.string.settings_show_daily_focus),
-                            subtitle = stringResource(R.string.settings_show_daily_focus_subtitle),
-                            checked = settings.showDailyFocus,
-                            onCheckedChange = { appSettingsRepository.setShowDailyFocus(it) },
-                        )
-
-                        AnimatedVisibility(
-                            visible = settings.showDailyFocus,
-                            enter = fadeIn(tween(180)) + expandVertically(tween(220)),
-                            exit = fadeOut(tween(140)) + shrinkVertically(tween(200)),
-                        ) {
-                            Column {
-                                SettingsDivider()
-                                SettingsNavRow(
-                                    icon = Icons.Filled.Info,
-                                    title = stringResource(R.string.settings_daily_focus_mode),
-                                    subtitle = dailyFocusModeLabel(settings.dailyFocusMode),
-                                    onClick = { showDailyFocusModeDialog = true },
-                                )
-                            }
-                        }
-
-                        SettingsDivider()
-
-                        SettingsSwitchRow(
-                            icon = Icons.Filled.Info,
-                            title = stringResource(R.string.settings_enable_tasks_plugin_support),
-                            subtitle = stringResource(R.string.settings_enable_tasks_plugin_support_subtitle),
-                            checked = settings.enableTasksPluginSupport,
-                            onCheckedChange = { enabled ->
-                                appSettingsRepository.setEnableTasksPluginSupport(enabled)
-
-                                if (!enabled) return@SettingsSwitchRow
-                                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return@SettingsSwitchRow
-
-                                val granted = ContextCompat.checkSelfPermission(
-                                    context,
-                                    Manifest.permission.POST_NOTIFICATIONS,
-                                ) == PackageManager.PERMISSION_GRANTED
-                                if (!granted) {
-                                    notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                                }
-                            },
-                        )
-
-                        AnimatedVisibility(
-                            visible = settings.enableTasksPluginSupport,
-                            enter = fadeIn(tween(180)) + expandVertically(tween(220)),
-                            exit = fadeOut(tween(140)) + shrinkVertically(tween(200)),
-                        ) {
-                            Column {
-                                SettingsDivider()
-                                SettingsSwitchRow(
-                                    icon = Icons.Filled.Info,
-                                    title = stringResource(R.string.settings_tasks_plugin_ui_emojis),
-                                    subtitle = stringResource(R.string.settings_tasks_plugin_ui_emojis_subtitle),
-                                    checked = settings.tasksPluginUseEmojisInUi,
-                                    onCheckedChange = { appSettingsRepository.setTasksPluginUseEmojisInUi(it) },
-                                )
-
-                                SettingsDivider()
-
-                                SettingsNavRow(
-                                    icon = Icons.Filled.Edit,
-                                    title = stringResource(R.string.settings_markers_title),
-                                    subtitle = stringResource(R.string.settings_markers_subtitle),
-                                    onClick = { showMarkersSheet = true },
-                                )
-
-                                SettingsDivider()
-
-                                SettingsNavRow(
-                                    icon = Icons.Filled.Schedule,
-                                    title = stringResource(R.string.settings_reminder_time),
-                                    subtitle = stringResource(
-                                        R.string.settings_reminder_time_subtitle,
-                                        reminderTimeLabel
-                                    ),
-                                    onClick = { showReminderTimeDialog = true },
-                                )
-                            }
-                        }
-
-                        SettingsDivider()
-
-                        SettingsNavRow(
-                            icon = Icons.Filled.Schedule,
-                            title = stringResource(R.string.settings_reminder_repeat),
-                            subtitle = stringResource(
-                                R.string.settings_reminder_repeat_subtitle,
-                                reminderRepeatLabel(settings.reminderRepeat),
-                            ),
-                            onClick = { showReminderRepeatDialog = true },
-                        )
-
-                        SettingsDivider()
-
-                        SettingsNavRow(
-                            icon = Icons.Filled.Sync,
-                            title = stringResource(R.string.settings_folder_watch),
-                            subtitle = stringResource(
-                                R.string.settings_folder_watch_subtitle,
-                                if (settings.folderWatchMode == FolderWatchMode.INSTANT && !hasAllFilesAccess) {
-                                    stringResource(R.string.settings_folder_watch_no_access)
-                                } else {
-                                    folderWatchLabel(settings.folderWatchMode)
-                                },
-                            ),
-                            onClick = { showFolderWatchDialog = true },
-                        )
-
-                        SettingsDivider()
-
-                        SettingsNavRow(
-                            icon = Icons.Filled.Storage,
-                            title = stringResource(R.string.settings_index),
-                            subtitle = stringResource(R.string.settings_index_deep_check) + ": " +
-                                deepCheckModeLabel(settings.deepCheckMode),
-                            onClick = { showIndexDialog = true },
-                        )
-
-                        SettingsDivider()
-
-                        SettingsNavRow(
-                            icon = Icons.AutoMirrored.Filled.OpenInNew,
-                            title = stringResource(R.string.settings_obsidian_vault),
-                            subtitle = settings.obsidianVaultName.ifBlank { mainFolderName },
-                            onClick = { showVaultNameDialog = true },
-                        )
-
-                        SettingsDivider()
-
-                        SettingsNavRow(
-                            icon = Icons.Filled.FolderOff,
-                            title = stringResource(R.string.settings_excluded_folders),
-                            subtitle = if (settings.excludedFolders.isEmpty()) {
-                                stringResource(R.string.settings_excluded_folders_none)
-                            } else {
-                                settings.excludedFolders.sortedBy { it.lowercase() }.joinToString(", ")
-                            },
-                            onClick = { showExcludedFoldersDialog = true },
-                        )
-
-                        SettingsDivider()
-
-                        SettingsNavRow(
-                            icon = Icons.Filled.DeleteSweep,
-                            title = stringResource(R.string.settings_deleted_note),
-                            subtitle = deletedNoteRemindersLabel(settings.deletedNoteReminders),
-                            onClick = { showDeletedNoteDialog = true },
-                        )
-
-                        SettingsDivider()
-
-                        SettingsNavRow(
-                            icon = Icons.Filled.Fingerprint,
-                            title = stringResource(R.string.settings_task_ids),
-                            subtitle = taskIdModeLabel(settings.taskIdMode),
-                            onClick = { showTaskIdDialog = true },
-                        )
-
-                        SettingsDivider()
-
-                        SettingsNavRow(
-                            icon = Icons.AutoMirrored.Filled.CallMerge,
-                            title = stringResource(R.string.settings_conflicts),
-                            subtitle = conflictModeLabel(settings.conflictMode),
-                            onClick = { showConflictModeDialog = true },
-                        )
-
-                        SettingsDivider()
-
-                        SettingsNavRow(
-                            icon = Icons.AutoMirrored.Filled.Undo,
-                            title = stringResource(R.string.undo_history_title),
-                            subtitle = stringResource(R.string.undo_history_summary),
-                            onClick = { showUndoHistory = true },
-                        )
-
-                        SettingsDivider()
-
-                        SettingsNavRow(
-                            icon = Icons.Filled.Restore,
-                            title = stringResource(R.string.settings_merged_conflicts),
-                            subtitle = stringResource(R.string.settings_merged_conflicts_hint),
-                            onClick = { showMergedConflictsDialog = true },
-                        )
-
-                        SettingsDivider()
-
-                        SettingsNavRow(
-                            icon = Icons.Filled.NotificationsActive,
-                            title = stringResource(R.string.settings_reminder_profiles),
-                            subtitle = if (settings.profileRemindersEnabled) {
-                                stringResource(R.string.settings_reminder_profiles_subtitle)
-                            } else {
-                                stringResource(R.string.settings_reminder_profiles_subtitle_off)
-                            },
-                            onClick = { showReminderProfilesDialog = true },
-                        )
-
-                        SettingsDivider()
-
-                        SettingsNavRow(
-                            icon = Icons.Filled.FiberNew,
-                            title = stringResource(R.string.settings_new_task_alerts),
-                            subtitle = if (newTaskAlertFiles.isEmpty()) {
-                                stringResource(R.string.settings_new_task_alerts_off)
-                            } else {
-                                pluralStringResource(R.plurals.settings_new_task_alerts_lists, newTaskAlertFiles.size, newTaskAlertFiles.size)
-                            },
-                            onClick = { showNewTaskAlertDialog = true },
-                        )
-
-                        SettingsDivider()
-
-                        SettingsNavRow(
-                            icon = Icons.Filled.Sell,
-                            title = stringResource(R.string.settings_keyword_editor),
-                            subtitle = stringResource(R.string.settings_keyword_editor_subtitle),
-                            onClick = { showKeywordEditor = true },
-                        )
-
-                        SettingsDivider()
-
-                        SettingsNavRow(
-                            icon = Icons.AutoMirrored.Filled.Label,
-                            title = stringResource(R.string.settings_tag_display),
-                            subtitle = stringResource(R.string.settings_tag_display_subtitle),
-                            onClick = { showTagDisplayDialog = true },
-                        )
-
-                        SettingsDivider()
-
-                        SettingsSwitchRow(
-                            icon = Icons.Filled.AutoAwesome,
-                            title = stringResource(R.string.settings_tag_recognition),
-                            subtitle = stringResource(R.string.settings_tag_recognition_subtitle),
-                            checked = settings.tagRecognition,
-                            onCheckedChange = { appSettingsRepository.setTagRecognition(it) },
-                        )
-
-                        SettingsSwitchRow(
-                            icon = Icons.Filled.ContentCut,
-                            title = stringResource(R.string.settings_tag_recognition_remove),
-                            subtitle = stringResource(R.string.settings_tag_recognition_remove_subtitle),
-                            checked = settings.tagRecognitionRemoveWords,
-                            onCheckedChange = { appSettingsRepository.setTagRecognitionRemoveWords(it) },
-                            enabled = settings.tagRecognition,
-                        )
-
-                        SettingsDivider()
-
+                    SettingsGroup(title = stringResource(R.string.settings_section_home)) {
                         SettingsNavRow(
                             icon = Icons.Filled.Home,
                             title = stringResource(R.string.settings_start_tab),
@@ -1143,6 +1019,35 @@ fun SettingsScreen(
 
                         SettingsDivider()
 
+                        SettingsSwitchRow(
+                            icon = Icons.Filled.Info,
+                            title = stringResource(R.string.settings_show_daily_focus),
+                            subtitle = stringResource(R.string.settings_show_daily_focus_subtitle),
+                            checked = settings.showDailyFocus,
+                            onCheckedChange = { appSettingsRepository.setShowDailyFocus(it) },
+                        )
+
+                        AnimatedVisibility(
+                            visible = settings.showDailyFocus,
+                            enter = fadeIn(tween(180)) + expandVertically(tween(220)),
+                            exit = fadeOut(tween(140)) + shrinkVertically(tween(200)),
+                        ) {
+                            Column {
+                                SettingsDivider()
+                                SettingsNavRow(
+                                    icon = Icons.Filled.Info,
+                                    title = stringResource(R.string.settings_daily_focus_mode),
+                                    subtitle = dailyFocusModeLabel(settings.dailyFocusMode),
+                                    onClick = { showDailyFocusModeDialog = true },
+                                )
+                            }
+                        }
+                    }
+                }
+                    }
+                    SettingsSection.TASKS -> {
+                item {
+                    SettingsGroup(title = null) {
                         SettingsNavRow(
                             icon = Icons.AutoMirrored.Filled.Sort,
                             title = stringResource(R.string.settings_category_sort),
@@ -1186,11 +1091,10 @@ fun SettingsScreen(
                                 ?: stringResource(R.string.settings_default_add_task_file_ask),
                             onClick = { showDefaultAddTaskFileDialog = true },
                         )
-                    }
-                }
+                    
 
-                item {
-                    SettingsGroup(title = null) {
+                        SettingsDivider()
+
                         SettingsSwitchRow(
                             icon = Icons.Filled.Info,
                             title = stringResource(R.string.settings_enable_subtasks),
@@ -1198,36 +1102,230 @@ fun SettingsScreen(
                             checked = settings.enableSubtasks,
                             onCheckedChange = { appSettingsRepository.setEnableSubtasks(it) },
                         )
+                    
                     }
                 }
-
+                    }
+                    SettingsSection.REMINDERS -> {
                 item {
-                    SettingsGroup(title = stringResource(R.string.settings_about)) {
+                    SettingsGroup(title = null) {
                         SettingsNavRow(
+                            icon = Icons.Filled.Schedule,
+                            title = stringResource(R.string.settings_reminder_repeat),
+                            subtitle = stringResource(
+                                R.string.settings_reminder_repeat_subtitle,
+                                reminderRepeatLabel(settings.reminderRepeat),
+                            ),
+                            onClick = { showReminderRepeatDialog = true },
+                        )
+
+                        SettingsDivider()
+
+                        SettingsNavRow(
+                            icon = Icons.Filled.NotificationsActive,
+                            title = stringResource(R.string.settings_reminder_profiles),
+                            subtitle = if (settings.profileRemindersEnabled) {
+                                stringResource(R.string.settings_reminder_profiles_subtitle)
+                            } else {
+                                stringResource(R.string.settings_reminder_profiles_subtitle_off)
+                            },
+                            onClick = { showReminderProfilesDialog = true },
+                        )
+
+                        SettingsDivider()
+
+                        SettingsNavRow(
+                            icon = Icons.Filled.FiberNew,
+                            title = stringResource(R.string.settings_new_task_alerts),
+                            subtitle = if (newTaskAlertFiles.isEmpty()) {
+                                stringResource(R.string.settings_new_task_alerts_off)
+                            } else {
+                                pluralStringResource(R.plurals.settings_new_task_alerts_lists, newTaskAlertFiles.size, newTaskAlertFiles.size)
+                            },
+                            onClick = { showNewTaskAlertDialog = true },
+                        )
+
+                        if (settings.enableTasksPluginSupport) {
+                            SettingsDivider()
+                            SettingsNavRow(
+                                icon = Icons.Filled.Schedule,
+                                title = stringResource(R.string.settings_reminder_time),
+                                subtitle = stringResource(
+                                    R.string.settings_reminder_time_subtitle,
+                                    reminderTimeLabel
+                                ),
+                                onClick = { showReminderTimeDialog = true },
+                            )
+                        }
+                    }
+                }
+                    }
+                    SettingsSection.TAGS -> {
+                item {
+                    SettingsGroup(title = null) {
+                        SettingsNavRow(
+                            icon = Icons.Filled.Sell,
+                            title = stringResource(R.string.settings_keyword_editor),
+                            subtitle = stringResource(R.string.settings_keyword_editor_subtitle),
+                            onClick = { showKeywordEditor = true },
+                        )
+
+                        SettingsDivider()
+
+                        SettingsNavRow(
+                            icon = Icons.AutoMirrored.Filled.Label,
+                            title = stringResource(R.string.settings_tag_display),
+                            subtitle = stringResource(R.string.settings_tag_display_subtitle),
+                            onClick = { showTagDisplayDialog = true },
+                        )
+
+                        SettingsDivider()
+
+                        SettingsSwitchRow(
                             icon = Icons.Filled.AutoAwesome,
-                            title = stringResource(R.string.settings_whats_new),
-                            subtitle = stringResource(R.string.settings_whats_new_subtitle),
-                            onClick = {
-                                showChangelogSheet = true
-                                preferencesManager.saveLastSeenVersionCode(BuildConfig.VERSION_CODE)
+                            title = stringResource(R.string.settings_tag_recognition),
+                            subtitle = stringResource(R.string.settings_tag_recognition_subtitle),
+                            checked = settings.tagRecognition,
+                            onCheckedChange = { appSettingsRepository.setTagRecognition(it) },
+                        )
+
+                        SettingsSwitchRow(
+                            icon = Icons.Filled.ContentCut,
+                            title = stringResource(R.string.settings_tag_recognition_remove),
+                            subtitle = stringResource(R.string.settings_tag_recognition_remove_subtitle),
+                            checked = settings.tagRecognitionRemoveWords,
+                            onCheckedChange = { appSettingsRepository.setTagRecognitionRemoveWords(it) },
+                            enabled = settings.tagRecognition,
+                        )
+                    }
+                }
+                    }
+                    SettingsSection.SYNC -> {
+                item {
+                    SettingsGroup(title = null) {
+                        SettingsNavRow(
+                            icon = Icons.Filled.Sync,
+                            title = stringResource(R.string.settings_folder_watch),
+                            subtitle = stringResource(
+                                R.string.settings_folder_watch_subtitle,
+                                if (settings.folderWatchMode == FolderWatchMode.INSTANT && !hasAllFilesAccess) {
+                                    stringResource(R.string.settings_folder_watch_no_access)
+                                } else {
+                                    folderWatchLabel(settings.folderWatchMode)
+                                },
+                            ),
+                            onClick = { showFolderWatchDialog = true },
+                        )
+
+                        SettingsDivider()
+
+                        SettingsNavRow(
+                            icon = Icons.Filled.Storage,
+                            title = stringResource(R.string.settings_index),
+                            subtitle = stringResource(R.string.settings_index_deep_check) + ": " +
+                                deepCheckModeLabel(settings.deepCheckMode),
+                            onClick = { showIndexDialog = true },
+                        )
+
+                        SettingsDivider()
+
+                        SettingsNavRow(
+                            icon = Icons.Filled.DeleteSweep,
+                            title = stringResource(R.string.settings_deleted_note),
+                            subtitle = deletedNoteRemindersLabel(settings.deletedNoteReminders),
+                            onClick = { showDeletedNoteDialog = true },
+                        )
+
+                        SettingsDivider()
+
+                        SettingsNavRow(
+                            icon = Icons.AutoMirrored.Filled.CallMerge,
+                            title = stringResource(R.string.settings_conflicts),
+                            subtitle = conflictModeLabel(settings.conflictMode),
+                            onClick = { showConflictModeDialog = true },
+                        )
+
+                        SettingsDivider()
+
+                        SettingsNavRow(
+                            icon = Icons.Filled.Restore,
+                            title = stringResource(R.string.settings_merged_conflicts),
+                            subtitle = stringResource(R.string.settings_merged_conflicts_hint),
+                            onClick = { showMergedConflictsDialog = true },
+                        )
+
+                        SettingsDivider()
+
+                        SettingsNavRow(
+                            icon = Icons.AutoMirrored.Filled.Undo,
+                            title = stringResource(R.string.undo_history_title),
+                            subtitle = stringResource(R.string.undo_history_summary),
+                            onClick = { showUndoHistory = true },
+                        )
+                    }
+                }
+                    }
+                    SettingsSection.EXPERT -> {
+                item {
+                    SettingsGroup(title = null) {
+                        SettingsSwitchRow(
+                            icon = Icons.Filled.Info,
+                            title = stringResource(R.string.settings_enable_tasks_plugin_support),
+                            subtitle = stringResource(R.string.settings_enable_tasks_plugin_support_subtitle),
+                            checked = settings.enableTasksPluginSupport,
+                            onCheckedChange = { enabled ->
+                                appSettingsRepository.setEnableTasksPluginSupport(enabled)
+
+                                if (!enabled) return@SettingsSwitchRow
+                                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return@SettingsSwitchRow
+
+                                val granted = ContextCompat.checkSelfPermission(
+                                    context,
+                                    Manifest.permission.POST_NOTIFICATIONS,
+                                ) == PackageManager.PERMISSION_GRANTED
+                                if (!granted) {
+                                    notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                }
                             },
                         )
 
+                        AnimatedVisibility(
+                            visible = settings.enableTasksPluginSupport,
+                            enter = fadeIn(tween(180)) + expandVertically(tween(220)),
+                            exit = fadeOut(tween(140)) + shrinkVertically(tween(200)),
+                        ) {
+                            Column {
+                                SettingsDivider()
+                                SettingsSwitchRow(
+                                    icon = Icons.Filled.Info,
+                                    title = stringResource(R.string.settings_tasks_plugin_ui_emojis),
+                                    subtitle = stringResource(R.string.settings_tasks_plugin_ui_emojis_subtitle),
+                                    checked = settings.tasksPluginUseEmojisInUi,
+                                    onCheckedChange = { appSettingsRepository.setTasksPluginUseEmojisInUi(it) },
+                                )
+
+                                SettingsDivider()
+
+                                SettingsNavRow(
+                                    icon = Icons.Filled.Edit,
+                                    title = stringResource(R.string.settings_markers_title),
+                                    subtitle = stringResource(R.string.settings_markers_subtitle),
+                                    onClick = { showMarkersSheet = true },
+                                )
+
+                            }
+                        }
+
                         SettingsDivider()
 
-                        SettingsInfoRow(
-                            icon = Icons.Filled.Info,
-                            title = stringResource(R.string.settings_version),
-                            subtitle = "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
+                        SettingsNavRow(
+                            icon = Icons.Filled.Fingerprint,
+                            title = stringResource(R.string.settings_task_ids),
+                            subtitle = taskIdModeLabel(settings.taskIdMode),
+                            onClick = { showTaskIdDialog = true },
                         )
-
-                        SettingsDivider()
-
-                        SettingsInfoRow(
-                            icon = Icons.Filled.Info,
-                            title = stringResource(R.string.settings_android_sdk),
-                            subtitle = Build.VERSION.SDK_INT.toString(),
-                        )
+                    }
+                }
                     }
                 }
             }
@@ -2023,4 +2121,15 @@ private fun PersonScopeDialog(
             TextButton(onClick = onDismiss) { Text(text = stringResource(R.string.action_cancel)) }
         },
     )
+}
+
+/** Pages of the settings, each opened from a row on the main page. */
+private enum class SettingsSection(@StringRes val title: Int, @StringRes val summary: Int) {
+    VAULT(R.string.settings_section_vault, R.string.settings_section_vault_summary),
+    VIEW(R.string.settings_section_view, R.string.settings_section_view_summary),
+    TASKS(R.string.settings_section_tasks, R.string.settings_section_tasks_summary),
+    REMINDERS(R.string.settings_section_reminders, R.string.settings_section_reminders_summary),
+    TAGS(R.string.settings_section_tags, R.string.settings_section_tags_summary),
+    SYNC(R.string.settings_section_sync, R.string.settings_section_sync_summary),
+    EXPERT(R.string.settings_section_expert, R.string.settings_section_expert_summary),
 }
