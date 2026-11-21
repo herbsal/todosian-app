@@ -504,9 +504,27 @@ fun TasksMetaEditor(
             icon = if (useEmojisInUi) null else Icons.Outlined.Event,
             value = meta.dueDate,
             allowClear = true,
-            onPick = { picked -> onMetaChange(meta.copy(dueDate = picked)) },
+            // A ⏰ on the old due day moves with it, so "due at 14:00" stays together.
+            onPick = { picked ->
+                val reminder = TodoDates.parseReminder(meta.reminder)
+                val moved = if (reminder != null && reminder.toLocalDate().toString() == meta.dueDate) {
+                    TodoDates.parseDate(picked)?.let { MarkdownParser.formatReminder(it.atTime(reminder.toLocalTime())) }
+                } else {
+                    null
+                }
+                onMetaChange(meta.copy(dueDate = picked, reminder = moved ?: meta.reminder))
+            },
             onClear = { onMetaChange(meta.copy(dueDate = null)) },
         )
+
+        meta.dueDate?.let { due -> TodoDates.parseDate(due) }?.let { dueDay ->
+            DueTimeRow(
+                dueDay = dueDay,
+                reminder = meta.reminder,
+                onPick = { time -> onMetaChange(meta.copy(reminder = MarkdownParser.formatReminder(dueDay.atTime(time)))) },
+                onClear = { onMetaChange(meta.copy(reminder = null)) },
+            )
+        }
 
         ReminderMetaRow(
             label = if (useEmojisInUi) {
@@ -628,6 +646,57 @@ private fun DateMetaRow(
         }
 
         if (allowClear && value != null) {
+            TextButton(onClick = onClear) {
+                Text(text = stringResource(R.string.action_clear))
+            }
+        }
+    }
+}
+
+/**
+ * Time of the due date. Obsidian Tasks dates have no time, so it is stored as ⏰ on the due day,
+ * which also reminds at that time.
+ */
+@Composable
+private fun DueTimeRow(
+    dueDay: LocalDate,
+    reminder: String?,
+    onPick: (java.time.LocalTime) -> Unit,
+    onClear: () -> Unit,
+) {
+    val context = LocalContext.current
+    val locale = LocalConfiguration.current.locales[0]
+    val onDueDay = TodoDates.parseReminder(reminder)?.takeIf { it.toLocalDate() == dueDay }
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Text(
+            text = stringResource(R.string.category_tasks_due_time),
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier
+                .weight(1f)
+                .padding(start = 26.dp),
+        )
+        TextButton(
+            onClick = {
+                val initial = onDueDay?.toLocalTime() ?: java.time.LocalTime.of(9, 0)
+                TimePickerDialog(
+                    context,
+                    { _, hour, minute -> onPick(java.time.LocalTime.of(hour, minute)) },
+                    initial.hour,
+                    initial.minute,
+                    DateFormat.is24HourFormat(context),
+                ).show()
+            },
+        ) {
+            Text(
+                text = onDueDay?.toLocalTime()?.format(DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT).withLocale(locale))
+                    ?: stringResource(R.string.action_set),
+            )
+        }
+        if (onDueDay != null) {
             TextButton(onClick = onClear) {
                 Text(text = stringResource(R.string.action_clear))
             }
@@ -895,10 +964,15 @@ internal fun buildMetaItems(
     val locale = LocalConfiguration.current.locales[0]
 
     if (enableTasksPluginSupport) {
-        TodoDates.parseDate(todo.dueDate)?.let { date ->
+        val reminderAt = TodoDates.parseReminder(todo.reminder)
+        val dueDay = TodoDates.parseDate(todo.dueDate)
+        // A ⏰ on the due day is the due time: one item "Today, 14:00" instead of two.
+        val dueTime = reminderAt?.takeIf { it.toLocalDate() == dueDay }?.toLocalTime()
+            ?.format(DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT).withLocale(locale))
+        dueDay?.let { date ->
             items.add(
                 TodoMetaItem(
-                    text = dayLabel(date, today),
+                    text = if (dueTime != null) stringResource(R.string.date_with_time, dayLabel(date, today), dueTime) else dayLabel(date, today),
                     icon = if (useEmojisInUi) null else Icons.Outlined.Event,
                     emoji = if (useEmojisInUi) "📅" else null,
                     tone = toneFor(date, today),
@@ -907,7 +981,7 @@ internal fun buildMetaItems(
             )
         } ?: todo.dueDate?.let { raw -> items.add(TodoMetaItem(text = raw, icon = Icons.Outlined.Event)) }
 
-        TodoDates.parseReminder(todo.reminder)?.let { at ->
+        reminderAt?.takeIf { dueTime == null }?.let { at ->
             val time = at.toLocalTime().format(DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT).withLocale(locale))
             items.add(
                 TodoMetaItem(

@@ -86,8 +86,9 @@ object TaskInputRecognizer {
 }
 
 /**
- * Moves a date found in the text into the task: with a time as ⏰ reminder, without as 📅 due
- * date. Without Obsidian Tasks support the markers are written into the text itself.
+ * Moves a date found in the text into the task: always as 📅 due date, with a time also as ⏰
+ * reminder on that day ("heute 14 Uhr" = due today, reminder 14:00). Obsidian Tasks dates have no
+ * time, so the ⏰ carries it. Without Obsidian Tasks support the markers go into the text itself.
  */
 internal fun applyRecognizedDate(
     match: DateMatch?,
@@ -99,9 +100,10 @@ internal fun applyRecognizedDate(
     if (match == null) return text to meta
     val reminder = match.dateTime?.let { MarkdownParser.formatReminder(it) }
     return if (tasksPlugin) {
-        match.text to if (reminder != null) meta.copy(reminder = reminder) else meta.copy(dueDate = match.date.toString())
+        match.text to meta.copy(reminder = reminder ?: meta.reminder, dueDate = meta.dueDate ?: match.date.toString())
     } else {
-        val suffix = if (reminder != null) "$REMINDER_MARKER $reminder" else "${markers.due} ${match.date}"
+        // ⏰ stays right behind the text, the date fields follow.
+        val suffix = listOfNotNull(reminder?.let { "$REMINDER_MARKER $it" }, "${markers.due} ${match.date}").joinToString(" ")
         "${match.text} $suffix" to meta
     }
 }

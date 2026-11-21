@@ -422,7 +422,7 @@
     <string name="settings_person_scope_group">Gruppe mit Personen</string>
     <string name="settings_person_scope_people">Erinnern an Aufgaben von</string>
     <string name="widget_configure_view_hint">Schnellansicht: offene Aufgaben mit diesen Tags aus allen Listen</string>
-    <string name="category_recognized_reminder">⏰ %1$s, %2$s</string>
+    <string name="category_recognized_reminder">📅 %1$s ⏰ %2$s</string>
     <string name="category_recognized_due">📅 %1$s</string>
     <string name="category_recognized_ignore">Datum als Text behalten</string>
     <string name="category_first_step_add">+ Erster Schritt</string>
@@ -494,4 +494,5 @@
         <item quantity="one">+ %1$d weitere</item>
         <item quantity="other">+ %1$d weitere</item>
     </plurals>
+    <string name="category_tasks_due_time">Uhrzeit</string>
 </resources>
