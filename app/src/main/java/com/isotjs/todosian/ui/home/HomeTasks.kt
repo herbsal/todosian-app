@@ -109,6 +109,7 @@ internal fun HomeTaskSections(
     onToggleTodo: (Category, Todo) -> Unit,
     header: LazyListScope.() -> Unit,
     modifier: Modifier = Modifier,
+    filter: SavedView? = null,
 ) {
     LazyColumn(
         contentPadding = PaddingValues(bottom = 96.dp),
@@ -117,22 +118,29 @@ internal fun HomeTaskSections(
         header()
         categories.forEach { category ->
             val key = category.uri.toString()
+            val definitions = tagDefinitions[category.uri] ?: TagDefinitions.EMPTY
+            // With a saved view chosen: only its tasks, all of them, and lists without any are left out.
+            val matching = filter?.let { view -> category.openTodos.filter { it.indentLevel == 0 && view.matches(it.text) } }
+            if (matching != null && matching.isEmpty()) return@forEach
             val collapsed = key in settings.homeCollapsed
-            val open = category.todoCount - category.doneCount
+            val open = matching?.size ?: (category.todoCount - category.doneCount)
             item(key = "header:$key") {
                 ListHeader(
                     name = category.shortName(),
                     open = open,
-                    overdue = category.overdueCount,
+                    overdue = if (matching == null) category.overdueCount else 0,
                     collapsed = collapsed,
                     onToggle = { onToggleCollapse(category) },
                     onOpen = { onOpenCategory(category.uri) },
                 )
             }
             if (!collapsed) {
-                val definitions = tagDefinitions[category.uri] ?: TagDefinitions.EMPTY
-                val preview = previewTasks(category, settings.homeTasksPerList, settings, definitions)
-                val more = category.openTodos.count { it.indentLevel == 0 } - preview.size
+                val preview = if (matching != null) {
+                    TodoSorting.sortAcrossLists(matching, settings.todoSort, settings.todoSortGroup, { it }, { definitions })
+                } else {
+                    previewTasks(category, settings.homeTasksPerList, settings, definitions)
+                }
+                val more = if (matching != null) 0 else category.openTodos.count { it.indentLevel == 0 } - preview.size
                 val rows = preview.size + if (more > 0) 1 else 0
                 if (preview.isEmpty()) {
                     item(key = "empty:$key") {
@@ -234,13 +242,14 @@ internal fun CalendarTab(
     onToggleTodo: (Category, Todo) -> Unit,
     modifier: Modifier = Modifier,
     savedViews: List<SavedView> = emptyList(),
+    viewKey: String? = null,
+    onSelectView: (String?) -> Unit = {},
 ) {
     var mode by rememberSaveable { mutableStateOf(CalendarMode.MONTH) }
     val today = LocalDate.now()
     var month by rememberSaveable { mutableStateOf(today.withDayOfMonth(1).toString()) }
     var selected by rememberSaveable { mutableStateOf(today.toString()) }
-    // The filter chips of the lists tab filter the calendar in place: one view at a time.
-    var viewKey by rememberSaveable { mutableStateOf<String?>(null) }
+    // The saved-view chips filter in place, one view at a time; the choice is shared with the lists tab.
     val activeView = savedViews.firstOrNull { viewKeyOf(it) == viewKey }
     val tasks = remember(categories, activeView, settings.todoSort, settings.todoSortGroup, tagDefinitions) {
         categories.flatMap { c -> c.openTodos.map { c.item(it) } }
@@ -257,25 +266,7 @@ internal fun CalendarTab(
     }
 
     Column(modifier = modifier.fillMaxSize()) {
-        if (savedViews.isNotEmpty()) {
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 8.dp)) {
-                items(savedViews, key = { viewKeyOf(it) }) { view ->
-                    val isActive = viewKeyOf(view) == viewKey
-                    FilterChip(
-                        selected = isActive,
-                        onClick = { viewKey = if (isActive) null else viewKeyOf(view) },
-                        label = { Text(text = view.name) },
-                        leadingIcon = {
-                            Icon(
-                                imageVector = if (isActive) Icons.Filled.Check else Icons.Filled.FilterList,
-                                contentDescription = null,
-                                modifier = Modifier.size(FilterChipDefaults.IconSize),
-                            )
-                        },
-                    )
-                }
-            }
-        }
+        SavedViewChips(views = savedViews, selectedKey = viewKey, onSelect = onSelectView, modifier = Modifier.padding(bottom = 8.dp))
         SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
             CalendarMode.entries.forEachIndexed { index, entry ->
                 SegmentedButton(
@@ -484,4 +475,32 @@ private fun DayCell(
     }
 }
 
-private fun viewKeyOf(view: SavedView): String = "${view.folder}\u001F${view.name}"
+internal fun viewKeyOf(view: SavedView): String = "${view.folder}\u001F${view.name}"
+
+/** One chip per saved view; tapping one filters the tab in place, tapping it again shows everything. */
+@Composable
+internal fun SavedViewChips(
+    views: List<SavedView>,
+    selectedKey: String?,
+    onSelect: (String?) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    if (views.isEmpty()) return
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = modifier) {
+        items(views, key = { viewKeyOf(it) }) { view ->
+            val isActive = viewKeyOf(view) == selectedKey
+            FilterChip(
+                selected = isActive,
+                onClick = { onSelect(if (isActive) null else viewKeyOf(view)) },
+                label = { Text(text = view.name) },
+                leadingIcon = {
+                    Icon(
+                        imageVector = if (isActive) Icons.Filled.Check else Icons.Filled.FilterList,
+                        contentDescription = null,
+                        modifier = Modifier.size(FilterChipDefaults.IconSize),
+                    )
+                },
+            )
+        }
+    }
+}
