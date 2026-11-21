@@ -75,6 +75,8 @@ internal object RecurrenceEngine {
         val dueDate: LocalDate?,
         val scheduledDate: LocalDate?,
         val startDate: LocalDate?,
+        /** The next date of the rule itself, also when the task has no date. */
+        val reference: LocalDate? = null,
     )
 
     fun nextOccurrence(
@@ -105,6 +107,7 @@ internal object RecurrenceEngine {
             dueDate = nextDue,
             scheduledDate = nextScheduled,
             startDate = nextStart,
+            reference = nextReference,
         )
     }
 
