@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.database.ContentObserver
 import android.net.Uri
+import androidx.core.net.toUri
 import android.os.Handler
 import android.os.Looper
 import android.provider.DocumentsContract
@@ -16,6 +17,10 @@ import com.isotjs.todosian.utils.TaskMarkers
 import com.isotjs.todosian.utils.TaskIds
 import com.isotjs.todosian.data.settings.SharedPrefsAppSettingsRepository
 import kotlinx.coroutines.CoroutineScope
+import com.isotjs.todosian.data.undo.UndoChanges
+import com.isotjs.todosian.data.undo.UndoEntry
+import com.isotjs.todosian.data.undo.UndoRecorder
+import com.isotjs.todosian.data.undo.UndoResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -135,6 +140,12 @@ interface FileRepository {
      * Returns the lines now on disk, or null when [transform] returned null and nothing was written.
      */
     suspend fun updateLines(uri: Uri, transform: (List<String>) -> List<String>?): Result<List<String>?>
+
+    /**
+     * Takes back an action ([forward] false: writes each note's state before it) or does it again,
+     * but only when every note is still as the action left it; otherwise nothing is written.
+     */
+    suspend fun applyUndo(entry: UndoEntry, forward: Boolean): UndoResult = UndoResult.FAILED
 
     suspend fun createCategory(folderUri: Uri, name: String): Result<Uri>
 
@@ -459,15 +470,38 @@ class SafFileRepository(
 
     override suspend fun updateLines(uri: Uri, transform: (List<String>) -> List<String>?): Result<List<String>?> {
         if (!isCategoryUri(uri)) return foreignUriError()
+        val recorder = UndoRecorder.current()
         return withContext(Dispatchers.IO) {
             runCatching {
                 fileMutex.withLock {
                     val currentLines = readLinesInternal(uri)
                     val newLines = transform(currentLines) ?: return@withLock null
-                    if (newLines != currentLines) writeLinesInternal(uri, newLines) else newLines
+                    if (newLines != currentLines) {
+                        writeLinesInternal(uri, newLines).also { recorder?.add(uri.toString(), currentLines, it) }
+                    } else {
+                        newLines
+                    }
                 }
             }
         }
+    }
+
+    override suspend fun applyUndo(entry: UndoEntry, forward: Boolean): UndoResult = withContext(Dispatchers.IO) {
+        runCatching {
+            fileMutex.withLock {
+                val uris = entry.changes.map { it.uri.toUri() }
+                if (uris.any { !isCategoryUri(it) }) return@withLock UndoResult.FAILED
+                val current = uris.map { readLinesInternal(it) }
+                val unchanged = entry.changes.indices.all { i ->
+                    UndoChanges.same(current[i], if (forward) entry.changes[i].before else entry.changes[i].after)
+                }
+                if (!unchanged) return@withLock UndoResult.CHANGED
+                // A task added back comes first, as when moving: a failure leaves it twice, never lost.
+                entry.changes.indices.sortedByDescending { i -> (if (forward) entry.changes[i].after else entry.changes[i].before).size }
+                    .forEach { i -> writeLinesInternal(uris[i], if (forward) entry.changes[i].after else entry.changes[i].before) }
+                UndoResult.DONE
+            }
+        }.onFailure { Log.w(TAG, "Undo failed", it) }.getOrDefault(UndoResult.FAILED)
     }
 
     /** The main folder must be readable; an extra folder that went missing is skipped. */
@@ -553,6 +587,7 @@ class SafFileRepository(
         expectedLine: String,
     ): Result<Unit> {
         if (!isCategoryUri(sourceUri) || !isCategoryUri(targetUri)) return foreignUriError()
+        val recorder = UndoRecorder.current()
         return withContext(Dispatchers.IO) {
             runCatching {
                 fileMutex.withLock {
@@ -567,8 +602,10 @@ class SafFileRepository(
                     ) ?: throw TodoLineChangedException()
 
                     // Target first: if the second write fails the todo exists twice instead of not at all.
-                    writeLinesInternal(targetUri, updated.second)
-                    writeLinesInternal(sourceUri, updated.first)
+                    val writtenTarget = writeLinesInternal(targetUri, updated.second)
+                    val writtenSource = writeLinesInternal(sourceUri, updated.first)
+                    recorder?.add(targetUri.toString(), targetLines, writtenTarget)
+                    recorder?.add(sourceUri.toString(), sourceLines, writtenSource)
                     Unit
                 }
             }

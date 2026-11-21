@@ -15,6 +15,8 @@ import com.isotjs.todosian.utils.MarkdownParser
 import com.isotjs.todosian.utils.TaskMarkers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import com.isotjs.todosian.utils.TagDefinitions
+import com.isotjs.todosian.data.undo.UndoKind
+import com.isotjs.todosian.data.undo.recordUndo
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -161,7 +163,7 @@ class CategoryViewModel(
     }
 
     fun toggleTodo(todo: Todo, enableTasksPluginSupport: Boolean) {
-        editTodoLine(todo) { lines, index, markers ->
+        editTodoLine(todo, undo = (if (todo.isDone) UndoKind.UNCHECK else UndoKind.CHECK) to todo.text) { lines, index, markers ->
             MarkdownParser.tryToggleLine(
                 lines = lines,
                 lineIndex = index,
@@ -227,7 +229,7 @@ class CategoryViewModel(
         meta: MarkdownParser.TasksMeta?,
         enableTasksPluginSupport: Boolean,
     ) {
-        editTodoLine(todo) { lines, index, markers ->
+        editTodoLine(todo, undo = UndoKind.EDIT to newText) { lines, index, markers ->
             if (enableTasksPluginSupport) {
                 MarkdownParser.editTodo(
                     lines = lines,
@@ -244,7 +246,7 @@ class CategoryViewModel(
     }
 
     fun deleteTodo(todo: Todo) {
-        editTodoLine(todo) { lines, index, _ ->
+        editTodoLine(todo, undo = UndoKind.DELETE to todo.text) { lines, index, _ ->
             MarkdownParser.tryDeleteTodoWithSubtasks(lines, index)
         }
     }
@@ -269,15 +271,16 @@ class CategoryViewModel(
 
             inFlightWrites.incrementAndGet()
             try {
-                val result = fileRepository.moveTodoLine(categoryUri, targetUri, todo.lineIndex, expectedLine)
+                val result = recordUndo(UndoKind.MOVE, todo.text) {
+                    fileRepository.moveTodoLine(categoryUri, targetUri, todo.lineIndex, expectedLine)
+                }
                 if (result.isFailure) {
                     if (_uiState.value.lines == newLines) {
                         applyLines(previousLines, markers)
                     }
                     reportFailure(result.exceptionOrNull())
-                } else {
-                    _events.emit(Event.ShowMessage(R.string.category_move_success))
                 }
+                // On success the "moved" message with "Undo" comes from the undo history.
             } finally {
                 onWriteFinishedMaybeRefresh()
             }
@@ -313,10 +316,11 @@ class CategoryViewModel(
      */
     private fun editTodoLine(
         todo: Todo,
+        undo: Pair<UndoKind, String>? = null,
         edit: (lines: List<String>, lineIndex: Int, markers: TaskMarkers) -> List<String>?,
     ) {
         val expectedLine = _uiState.value.lines.getOrNull(todo.lineIndex)
-        editLines { lines, markers ->
+        editLines(undo) { lines, markers ->
             if (expectedLine == null) return@editLines null
             val index = MarkdownParser.locateTodoLine(lines, todo.lineIndex, expectedLine)
                 ?: return@editLines null
@@ -324,8 +328,8 @@ class CategoryViewModel(
         }
     }
 
-    /** [edit] returns null when it cannot be applied to the given lines. */
-    private fun editLines(edit: (lines: List<String>, markers: TaskMarkers) -> List<String>?) {
+    /** [edit] returns null when it cannot be applied to the given lines; [undo] records it for "undo". */
+    private fun editLines(undo: Pair<UndoKind, String>? = null, edit: (lines: List<String>, markers: TaskMarkers) -> List<String>?) {
         viewModelScope.launch {
             val markers = currentMarkers()
             val previousLines = _uiState.value.lines
@@ -341,7 +345,8 @@ class CategoryViewModel(
 
             inFlightWrites.incrementAndGet()
             try {
-                val result = fileRepository.updateLines(categoryUri) { freshLines -> edit(freshLines, markers) }
+                val write = suspend { fileRepository.updateLines(categoryUri) { freshLines -> edit(freshLines, markers) } }
+                val result = if (undo != null) recordUndo(undo.first, undo.second) { write() } else write()
                 result.onSuccess { writtenLines ->
                     when {
                         writtenLines == null -> {

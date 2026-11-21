@@ -605,4 +605,19 @@
     <string name="search_list">List</string>
     <string name="settings_obsidian_vault">Vault name in Obsidian</string>
     <string name="settings_obsidian_vault_hint">Used to open notes and searches in Obsidian. Leave empty to use the name of the notes folder.</string>
+    <string name="undo_checked">Done: %1$s</string>
+    <string name="undo_unchecked">Open again: %1$s</string>
+    <string name="undo_edited">Changed: %1$s</string>
+    <string name="undo_deleted">Deleted: %1$s</string>
+    <string name="undo_moved">Moved: %1$s</string>
+    <string name="undo_snoozed">Remind later: %1$s</string>
+    <string name="undo_action">Undo</string>
+    <string name="redo_action">Redo</string>
+    <string name="undo_done">Undone: %1$s</string>
+    <string name="undo_changed">The note was changed in the meantime, so nothing was reset.</string>
+    <string name="undo_failed">Could not undo.</string>
+    <string name="undo_history_title">Recent actions</string>
+    <string name="undo_history_summary">Undo or redo your last actions</string>
+    <string name="undo_history_empty">No actions yet. The list starts anew when the app restarts.</string>
+    <string name="undo_history_undone">Undone</string>
 </resources>

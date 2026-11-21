@@ -49,6 +49,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.Sort
@@ -249,6 +250,7 @@ fun SettingsScreen(
     var showTaskIdDialog by remember { mutableStateOf(false) }
     var showConflictModeDialog by remember { mutableStateOf(false) }
     var showMergedConflictsDialog by remember { mutableStateOf(false) }
+    var showUndoHistory by remember { mutableStateOf(false) }
     var showVaultNameDialog by remember { mutableStateOf(false) }
     val mainFolderName = remember(fileRepository) {
         fileRepository.getFolderUri()?.let { folder -> ObsidianLinks.vaultName(context, folder, null, "") }.orEmpty()
@@ -431,6 +433,10 @@ fun SettingsScreen(
             onSelected = { appSettingsRepository.setConflictMode(it) },
             onDismiss = { showConflictModeDialog = false },
         )
+    }
+
+    if (showUndoHistory) {
+        UndoHistoryDialog(fileRepository = fileRepository, onDismiss = { showUndoHistory = false })
     }
 
     if (showMergedConflictsDialog) {
@@ -990,6 +996,15 @@ fun SettingsScreen(
                             title = stringResource(R.string.settings_conflicts),
                             subtitle = conflictModeLabel(settings.conflictMode),
                             onClick = { showConflictModeDialog = true },
+                        )
+
+                        SettingsDivider()
+
+                        SettingsNavRow(
+                            icon = Icons.AutoMirrored.Filled.Undo,
+                            title = stringResource(R.string.undo_history_title),
+                            subtitle = stringResource(R.string.undo_history_summary),
+                            onClick = { showUndoHistory = true },
                         )
 
                         SettingsDivider()

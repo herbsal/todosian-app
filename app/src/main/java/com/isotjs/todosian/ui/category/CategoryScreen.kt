@@ -72,6 +72,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.isotjs.todosian.R
+import com.isotjs.todosian.ui.components.UndoSnackbarEffect
 import com.isotjs.todosian.ui.preview.NotePreviewSheet
 import com.isotjs.todosian.data.FileRepository
 import com.isotjs.todosian.data.model.Todo
@@ -143,6 +144,7 @@ fun CategoryScreen(
 
     val resources = LocalResources.current
     val snackbarHostState = remember { SnackbarHostState() }
+    UndoSnackbarEffect(snackbarHostState, fileRepository) { viewModel.refreshFromDisk(showLoading = false) }
     LaunchedEffect(viewModel) {
         viewModel.events.collectLatest { event ->
             when (event) {

@@ -5,6 +5,8 @@ import android.os.SystemClock
 import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.isotjs.todosian.data.undo.UndoKind
+import com.isotjs.todosian.data.undo.recordUndo
 import com.isotjs.todosian.R
 import com.isotjs.todosian.data.FileRepository
 import com.isotjs.todosian.data.model.Category
@@ -103,13 +105,15 @@ class HomeViewModel(
         viewModelScope.launch {
             val settings = appSettingsRepository.settings.first()
             val markers = settings.toTaskMarkers()
-            val result = fileRepository.updateLines(categoryUri) { lines ->
-                val index = if (todo.isDone) {
-                    todo.lineIndex.takeIf { MarkdownParser.parse(lines, markers).any { it.lineIndex == todo.lineIndex && it.text == todo.text } }
-                } else {
-                    MarkdownParser.locateOpenTodo(lines, todo.text, todo.lineIndex, markers)
-                } ?: return@updateLines null
-                MarkdownParser.tryToggleLine(lines, index, settings.enableTasksPluginSupport, markers = markers)
+            val result = recordUndo(if (todo.isDone) UndoKind.UNCHECK else UndoKind.CHECK, todo.text) {
+                fileRepository.updateLines(categoryUri) { lines ->
+                    val index = if (todo.isDone) {
+                        todo.lineIndex.takeIf { MarkdownParser.parse(lines, markers).any { it.lineIndex == todo.lineIndex && it.text == todo.text } }
+                    } else {
+                        MarkdownParser.locateOpenTodo(lines, todo.text, todo.lineIndex, markers)
+                    } ?: return@updateLines null
+                    MarkdownParser.tryToggleLine(lines, index, settings.enableTasksPluginSupport, markers = markers)
+                }
             }
             when {
                 result.isFailure -> _events.emit(Event.ShowMessage(R.string.error_write_failed))
