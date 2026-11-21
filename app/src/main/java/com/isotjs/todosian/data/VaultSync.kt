@@ -235,6 +235,11 @@ internal class VaultSync(private val context: Context, private val index: VaultI
         throw java.io.FileNotFoundException(uri.toString())
     }
 
+    /** The app is about to write [uri]: should the write fail half way, the next look reads it. */
+    fun invalidate(uri: Uri) {
+        index.note(uri.toString())?.let { index.put(it.copy(state = NoteState.UNSETTLED)) }
+    }
+
     private fun invalidateFolder(folder: String) {
         index.notes().filter { it.folder == folder && it.state == NoteState.OK }
             .forEach { index.put(it.copy(state = NoteState.UNSETTLED)) }
