@@ -416,7 +416,15 @@
     <string name="keyword_editor_views_hint">Benannte Tag-Filter auf der Startseite. Sie zeigen offene Aufgaben aus allen Ordnern, z. B. Kleine Aufgaben = #5min.</string>
     <string name="keyword_editor_add_view">Schnellansicht</string>
     <string name="keyword_editor_edit_view">Schnellansicht bearbeiten</string>
-    <string name="keyword_editor_view_tags_hint">Gleiche Gruppe = eins davon, verschiedene Gruppen = alle müssen passen</string>
+    <string name="keyword_editor_view_title_add">Neue Schnellansicht</string>
+    <string name="keyword_editor_view_all">Alle diese Tags</string>
+    <string name="keyword_editor_view_or">oder</string>
+    <string name="keyword_editor_view_add_or">Oder …</string>
+    <string name="keyword_editor_view_remove_or">Diese Möglichkeit entfernen</string>
+    <string name="keyword_editor_view_choice_hint">Tippe Tags an, um sie auszuwählen; eine Aufgabe braucht alle ausgewählten Tags. „Oder …“ fügt eine weitere Auswahl hinzu, die allein schon reicht.</string>
+    <string name="keyword_editor_view_no_tags">Lege zuerst oben Tags an, dann kannst du sie hier auswählen.</string>
+    <string name="keyword_editor_duplicate">Duplizieren</string>
+    <string name="keyword_editor_copy_name">%1$s (Kopie)</string>
     <string name="settings_person_scope">Erinnern an</string>
     <string name="settings_person_scope_all">Alle Aufgaben</string>
     <string name="settings_person_scope_unassigned">Aufgaben ohne Person</string>
