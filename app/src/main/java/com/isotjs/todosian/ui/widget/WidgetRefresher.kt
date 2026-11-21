@@ -20,7 +20,6 @@ import com.isotjs.todosian.data.FileRepository
 import com.isotjs.todosian.data.model.Category
 import com.isotjs.todosian.data.model.Todo
 import com.isotjs.todosian.utils.SavedView
-import com.isotjs.todosian.utils.TagFilter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -348,7 +347,7 @@ object WidgetRefresher {
                 )
             }
         }
-            .filter { item -> view == null || TagFilter.matches(item.todo.text, view.terms) }
+            .filter { item -> view == null || view.matches(item.todo.text) }
         val activeTasks = taskItems.filter { !it.todo.isDone }
         val completedTasks = taskItems.filter { it.todo.isDone }
         Log.d(

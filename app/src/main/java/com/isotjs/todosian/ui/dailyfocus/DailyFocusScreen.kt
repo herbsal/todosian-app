@@ -158,7 +158,7 @@ fun DailyFocusScreen(
         when {
             !isView -> uiState.tasks
             view == null -> emptyList()
-            else -> uiState.tasks.filter { TagFilter.matches(it.todo.text, view.terms) }
+            else -> uiState.tasks.filter { view.matches(it.todo.text) }
         }
     }
     val tagDisplay = remember(settings.tagDisplay) { TagDisplaySettings.decode(settings.tagDisplay) }

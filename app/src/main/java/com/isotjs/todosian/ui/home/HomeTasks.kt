@@ -23,7 +23,6 @@ import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import com.isotjs.todosian.utils.SavedView
-import com.isotjs.todosian.utils.TagFilter
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -263,7 +262,7 @@ internal fun CalendarTab(
     val activeView = savedViews.firstOrNull { viewKeyOf(it) == viewKey }
     val tasks = remember(categories, activeView) {
         categories.flatMap { c -> c.openTodos.map { HomeTask(c, it) } }
-            .filter { task -> activeView == null || TagFilter.matches(task.todo.text, activeView.terms) }
+            .filter { task -> activeView == null || activeView.matches(task.todo.text) }
     }
     val byDate = remember(tasks) {
         tasks.mapNotNull { task -> CalendarAgenda.dateOf(task.todo)?.let { it to task } }.groupBy({ it.first }, { it.second })

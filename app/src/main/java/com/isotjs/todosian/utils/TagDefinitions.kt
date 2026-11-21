@@ -73,7 +73,8 @@ object TagDefinitionParser {
     private val headingRegex = Regex("""^\s{0,3}(#{1,6})\s+(.+?)\s*#*\s*$""")
     private val itemRegex = Regex("""^\s*(?:[-*+]|\d+[.)])\s+(.*)$""")
     private val tagRegex = Regex("""(?<![\p{L}\p{N}_])#([\p{L}\p{N}_/\-]*[\p{L}_/\-][\p{L}\p{N}_/\-]*)""")
-    private val separatorRegex = Regex("""[,;\s]""")
+    // `|` and "oder"/"or" separate the alternatives of a saved view.
+    private val separatorRegex = Regex("""[,;\s|]|(?<![\p{L}])(?:oder|or)(?![\p{L}])""", RegexOption.IGNORE_CASE)
     private val wordRegex = Regex(""""([^"]*)"|„([^“”"]*)[“”"]|“([^”"]*)”""")
 
     fun parse(lines: List<String>): TagDefinitions = parseNote(lines).definitions
@@ -196,19 +197,34 @@ object TagNoteEdits {
         return "- ${term.label}: ${term.tags.joinToString(", ")}$suffix"
     }
 
-    fun addTerm(lines: List<String>, note: TagNote, group: TagNoteGroup?, term: TagTerm): List<String>? {
+    fun addTerm(lines: List<String>, note: TagNote, group: TagNoteGroup?, term: TagTerm): List<String>? =
+        addLine(lines, note, group, termLine(term))
+
+    /** Adds [line] (a list item) after the last keyword of [group], or below the note's title. */
+    fun addLine(lines: List<String>, note: TagNote, group: TagNoteGroup?, line: String): List<String>? {
         val anchor = group?.lastLine
-        if (anchor != null) return NoteLines.insertAfter(lines, anchor, note.lines[anchor], listOf(termLine(term)))
+        if (anchor != null) return NoteLines.insertAfter(lines, anchor, note.lines[anchor], listOf(line))
         // No ungrouped keywords yet: put the first one right below the title, or at the top.
         val title = lines.indexOfFirst { titleRegex.matches(it) }
-        if (title >= 0) return lines.take(title + 1) + termLine(term) + lines.drop(title + 1)
-        return listOf(termLine(term)) + lines
+        if (title >= 0) return lines.take(title + 1) + line + lines.drop(title + 1)
+        return listOf(line) + lines
     }
 
-    fun replaceTerm(lines: List<String>, note: TagNote, term: TagNoteTerm, updated: TagTerm): List<String>? {
+    fun replaceTerm(lines: List<String>, note: TagNote, term: TagNoteTerm, updated: TagTerm): List<String>? =
+        replaceLine(lines, note, term, termLine(updated))
+
+    /** Replaces the line of [term] with [line], keeping its indentation and list marker. */
+    fun replaceLine(lines: List<String>, note: TagNote, term: TagNoteTerm, line: String): List<String>? {
         val original = note.lines[term.line]
-        return NoteLines.replace(lines, term.line, original, NoteLines.withItemPrefix(original, termLine(updated).removePrefix("- ")))
+        return NoteLines.replace(lines, term.line, original, NoteLines.withItemPrefix(original, line.removePrefix("- ")))
     }
+
+    /**
+     * A copy of [group] with all its keywords, added at the end of the note under [name].
+     * The copy keeps the tags, so the user changes them after.
+     */
+    fun duplicateGroup(lines: List<String>, group: TagNoteGroup, name: String): List<String> =
+        NoteLines.append(lines, listOf("## $name") + group.terms.map { termLine(it.term) })
 
     fun removeTerm(lines: List<String>, note: TagNote, term: TagNoteTerm): List<String>? =
         NoteLines.remove(lines, listOf(term.line to note.lines[term.line]))

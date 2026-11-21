@@ -71,4 +71,36 @@ class TagFilterTest {
         assertEquals(listOf(texts[0]), texts.filter { TagFilter.matches(it, views[1].terms) })
         assertEquals(listOf(texts[1]), texts.filter { TagFilter.matches(it, views[2].terms) })
     }
+
+    @Test
+    fun savedViewAlternativesAreOr() {
+        val lines = listOf(
+            "# Ansichten",
+            "- Leicht: #kurz, #energie/niedrig | #papierkram",
+            "- Lang: #2h oder #energie/hoch",
+        )
+        val views = SavedViews.parse(lines, definitions, "folder")
+        // (5 min and low energy) or paperwork.
+        assertEquals(texts.take(2), texts.filter { views[0].matches(it) })
+        assertEquals(texts.slice(1..2), texts.filter { views[1].matches(it) })
+        assertTrue(TagDefinitionParser.parseNote(lines).problems.isEmpty())
+        assertEquals(listOf(listOf("#kurz", "#energie/niedrig"), listOf("#papierkram")), SavedViews.alternativesOf(lines[1]))
+    }
+
+    @Test
+    fun savedViewLineRoundTrips() {
+        val line = SavedViews.line("Leicht: heute", listOf(listOf("#kurz", "#energie/niedrig"), emptyList(), listOf("#papierkram")))
+        assertEquals("- Leicht heute: #kurz, #energie/niedrig | #papierkram", line)
+        val view = SavedViews.parse(listOf(line), definitions, "folder").single()
+        assertEquals("Leicht heute", view.name)
+        assertEquals(2, view.alternatives.size)
+    }
+
+    @Test
+    fun duplicatingAGroupCopiesItsKeywords() {
+        val lines = listOf("# Tags", "## ⏱ Aufwand", "- 5 Min: #5min \"kurz mal\"", "", "Freier Text")
+        val note = TagDefinitionParser.parseNote(lines)
+        val copy = TagNoteEdits.duplicateGroup(lines, note.editableGroups.first(), "⏱ Aufwand (Kopie)")
+        assertEquals(lines + listOf("", "## ⏱ Aufwand (Kopie)", "- 5 Min: #5min \"kurz mal\""), copy)
+    }
 }

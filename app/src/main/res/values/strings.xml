@@ -416,7 +416,15 @@
     <string name="keyword_editor_views_hint">Named tag filters, shown on the home screen. They list open tasks from all folders, e.g. Small tasks = #5min.</string>
     <string name="keyword_editor_add_view">Quick view</string>
     <string name="keyword_editor_edit_view">Edit quick view</string>
-    <string name="keyword_editor_view_tags_hint">Same group = either one, different groups = all must apply</string>
+    <string name="keyword_editor_view_title_add">New quick view</string>
+    <string name="keyword_editor_view_all">All of these tags</string>
+    <string name="keyword_editor_view_or">OR</string>
+    <string name="keyword_editor_view_add_or">Or …</string>
+    <string name="keyword_editor_view_remove_or">Remove this alternative</string>
+    <string name="keyword_editor_view_choice_hint">Tap tags to select them; a task needs all selected tags. “Or …” adds another set of tags that is enough on its own.</string>
+    <string name="keyword_editor_view_no_tags">Add tags above first, then pick them here.</string>
+    <string name="keyword_editor_duplicate">Duplicate</string>
+    <string name="keyword_editor_copy_name">%1$s (copy)</string>
     <string name="settings_person_scope">Remind me about</string>
     <string name="settings_person_scope_all">All tasks</string>
     <string name="settings_person_scope_unassigned">Tasks without a person</string>

@@ -58,6 +58,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -77,7 +78,9 @@ import com.isotjs.todosian.utils.NoteLines
 import com.isotjs.todosian.utils.NoteProblem
 import com.isotjs.todosian.utils.NoteProblemKind
 import com.isotjs.todosian.utils.TagDefinitionParser
+import com.isotjs.todosian.utils.SavedViews
 import com.isotjs.todosian.utils.TagDefinitions
+import com.isotjs.todosian.utils.TagDisplay
 import com.isotjs.todosian.utils.TagGroup
 import com.isotjs.todosian.utils.TagNote
 import com.isotjs.todosian.utils.TagNoteEdits
@@ -99,7 +102,11 @@ private enum class NoteTarget { TAGS, PROFILE, VIEWS }
 private sealed interface EditorPrompt {
     data object NewGroup : EditorPrompt
     data class RenameGroup(val note: TagNote, val group: TagNoteGroup) : EditorPrompt
-    data class Term(val note: TagNote, val group: TagNoteGroup?, val term: TagNoteTerm?, val view: Boolean = false) : EditorPrompt
+    /** [initial] fills a new keyword, e.g. with a copy of another one. */
+    data class Term(val note: TagNote, val group: TagNoteGroup?, val term: TagNoteTerm?, val initial: TagTerm? = null) : EditorPrompt
+
+    /** A saved view: its name and alternatives, each a set of tags that must all apply. */
+    data class View(val note: TagNote, val entry: TagNoteTerm?, val name: String, val alternatives: List<List<String>>) : EditorPrompt
     data object NewProfile : EditorPrompt
     data object AddKeyword : EditorPrompt
     data class AddRule(val note: ProfileNote, val keyword: ProfileNoteKeyword) : EditorPrompt
@@ -125,6 +132,9 @@ internal fun KeywordEditorDialog(
     val noteTitle = stringResource(R.string.keyword_editor_note_title)
     val viewsTitle = stringResource(R.string.keyword_editor_views)
     val german = LocalConfiguration.current.locales[0].language == "de"
+    val resources = LocalResources.current
+    /** "Name (Kopie)" for a duplicate. */
+    fun copyName(name: String): String = resources.getString(R.string.keyword_editor_copy_name, name)
 
     val folders by produceState<List<EditorFolder>?>(initialValue = null) {
         value = (listOfNotNull(fileRepository.getFolderUri()) + fileRepository.getExtraFolderUris()).distinct().map { uri ->
@@ -312,7 +322,14 @@ internal fun KeywordEditorDialog(
                             note = viewNote,
                             onFix = { prompt = EditorPrompt.FixProblem(it, NoteTarget.VIEWS) },
                             onDeleteProblem = { problem -> editViews { NoteLines.remove(it, listOf(problem.line to problem.text)) } },
-                            onEdit = { term -> prompt = EditorPrompt.Term(viewNote, viewNote.editableGroups.lastOrNull(), term, view = true) },
+                            onEdit = { entry ->
+                                prompt = EditorPrompt.View(
+                                    note = viewNote,
+                                    entry = entry,
+                                    name = entry?.term?.label.orEmpty(),
+                                    alternatives = entry?.let { SavedViews.alternativesOf(viewNote.lines[it.line]) }.orEmpty(),
+                                )
+                            },
                         )
                         HorizontalDivider()
                         Text(
@@ -372,28 +389,63 @@ internal fun KeywordEditorDialog(
                 prompt = null
                 editTags { TagNoteEdits.removeGroup(it, current.note, current.group) }
             },
+            onDuplicate = {
+                prompt = null
+                editTags { TagNoteEdits.duplicateGroup(it, current.group, copyName(current.group.name.orEmpty())) }
+            },
         )
         is EditorPrompt.Term -> {
-            val edit: ((List<String>) -> List<String>?) -> Unit = if (current.view) ::editViews else ::editTags
             TermPrompt(
-                term = current.term?.term,
-                view = current.view,
+                term = current.term?.term ?: current.initial,
+                isNew = current.term == null,
                 groupName = current.group?.name,
                 onDismiss = { prompt = null },
                 onConfirm = { updated ->
                     prompt = null
                     val term = current.term
                     if (term == null) {
-                        edit { TagNoteEdits.addTerm(it, current.note, current.group, updated) }
+                        editTags { TagNoteEdits.addTerm(it, current.note, current.group, updated) }
                     } else {
-                        edit { TagNoteEdits.replaceTerm(it, current.note, term, updated) }
+                        editTags { TagNoteEdits.replaceTerm(it, current.note, term, updated) }
                     }
                 },
                 onDelete = current.term?.let { term ->
                     {
                         prompt = null
-                        edit { TagNoteEdits.removeTerm(it, current.note, term) }
+                        editTags { TagNoteEdits.removeTerm(it, current.note, term) }
                     }
+                },
+                // The copy opens as a new keyword, so its tags can be changed before it is saved.
+                onDuplicate = current.term?.let { term ->
+                    { prompt = current.copy(term = null, initial = term.term.copy(label = copyName(term.term.label))) }
+                },
+            )
+        }
+        is EditorPrompt.View -> {
+            ViewPrompt(
+                isNew = current.entry == null,
+                initialName = current.name,
+                initialAlternatives = current.alternatives,
+                definitions = definitions,
+                onDismiss = { prompt = null },
+                onConfirm = { name, alternatives ->
+                    prompt = null
+                    val line = SavedViews.line(name, alternatives)
+                    val entry = current.entry
+                    if (entry == null) {
+                        editViews { TagNoteEdits.addLine(it, current.note, current.note.editableGroups.lastOrNull(), line) }
+                    } else {
+                        editViews { TagNoteEdits.replaceLine(it, current.note, entry, line) }
+                    }
+                },
+                onDelete = current.entry?.let { entry ->
+                    {
+                        prompt = null
+                        editViews { TagNoteEdits.removeTerm(it, current.note, entry) }
+                    }
+                },
+                onDuplicate = current.entry?.let {
+                    { name, alternatives -> prompt = current.copy(entry = null, name = copyName(name), alternatives = alternatives) }
                 },
             )
         }
@@ -754,6 +806,7 @@ private fun TextPrompt(
     onConfirm: (String) -> Unit,
     onDelete: (() -> Unit)? = null,
     supportingText: String? = null,
+    onDuplicate: (() -> Unit)? = null,
 ) {
     var text by remember { mutableStateOf(initial) }
     AlertDialog(
@@ -773,14 +826,7 @@ private fun TextPrompt(
                 Text(text = stringResource(R.string.action_ok))
             }
         },
-        dismissButton = {
-            Row {
-                if (onDelete != null) {
-                    TextButton(onClick = onDelete) { Text(text = stringResource(R.string.keyword_editor_delete)) }
-                }
-                TextButton(onClick = onDismiss) { Text(text = stringResource(R.string.action_cancel)) }
-            }
-        },
+        dismissButton = { PromptButtons(onDelete = onDelete, onDuplicate = onDuplicate, onDismiss = onDismiss) },
     )
 }
 
@@ -789,11 +835,12 @@ private const val MAX_AUTOMATIC = 10
 @Composable
 private fun TermPrompt(
     term: TagTerm?,
-    view: Boolean,
+    isNew: Boolean,
     groupName: String?,
     onDismiss: () -> Unit,
     onConfirm: (TagTerm) -> Unit,
     onDelete: (() -> Unit)?,
+    onDuplicate: (() -> Unit)?,
 ) {
     var label by remember { mutableStateOf(term?.label.orEmpty()) }
     var tags by remember { mutableStateOf(term?.tags?.joinToString(", ").orEmpty()) }
@@ -802,7 +849,7 @@ private fun TermPrompt(
     val parsedWords = TagWords.parseInput(words)
     // What the app already recognizes without own words, so the user only adds what is missing.
     val automatic = remember(label, parsed, groupName) {
-        if (view || parsed.isEmpty()) {
+        if (parsed.isEmpty()) {
             emptyList()
         } else {
             val cleanLabel = label.replace(":", "").trim().ifEmpty { parsed.first().removePrefix("#") }
@@ -813,12 +860,7 @@ private fun TermPrompt(
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            val title = when {
-                view && term == null -> R.string.keyword_editor_add_view
-                view -> R.string.keyword_editor_edit_view
-                term == null -> R.string.keyword_editor_add_keyword
-                else -> R.string.keyword_editor_edit_keyword
-            }
+            val title = if (isNew) R.string.keyword_editor_add_keyword else R.string.keyword_editor_edit_keyword
             Text(text = stringResource(title))
         },
         text = {
@@ -834,25 +876,23 @@ private fun TermPrompt(
                     onValueChange = { tags = it },
                     label = { Text(stringResource(R.string.keyword_editor_keyword_tags)) },
                     supportingText = {
-                        Text(stringResource(if (view) R.string.keyword_editor_view_tags_hint else R.string.keyword_editor_keyword_tags_hint))
+                        Text(stringResource(R.string.keyword_editor_keyword_tags_hint))
                     },
                 )
-                if (!view) {
-                    OutlinedTextField(
-                        value = words,
-                        onValueChange = { words = it },
-                        label = { Text(stringResource(R.string.keyword_editor_words)) },
-                        placeholder = { Text(stringResource(R.string.keyword_editor_words_example)) },
-                        supportingText = { Text(stringResource(R.string.keyword_editor_words_hint)) },
+                OutlinedTextField(
+                    value = words,
+                    onValueChange = { words = it },
+                    label = { Text(stringResource(R.string.keyword_editor_words)) },
+                    placeholder = { Text(stringResource(R.string.keyword_editor_words_example)) },
+                    supportingText = { Text(stringResource(R.string.keyword_editor_words_hint)) },
+                )
+                if (automatic.isNotEmpty()) {
+                    Text(
+                        text = stringResource(R.string.keyword_editor_words_automatic, automatic.take(MAX_AUTOMATIC).joinToString(", ")) +
+                            if (automatic.size > MAX_AUTOMATIC) " …" else "",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    if (automatic.isNotEmpty()) {
-                        Text(
-                            text = stringResource(R.string.keyword_editor_words_automatic, automatic.take(MAX_AUTOMATIC).joinToString(", ")) +
-                                if (automatic.size > MAX_AUTOMATIC) " …" else "",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
                 }
             }
         },
@@ -861,18 +901,11 @@ private fun TermPrompt(
                 enabled = parsed.isNotEmpty(),
                 onClick = {
                     val cleanLabel = label.replace(":", "").trim().ifEmpty { parsed.first().removePrefix("#") }
-                    onConfirm(TagTerm(cleanLabel, parsed, if (view) term?.words.orEmpty() else parsedWords))
+                    onConfirm(TagTerm(cleanLabel, parsed, parsedWords))
                 },
             ) { Text(text = stringResource(R.string.action_ok)) }
         },
-        dismissButton = {
-            Row {
-                if (onDelete != null) {
-                    TextButton(onClick = onDelete) { Text(text = stringResource(R.string.keyword_editor_delete)) }
-                }
-                TextButton(onClick = onDismiss) { Text(text = stringResource(R.string.action_cancel)) }
-            }
-        },
+        dismissButton = { PromptButtons(onDelete = onDelete, onDuplicate = onDuplicate, onDismiss = onDismiss) },
     )
 }
 
@@ -949,6 +982,153 @@ private fun DaysBeforePrompt(onDismiss: () -> Unit, onPick: (Int) -> Unit) {
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text(text = stringResource(R.string.action_cancel)) }
+        },
+    )
+}
+
+/** Delete, duplicate and cancel of a prompt; they wrap onto a second row when space is short. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun PromptButtons(onDelete: (() -> Unit)?, onDuplicate: (() -> Unit)?, onDismiss: () -> Unit) {
+    FlowRow(horizontalArrangement = Arrangement.End) {
+        if (onDelete != null) {
+            TextButton(onClick = onDelete) { Text(text = stringResource(R.string.keyword_editor_delete)) }
+        }
+        if (onDuplicate != null) {
+            TextButton(onClick = onDuplicate) { Text(text = stringResource(R.string.keyword_editor_duplicate)) }
+        }
+        TextButton(onClick = onDismiss) { Text(text = stringResource(R.string.action_cancel)) }
+    }
+}
+
+/**
+ * A saved view, picked with chips: the selected tags of one box must all apply; "Or …" adds
+ * another box that is enough on its own. In a group where a task has only one tag, picking one
+ * replaces the other, since a task can never have both.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ViewPrompt(
+    isNew: Boolean,
+    initialName: String,
+    initialAlternatives: List<List<String>>,
+    definitions: TagDefinitions,
+    onDismiss: () -> Unit,
+    onConfirm: (name: String, alternatives: List<List<String>>) -> Unit,
+    onDelete: (() -> Unit)?,
+    onDuplicate: ((name: String, alternatives: List<List<String>>) -> Unit)?,
+) {
+    var name by remember { mutableStateOf(initialName) }
+    var alternatives by remember { mutableStateOf(initialAlternatives.ifEmpty { listOf(emptyList()) }) }
+    val groups = definitions.groups.filter { it.terms.isNotEmpty() }
+    val filled = alternatives.filter { it.isNotEmpty() }
+
+    fun toggle(index: Int, group: TagGroup, term: TagTerm) {
+        alternatives = alternatives.mapIndexed { i, tags ->
+            if (i != index) return@mapIndexed tags
+            if (tags.any { term.matches(it) }) {
+                tags.filterNot { term.matches(it) }
+            } else {
+                val others = if (group.exclusive) group.terms.filter { it != term } else emptyList()
+                tags.filterNot { tag -> others.any { it.matches(tag) } } + term.primaryTag
+            }
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(text = stringResource(if (isNew) R.string.keyword_editor_view_title_add else R.string.keyword_editor_edit_view)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.verticalScroll(rememberScrollState())) {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text(stringResource(R.string.keyword_editor_keyword_label)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Text(
+                    text = stringResource(if (groups.isEmpty()) R.string.keyword_editor_view_no_tags else R.string.keyword_editor_view_choice_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                alternatives.forEachIndexed { index, tags ->
+                    if (index > 0) {
+                        Text(
+                            text = stringResource(R.string.keyword_editor_view_or),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.align(Alignment.CenterHorizontally),
+                        )
+                    }
+                    OutlinedCard(modifier = Modifier.fillMaxWidth()) {
+                        Column(modifier = Modifier.padding(start = 12.dp, end = 4.dp, bottom = 8.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = stringResource(R.string.keyword_editor_view_all),
+                                    style = MaterialTheme.typography.labelLarge,
+                                    modifier = Modifier.weight(1f).padding(vertical = 12.dp),
+                                )
+                                if (alternatives.size > 1) {
+                                    IconButton(onClick = { alternatives = alternatives.filterIndexed { i, _ -> i != index } }) {
+                                        Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.keyword_editor_view_remove_or))
+                                    }
+                                }
+                            }
+                            groups.forEach { group ->
+                                group.name?.let { groupName ->
+                                    Text(
+                                        text = "${TagDisplay.iconFor(group)} $groupName".trim(),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    group.terms.forEach { term ->
+                                        FilterChip(
+                                            selected = tags.any { term.matches(it) },
+                                            onClick = { toggle(index, group, term) },
+                                            label = { Text(term.label) },
+                                        )
+                                    }
+                                }
+                            }
+                            // Tags of the view that the tag note does not define: shown so they can be removed.
+                            val unknown = tags.filter { definitions.termFor(it) == null }
+                            if (unknown.isNotEmpty()) {
+                                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    unknown.forEach { tag ->
+                                        FilterChip(
+                                            selected = true,
+                                            onClick = {
+                                                alternatives = alternatives.mapIndexed { i, list -> if (i == index) list - tag else list }
+                                            },
+                                            label = { Text(tag) },
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                TextButton(onClick = { alternatives = alternatives + listOf(emptyList()) }, enabled = groups.isNotEmpty()) {
+                    Icon(Icons.Filled.Add, contentDescription = null)
+                    Text(text = stringResource(R.string.keyword_editor_view_add_or), modifier = Modifier.padding(start = 8.dp))
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = name.replace(":", "").isNotBlank() && filled.isNotEmpty(),
+                onClick = { onConfirm(name.trim(), filled) },
+            ) { Text(text = stringResource(R.string.action_ok)) }
+        },
+        dismissButton = {
+            PromptButtons(
+                onDelete = onDelete,
+                onDuplicate = onDuplicate?.let { duplicate -> { duplicate(name.trim(), filled) } },
+                onDismiss = onDismiss,
+            )
         },
     )
 }
