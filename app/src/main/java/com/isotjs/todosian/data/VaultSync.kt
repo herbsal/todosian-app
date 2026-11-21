@@ -113,6 +113,21 @@ internal class VaultSync(private val context: Context, private val index: VaultI
         if (_conflicts.value.any { it.folder !in folders }) _conflicts.value = _conflicts.value.filter { it.folder in folders }
     }
 
+    /** Folder and path of a note as the index knows them, or null. */
+    fun noteInfo(uri: Uri): Pair<Uri, String>? = index.note(uri.toString())?.let { Uri.parse(it.folder) to it.relPath }
+
+    /**
+     * The note a wikilink [name] (`Kinder` or `Familie/Kinder`) points to in [folder]: same path,
+     * else the same name anywhere, as Obsidian resolves it.
+     */
+    fun findNote(folder: Uri, name: String): Uri? {
+        val wanted = name.trim().removeSuffix(".md").removePrefix("/")
+        val notes = index.notes().filter { it.folder == folder.toString() }
+        val match = notes.firstOrNull { it.relPath.equals(wanted, ignoreCase = true) }
+            ?: notes.firstOrNull { it.relPath.substringAfterLast('/').equals(wanted.substringAfterLast('/'), ignoreCase = true) }
+        return match?.let { Uri.parse(it.uri) }
+    }
+
     /**
      * The notes of [folder] as the index knows them, without looking at the folder: what the home
      * screen shows right away while the look runs.

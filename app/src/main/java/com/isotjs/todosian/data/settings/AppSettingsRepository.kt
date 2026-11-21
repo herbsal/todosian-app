@@ -55,6 +55,8 @@ interface AppSettingsRepository {
 
     fun setDeletedNoteReminders(mode: DeletedNoteReminders) {}
 
+    fun setObsidianVaultName(name: String) {}
+
     fun setProfileRemindersEnabled(enabled: Boolean)
 
     /** How keyword tags appear in task rows (encoded [com.isotjs.todosian.utils.TagDisplaySettings]). */
@@ -200,6 +202,10 @@ class SharedPrefsAppSettingsRepository(
         prefs.edit { putString(KEY_DELETED_NOTE_REMINDERS, mode.name) }
     }
 
+    override fun setObsidianVaultName(name: String) {
+        prefs.edit { putString(KEY_OBSIDIAN_VAULT_NAME, name.trim()) }
+    }
+
     override fun setProfileRemindersEnabled(enabled: Boolean) {
         prefs.edit { putBoolean(KEY_PROFILE_REMINDERS, enabled) }
     }
@@ -291,6 +297,7 @@ class SharedPrefsAppSettingsRepository(
             deletedNoteReminders = prefs.getString(KEY_DELETED_NOTE_REMINDERS, null)?.let { raw ->
                 runCatching { DeletedNoteReminders.valueOf(raw) }.getOrNull()
             } ?: DeletedNoteReminders.CANCEL_SILENTLY,
+            obsidianVaultName = prefs.getString(KEY_OBSIDIAN_VAULT_NAME, null).orEmpty(),
             profileRemindersEnabled = prefs.getBoolean(KEY_PROFILE_REMINDERS, true),
             tagDisplay = prefs.getString(KEY_TAG_DISPLAY, null).orEmpty(),
             tagRecognition = prefs.getBoolean(KEY_TAG_RECOGNITION, true),
@@ -336,6 +343,7 @@ class SharedPrefsAppSettingsRepository(
         private const val KEY_EXCLUDED_FOLDERS = "excluded_folders"
         private const val KEY_HIDE_EMPTY_NOTES = "hide_empty_notes"
         private const val KEY_DELETED_NOTE_REMINDERS = "deleted_note_reminders"
+        private const val KEY_OBSIDIAN_VAULT_NAME = "obsidian_vault_name"
 
         /**
          * The excluded folders without waiting for the settings flow; the note index needs them

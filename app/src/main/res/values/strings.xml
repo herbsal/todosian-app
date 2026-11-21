@@ -548,4 +548,15 @@
     </plurals>
     <string name="home_conflict_title">Conflict in %1$s</string>
     <string name="home_conflict_text">Syncthing kept two versions of this note. The tasks of the copy are not shown. Merge them in Obsidian and delete the conflict copy.</string>
+    <string name="preview_show_note">Show note</string>
+    <string name="preview_open_in_obsidian">Obsidian</string>
+    <string name="preview_unreadable">This note could not be read.</string>
+    <string name="preview_obsidian_missing">Obsidian is not installed.</string>
+    <string name="cd_search">Search</string>
+    <string name="search_placeholder">Search tasks and lists</string>
+    <string name="search_in_obsidian">Search in Obsidian</string>
+    <string name="search_no_results">Nothing found in tasks and list names.</string>
+    <string name="search_list">List</string>
+    <string name="settings_obsidian_vault">Vault name in Obsidian</string>
+    <string name="settings_obsidian_vault_hint">Used to open notes and searches in Obsidian. Leave empty to use the name of the notes folder.</string>
 </resources>

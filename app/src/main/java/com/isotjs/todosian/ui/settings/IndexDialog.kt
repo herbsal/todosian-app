@@ -273,3 +273,43 @@ internal fun deletedNoteRemindersLabel(mode: DeletedNoteReminders): String = whe
     DeletedNoteReminders.CANCEL_SILENTLY -> stringResource(R.string.settings_deleted_note_silent)
     DeletedNoteReminders.NOTIFY -> stringResource(R.string.settings_deleted_note_notify)
 }
+
+/** The vault name Obsidian links use; empty means the name of the notes folder. */
+@Composable
+internal fun ObsidianVaultNameDialog(
+    current: String,
+    folderName: String,
+    onSave: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var name by remember { mutableStateOf(current) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.settings_obsidian_vault)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = stringResource(R.string.settings_obsidian_vault_hint),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    singleLine = true,
+                    placeholder = { Text(folderName) },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                onSave(name.trim())
+                onDismiss()
+            }) { Text(stringResource(R.string.action_ok)) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
+        },
+    )
+}

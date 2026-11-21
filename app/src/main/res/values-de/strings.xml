@@ -548,4 +548,15 @@
     </plurals>
     <string name="home_conflict_title">Konflikt in %1$s</string>
     <string name="home_conflict_text">Syncthing hat zwei Fassungen dieser Notiz gespeichert. Die Aufgaben der Kopie werden nicht angezeigt. Führe sie in Obsidian zusammen und lösche danach die Konfliktkopie.</string>
+    <string name="preview_show_note">Notiz anzeigen</string>
+    <string name="preview_open_in_obsidian">Obsidian</string>
+    <string name="preview_unreadable">Diese Notiz konnte nicht gelesen werden.</string>
+    <string name="preview_obsidian_missing">Obsidian ist nicht installiert.</string>
+    <string name="cd_search">Suchen</string>
+    <string name="search_placeholder">Aufgaben und Listen durchsuchen</string>
+    <string name="search_in_obsidian">In Obsidian suchen</string>
+    <string name="search_no_results">Nichts gefunden in Aufgaben und Listennamen.</string>
+    <string name="search_list">Liste</string>
+    <string name="settings_obsidian_vault">Vault-Name in Obsidian</string>
+    <string name="settings_obsidian_vault_hint">Damit öffnet die App Notizen und Suchen in Obsidian. Leer lassen, um den Namen des Notizordners zu verwenden.</string>
 </resources>

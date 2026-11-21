@@ -35,6 +35,8 @@ data class AppSettings(
     val hideEmptyNotes: Boolean = true,
     /** What happens to the reminders of a note that was deleted outside the app. */
     val deletedNoteReminders: DeletedNoteReminders = DeletedNoteReminders.CANCEL_SILENTLY,
+    /** Name of the vault in Obsidian for `obsidian://` links; empty means the folder's name. */
+    val obsidianVaultName: String = "",
     /** Main switch for reminders from reminder profiles; ⏰ in a line always rings. */
     val profileRemindersEnabled: Boolean = true,
     /** Encoded [com.isotjs.todosian.utils.TagDisplaySettings]; empty = defaults. */
