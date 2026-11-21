@@ -139,6 +139,9 @@ object MarkdownParser {
             .minByOrNull { abs(it - lineIndex) }
     }
 
+    /** Whether [parse] reads a task from [line]; other lines never matter to it. */
+    fun isTaskLine(line: String): Boolean = todoRegex.matches(line)
+
     fun parse(lines: List<String>, markers: TaskMarkers = TaskMarkers.Default): List<Todo> {
         return lines.mapIndexedNotNull { index, line ->
             val match = todoRegex.matchEntire(line) ?: return@mapIndexedNotNull null

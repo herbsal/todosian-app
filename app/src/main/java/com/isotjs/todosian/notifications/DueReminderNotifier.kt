@@ -17,6 +17,7 @@ import androidx.core.content.edit
 import com.isotjs.todosian.MainActivity
 import com.isotjs.todosian.R
 import com.isotjs.todosian.data.MarkdownEntry
+import com.isotjs.todosian.data.NoteIndex
 import com.isotjs.todosian.data.PreferencesManager
 import com.isotjs.todosian.data.scanMarkdownTree
 import com.isotjs.todosian.data.model.Todo
@@ -173,7 +174,9 @@ object DueReminderNotifier {
             todosIn(uri, runCatching { scanMarkdownTree(context, uri, includeSubfolders).files }.getOrDefault(emptyList()))
         }
 
-        return (todosIn(folderUri, scanMarkdownTree(context, folderUri, includeSubfolders).files) + extraTodos)
+        val all = todosIn(folderUri, scanMarkdownTree(context, folderUri, includeSubfolders).files) + extraTodos
+        NoteIndex.get(context).save()
+        return all
             .asSequence()
             .sortedWith(compareBy<DueTodo> { it.dueDate }.thenBy { it.text.lowercase() })
             .toList()
@@ -185,9 +188,12 @@ object DueReminderNotifier {
         today: LocalDate,
         markers: TaskMarkers,
     ): List<DueTodo> {
-        val lines = context.contentResolver.openInputStream(file.ref)?.use { input ->
-            input.bufferedReader().readLines()
-        } ?: return emptyList()
+        val lines = runCatching {
+            NoteIndex.get(context).lines(file.ref.toString(), file.stamp) {
+                context.contentResolver.openInputStream(file.ref)?.use { input -> input.bufferedReader().readLines() }
+                    ?: throw java.io.FileNotFoundException(file.ref.toString())
+            }
+        }.getOrElse { return emptyList() }
 
         return MarkdownParser.parse(lines, markers)
             .asSequence()

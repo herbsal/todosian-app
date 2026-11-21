@@ -8,6 +8,7 @@ import android.net.Uri
 import android.os.Build
 import android.util.Log
 import androidx.core.content.edit
+import com.isotjs.todosian.data.NoteIndex
 import com.isotjs.todosian.data.PreferencesManager
 import com.isotjs.todosian.data.findReminderProfiles
 import com.isotjs.todosian.data.findTagNote
@@ -97,6 +98,7 @@ object TaskReminderScheduler {
         val alertFiles = preferences.getNewTaskAlertFiles()
         val tagDisplay = TagDisplaySettings.decode(settings.tagDisplay)
 
+        val index = NoteIndex.get(context)
         val candidates = folders.flatMap { folder ->
             val files = runCatching { scanMarkdownTree(context, folder, settings.includeSubfolders).files }
                 .getOrElse { emptyList() }
@@ -106,8 +108,12 @@ object TaskReminderScheduler {
             val definitions = loadTagDefinitions(context, folder)
             val display = { text: String -> TagDisplay.plainText(text, definitions, tagDisplay) }
             files.flatMap { file ->
+                // Unchanged notes come from the note index; only changed ones are read.
                 val readLines = runCatching {
-                    context.contentResolver.openInputStream(file.ref)?.bufferedReader()?.use { it.readLines() }
+                    index.lines(file.ref.toString(), file.stamp) {
+                        context.contentResolver.openInputStream(file.ref)?.bufferedReader()?.use { it.readLines() }
+                            ?: throw java.io.FileNotFoundException(file.ref.toString())
+                    }
                 }.getOrNull()
                 val lines = readLines.orEmpty()
                 // Only tasks of the people chosen on this device remind, also those with ⏰.
@@ -150,6 +156,7 @@ object TaskReminderScheduler {
             }
         }
 
+        index.save()
         NewTaskAlerts.keepOnly(context, alertFiles)
         val prefs = statePrefs(context)
         val existingKeys = candidates.map { TaskReminderPlanner.keyOf(it) }.toSet()

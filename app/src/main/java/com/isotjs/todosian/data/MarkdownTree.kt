@@ -4,10 +4,15 @@ import android.content.Context
 import android.net.Uri
 import android.provider.DocumentsContract
 
-internal data class DocumentEntry(val id: String, val name: String, val isDirectory: Boolean)
+internal data class DocumentEntry(
+    val id: String,
+    val name: String,
+    val isDirectory: Boolean,
+    val stamp: FileStamp? = null,
+)
 
 /** A Markdown note; [relativePath] is relative to the selected folder and has no `.md` suffix, e.g. `Projects/Move`. */
-internal data class MarkdownEntry<T>(val ref: T, val relativePath: String)
+internal data class MarkdownEntry<T>(val ref: T, val relativePath: String, val stamp: FileStamp? = null)
 
 internal data class MarkdownTree<T>(val files: List<MarkdownEntry<T>>, val folderIds: List<String>)
 
@@ -57,7 +62,7 @@ internal fun walkMarkdownTree(
                 val isConfig = prefix.isEmpty() && child.name.equals(CONFIG_FOLDER_NAME, ignoreCase = true)
                 if (recursive && !child.name.startsWith('.') && !isConfig) pending.add(child.id to "$prefix${child.name}/")
             } else if (isMarkdownNoteName(child.name)) {
-                files.add(MarkdownEntry(child.id, prefix + child.name.dropLast(MD_SUFFIX_LENGTH)))
+                files.add(MarkdownEntry(child.id, prefix + child.name.dropLast(MD_SUFFIX_LENGTH), child.stamp))
             }
         }
     }
@@ -69,23 +74,20 @@ internal fun scanMarkdownTree(context: Context, treeUri: Uri, recursive: Boolean
     val resolver = context.contentResolver
     val tree = walkMarkdownTree(DocumentsContract.getTreeDocumentId(treeUri), recursive) { folderId ->
         val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, folderId)
-        resolver.query(childrenUri, PROJECTION, null, null, null)?.use { cursor ->
+        // Time and size come with the listing at no extra cost; the note index compares them.
+        resolver.query(childrenUri, STAMP_PROJECTION, null, null, null)?.use { cursor ->
             buildList {
                 while (cursor.moveToNext()) {
                     val name = cursor.getString(1) ?: continue
-                    add(
-                        DocumentEntry(
-                            id = cursor.getString(0),
-                            name = name,
-                            isDirectory = cursor.getString(2) == DocumentsContract.Document.MIME_TYPE_DIR,
-                        ),
-                    )
+                    val isDirectory = cursor.getString(2) == DocumentsContract.Document.MIME_TYPE_DIR
+                    val stamp = if (isDirectory || cursor.isNull(3) || cursor.isNull(4)) null else FileStamp(cursor.getLong(3), cursor.getLong(4))
+                    add(DocumentEntry(id = cursor.getString(0), name = name, isDirectory = isDirectory, stamp = stamp))
                 }
             }
         }.orEmpty()
     }
     return MarkdownTree(
-        files = tree.files.map { MarkdownEntry(DocumentsContract.buildDocumentUriUsingTree(treeUri, it.ref), it.relativePath) },
+        files = tree.files.map { MarkdownEntry(DocumentsContract.buildDocumentUriUsingTree(treeUri, it.ref), it.relativePath, it.stamp) },
         folderIds = tree.folderIds,
     )
 }

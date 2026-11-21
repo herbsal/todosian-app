@@ -11,4 +11,6 @@ data class Category(
     val overdueCount: Int,
     /** The open tasks in file order, for the task preview and the calendar on the home screen. */
     val openTodos: List<Todo> = emptyList(),
+    /** All tasks in file order, done ones too, for the widgets. */
+    val todos: List<Todo> = emptyList(),
 )
