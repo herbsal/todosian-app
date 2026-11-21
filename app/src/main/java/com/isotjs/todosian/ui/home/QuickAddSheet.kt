@@ -104,7 +104,7 @@ internal fun QuickAddSheet(
         )
     }
     val target: Category? = chosenList ?: firstPass.list?.let { byName[it.name] } ?: defaultList ?: inbox
-    val loadedDefinitions by produceState(TagDefinitions.EMPTY, target?.uri) {
+    val loadedDefinitions by produceState(fileRepository.cachedTagDefinitions(target?.uri) ?: TagDefinitions.EMPTY, target?.uri) {
         value = fileRepository.getTagDefinitions(target?.uri)
     }
     LaunchedEffect(loadedDefinitions) { definitions = loadedDefinitions }

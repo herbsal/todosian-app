@@ -52,7 +52,13 @@ class CategoryViewModel(
     private val appSettingsRepository: AppSettingsRepository,
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(CategoryUiState(isLoading = true))
+    // Tags last read come along at once, so the first rows already show their symbols.
+    private val _uiState = MutableStateFlow(
+        CategoryUiState(
+            isLoading = true,
+            tagDefinitions = runCatching { fileRepository.cachedTagDefinitions(categoryUri) }.getOrNull() ?: TagDefinitions.EMPTY,
+        ),
+    )
     val uiState: StateFlow<CategoryUiState> = _uiState.asStateFlow()
 
     private val _events = MutableSharedFlow<Event>()
@@ -88,7 +94,7 @@ class CategoryViewModel(
         viewModelScope.launch {
             // The keyword note may have changed too (edited in Obsidian or synced).
             val tags = fileRepository.getTagDefinitions(categoryUri)
-            _uiState.update { it.copy(tagDefinitions = tags) }
+            if (tags != _uiState.value.tagDefinitions) _uiState.update { it.copy(tagDefinitions = tags) }
         }
         viewModelScope.launch {
             val startedAt = SystemClock.elapsedRealtime()

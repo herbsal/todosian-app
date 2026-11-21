@@ -138,7 +138,10 @@ fun DailyFocusScreen(
     var sheetText by remember { mutableStateOf("") }
     var sheetMeta by remember { mutableStateOf(MarkdownParser.TasksMeta()) }
     var sheetTask by remember { mutableStateOf<DailyFocusTask?>(null) }
-    val sheetTagDefinitions by produceState(TagDefinitions.EMPTY, sheetTask?.categoryUri) {
+    val sheetTagDefinitions by produceState(
+        fileRepository.cachedTagDefinitions(sheetTask?.categoryUri) ?: TagDefinitions.EMPTY,
+        sheetTask?.categoryUri,
+    ) {
         value = sheetTask?.categoryUri?.let { fileRepository.getTagDefinitions(it) } ?: TagDefinitions.EMPTY
     }
     var deleteTodoTarget by remember { mutableStateOf<DailyFocusTask?>(null) }
@@ -146,8 +149,15 @@ fun DailyFocusScreen(
     val selectedTagKeys = remember(tagFilterKeys) { tagFilterKeys.split(TAG_FILTER_SEPARATOR).filter { it.isNotEmpty() }.toSet() }
     val categoryUris = remember(uiState.tasks) { uiState.tasks.map { it.categoryUri }.distinct() }
     // Keyword notes of the folders the tasks come from, so the chips use their labels and synonyms.
-    val tagDefinitionsByCategory by produceState(emptyMap<Uri, TagDefinitions>(), categoryUris) {
-        value = categoryUris.associateWith { fileRepository.getTagDefinitions(it) }
+    // Start with the tags last read, so the rows show symbols at once, not `#tag` first.
+    val tagDefinitionsByCategory by produceState(
+        categoryUris.associateWith { fileRepository.cachedTagDefinitions(it) ?: TagDefinitions.EMPTY },
+        categoryUris,
+    ) {
+        val cached = categoryUris.associateWith { fileRepository.cachedTagDefinitions(it) ?: TagDefinitions.EMPTY }
+        if (cached != value) value = cached
+        val fresh = categoryUris.associateWith { fileRepository.getTagDefinitions(it) }
+        if (fresh != value) value = fresh
     }
     // A saved view shows only its keywords; until it is loaded, nothing.
     val viewTasks = remember(uiState.tasks, isView, savedView) {
