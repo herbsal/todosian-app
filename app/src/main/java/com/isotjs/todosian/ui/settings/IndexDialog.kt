@@ -28,6 +28,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -54,7 +55,7 @@ internal fun IndexDialog(
     var busy by remember { mutableStateOf(false) }
     var result by remember { mutableStateOf<String?>(null) }
     var refreshes by remember { mutableIntStateOf(0) }
-    val resources = context.resources
+    val resources = LocalResources.current
 
     LaunchedEffect(refreshes) {
         stats = withContext(Dispatchers.IO) { runCatching { VaultSync.get(context).stats() }.getOrNull() }
