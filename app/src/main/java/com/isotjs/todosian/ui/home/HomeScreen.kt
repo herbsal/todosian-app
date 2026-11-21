@@ -2,14 +2,9 @@ package com.isotjs.todosian.ui.home
 
 import android.net.Uri
 
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.filled.FilterList
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.runtime.produceState
 import androidx.compose.foundation.layout.size
-import com.isotjs.todosian.utils.SavedView
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
@@ -139,7 +134,6 @@ fun HomeScreen(
     preferencesManager: PreferencesManager,
     onOpenCategory: (android.net.Uri) -> Unit,
     onOpenSettings: () -> Unit,
-    onOpenView: (SavedView) -> Unit,
     onOpenAddTask: (listUri: android.net.Uri?, text: String) -> Unit,
     refreshSignal: Long,
     onRequireOnboarding: () -> Unit,
@@ -199,6 +193,9 @@ fun HomeScreen(
     }
 
     var tab by rememberSaveable { mutableStateOf(HomeTab.LISTS) }
+    // Saved view chosen with the chips of the lists and calendar tabs; it filters both in place.
+    var viewKey by rememberSaveable { mutableStateOf<String?>(null) }
+    val activeView = savedViews.firstOrNull { viewKeyOf(it) == viewKey }
     val shownTab = if (tab == HomeTab.FOCUS && !settings.showDailyFocus) HomeTab.LISTS else tab
     // "Undo" after an action; on the daily focus tab that tab shows it itself.
     if (shownTab != HomeTab.FOCUS) {
@@ -702,6 +699,8 @@ fun HomeScreen(
                     HomeContentState.DATA -> if (shownTab == HomeTab.CALENDAR) {
                         CalendarTab(
                             savedViews = savedViews,
+                            viewKey = viewKey,
+                            onSelectView = { viewKey = it },
                             categories = categories,
                             settings = settings,
                             tagDefinitions = tagDefinitionsByList,
@@ -713,7 +712,7 @@ fun HomeScreen(
                         Column(modifier = Modifier.fillMaxSize()) {
 
                             if (savedViews.isNotEmpty()) {
-                                SavedViewsRow(views = savedViews, onOpen = onOpenView)
+                                SavedViewChips(views = savedViews, selectedKey = viewKey, onSelect = { viewKey = it })
                                 Spacer(modifier = Modifier.height(12.dp))
                             }
 
@@ -724,8 +723,10 @@ fun HomeScreen(
                                 Spacer(modifier = Modifier.height(12.dp))
                             }
 
-                            if (settings.homeLayout == HomeLayout.TASKS) {
+                            // Tiles cannot show a filter, so a chosen view shows the lists with their tasks.
+                            if (settings.homeLayout == HomeLayout.TASKS || activeView != null) {
                                 HomeTaskSections(
+                                    filter = activeView,
                                     categories = listedCategories,
                                     settings = settings,
                                     tagDefinitions = tagDefinitionsByList,
@@ -927,26 +928,6 @@ private class HomeViewModelFactory(
             return HomeViewModel(fileRepository, appSettingsRepository) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")
-    }
-}
-
-/** One chip per saved view, e.g. "Small tasks"; tapping opens its tasks from all folders. */
-@Composable
-private fun SavedViewsRow(views: List<SavedView>, onOpen: (SavedView) -> Unit) {
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        items(views, key = { "${it.folder}\u001F${it.name}" }) { view ->
-            AssistChip(
-                onClick = { onOpen(view) },
-                label = { Text(text = view.name) },
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Filled.FilterList,
-                        contentDescription = null,
-                        modifier = Modifier.size(AssistChipDefaults.IconSize),
-                    )
-                },
-            )
-        }
     }
 }
 
