@@ -152,7 +152,6 @@ object TaskReminderScheduler {
             }
         }
 
-        index.save()
         NewTaskAlerts.keepOnly(context, alertFiles)
         val prefs = statePrefs(context)
         val existingKeys = candidates.map { TaskReminderPlanner.keyOf(it) }.toSet()
