@@ -69,6 +69,7 @@ import androidx.compose.material.icons.filled.Sell
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.FilterListOff
 import androidx.compose.material.icons.filled.FolderOff
@@ -132,6 +133,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.isotjs.todosian.BuildConfig
 import com.isotjs.todosian.R
+import com.isotjs.todosian.utils.ObsidianLinks
 import com.isotjs.todosian.data.FileRepository
 import com.isotjs.todosian.data.PreferencesManager
 import com.isotjs.todosian.data.model.Category
@@ -239,6 +241,10 @@ fun SettingsScreen(
     var showIndexDialog by remember { mutableStateOf(false) }
     var showExcludedFoldersDialog by remember { mutableStateOf(false) }
     var showDeletedNoteDialog by remember { mutableStateOf(false) }
+    var showVaultNameDialog by remember { mutableStateOf(false) }
+    val mainFolderName = remember(fileRepository) {
+        fileRepository.getFolderUri()?.let { folder -> ObsidianLinks.vaultName(context, folder, null, "") }.orEmpty()
+    }
     var showReminderProfilesDialog by remember { mutableStateOf(false) }
     var showNewTaskAlertDialog by remember { mutableStateOf(false) }
     var newTaskAlertFiles by remember { mutableStateOf(preferencesManager.getNewTaskAlertFiles()) }
@@ -397,6 +403,15 @@ fun SettingsScreen(
             folders = settings.excludedFolders,
             onChange = { appSettingsRepository.setExcludedFolders(it) },
             onDismiss = { showExcludedFoldersDialog = false },
+        )
+    }
+
+    if (showVaultNameDialog) {
+        ObsidianVaultNameDialog(
+            current = settings.obsidianVaultName,
+            folderName = mainFolderName,
+            onSave = { appSettingsRepository.setObsidianVaultName(it) },
+            onDismiss = { showVaultNameDialog = false },
         )
     }
 
@@ -894,6 +909,15 @@ fun SettingsScreen(
                             subtitle = stringResource(R.string.settings_index_deep_check) + ": " +
                                 deepCheckModeLabel(settings.deepCheckMode),
                             onClick = { showIndexDialog = true },
+                        )
+
+                        SettingsDivider()
+
+                        SettingsNavRow(
+                            icon = Icons.AutoMirrored.Filled.OpenInNew,
+                            title = stringResource(R.string.settings_obsidian_vault),
+                            subtitle = settings.obsidianVaultName.ifBlank { mainFolderName },
+                            onClick = { showVaultNameDialog = true },
                         )
 
                         SettingsDivider()

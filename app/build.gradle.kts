@@ -114,6 +114,9 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.glance.appwidget)
+    // Note preview: Markdown renderer (Apache-2.0) with Coil for images from the vault; no network module.
+    implementation(libs.mikepenz.markdown.m3)
+    implementation(libs.mikepenz.markdown.coil3)
     testImplementation(libs.junit)
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.squareup.leakcanary.android)

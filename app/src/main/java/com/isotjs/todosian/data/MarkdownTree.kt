@@ -212,3 +212,39 @@ private val STAMP_PROJECTION = arrayOf(
 internal fun sameName(a: String, b: String): Boolean =
     java.text.Normalizer.normalize(a, java.text.Normalizer.Form.NFC)
         .equals(java.text.Normalizer.normalize(b, java.text.Normalizer.Form.NFC), ignoreCase = true)
+
+/** All files of a note folder that are no notes (images, PDFs, …), by path and by name. */
+internal class VaultFiles(private val byPath: Map<String, Uri>, private val byName: Map<String, Uri>) {
+    /**
+     * The file a note links to: [link] as written in the note, either a path from the folder, a
+     * path from the note's own folder [noteDir], or a bare name as Obsidian allows.
+     */
+    fun find(link: String, noteDir: String): Uri? {
+        val path = link.trim().removePrefix("./").removePrefix("/")
+        return byPath[path.lowercase()]
+            ?: (if (noteDir.isNotEmpty()) byPath["$noteDir/$path".lowercase()] else null)
+            ?: byName[path.substringAfterLast('/').lowercase()]
+    }
+}
+
+/** Lists every file below [treeUri] that is not a note, hidden folders left out. */
+internal fun listVaultFiles(context: Context, treeUri: Uri, maxFolders: Int = 2_000): VaultFiles {
+    val byPath = HashMap<String, Uri>()
+    val byName = HashMap<String, Uri>()
+    val pending = ArrayDeque(listOf(DocumentsContract.getTreeDocumentId(treeUri) to ""))
+    var folders = 0
+    while (pending.isNotEmpty() && folders++ < maxFolders) {
+        val (folderId, prefix) = pending.removeFirst()
+        listChildren(context, treeUri, folderId).forEach { child ->
+            when {
+                child.isDirectory -> if (!child.name.startsWith('.')) pending.add(child.id to "$prefix${child.name}/")
+                !child.name.endsWith(".md", ignoreCase = true) -> {
+                    val uri = DocumentsContract.buildDocumentUriUsingTree(treeUri, child.id)
+                    byPath["$prefix${child.name}".lowercase()] = uri
+                    byName.putIfAbsent(child.name.lowercase(), uri)
+                }
+            }
+        }
+    }
+    return VaultFiles(byPath, byName)
+}

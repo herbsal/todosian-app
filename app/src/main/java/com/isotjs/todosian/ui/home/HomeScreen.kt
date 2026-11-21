@@ -1,5 +1,7 @@
 package com.isotjs.todosian.ui.home
 
+import android.net.Uri
+
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.filled.FilterList
@@ -37,6 +39,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.CreateNewFolder
@@ -84,6 +87,8 @@ import androidx.lifecycle.Lifecycle
 import com.isotjs.todosian.BuildConfig
 import com.isotjs.todosian.R
 import com.isotjs.todosian.data.VaultSync
+import com.isotjs.todosian.ui.preview.NotePreviewSheet
+import com.isotjs.todosian.utils.ObsidianLinks
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material3.Badge
@@ -190,6 +195,9 @@ fun HomeScreen(
 
     var showNewCategorySheet by remember { mutableStateOf(false) }
     var showQuickAdd by remember { mutableStateOf(false) }
+    var showSearch by remember { mutableStateOf(false) }
+    var previewUri by remember { mutableStateOf<Uri?>(null) }
+    val localContext = androidx.compose.ui.platform.LocalContext.current
     var newCategoryName by remember { mutableStateOf("") }
 
     var renameTarget by remember { mutableStateOf<Category?>(null) }
@@ -383,6 +391,39 @@ fun HomeScreen(
         )
     }
 
+    if (showSearch) {
+        SearchSheet(
+            categories = uiState.categories,
+            onOpenCategory = { uri ->
+                showSearch = false
+                onOpenCategory(uri)
+            },
+            onPreview = { previewUri = it },
+            onSearchInObsidian = { query ->
+                val folder = fileRepository.getFolderUri()
+                if (folder != null) {
+                    val vault = ObsidianLinks.vaultName(localContext, folder, folder, settings.obsidianVaultName)
+                    if (!ObsidianLinks.launch(localContext, ObsidianLinks.searchUri(vault, query))) {
+                        scope.launch { snackbarHostState.showSnackbar(resources.getString(R.string.preview_obsidian_missing)) }
+                    }
+                }
+            },
+            onDismiss = { showSearch = false },
+        )
+    }
+
+    previewUri?.let { uri ->
+        NotePreviewSheet(
+            noteUri = uri,
+            mainFolder = fileRepository.getFolderUri(),
+            vaultNameSetting = settings.obsidianVaultName,
+            onDismiss = { previewUri = null },
+            onObsidianMissing = {
+                scope.launch { snackbarHostState.showSnackbar(resources.getString(R.string.preview_obsidian_missing)) }
+            },
+        )
+    }
+
     if (showChangelogSheet) {
         ChangelogBottomSheet(
             onDismissRequest = {
@@ -398,6 +439,9 @@ fun HomeScreen(
                 actions = {
                     // Shown only while changed notes are read for more than half a second.
                     if (!(syncProgress?.firstBuild == true && uiState.categories.isEmpty())) SyncIndicator(syncProgress)
+                    IconButton(onClick = { showSearch = true }) {
+                        Icon(imageVector = Icons.Filled.Search, contentDescription = stringResource(R.string.cd_search))
+                    }
                     IconButton(onClick = onOpenSettings) {
                         Icon(
                             imageVector = Icons.Filled.Settings,

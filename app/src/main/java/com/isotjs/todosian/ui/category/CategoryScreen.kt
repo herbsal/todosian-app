@@ -27,6 +27,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Article
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.outlined.Checklist
 import androidx.compose.material.icons.outlined.ContentCopy
@@ -71,6 +72,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.isotjs.todosian.R
+import com.isotjs.todosian.ui.preview.NotePreviewSheet
 import com.isotjs.todosian.data.FileRepository
 import com.isotjs.todosian.data.model.Todo
 import com.isotjs.todosian.data.settings.AppSettingsRepository
@@ -570,6 +572,19 @@ fun CategoryScreen(
         }
     }
 
+    var showPreview by remember { mutableStateOf(false) }
+    if (showPreview) {
+        NotePreviewSheet(
+            noteUri = categoryUri,
+            mainFolder = fileRepository.getFolderUri(),
+            vaultNameSetting = settings.obsidianVaultName,
+            onDismiss = { showPreview = false },
+            onObsidianMissing = {
+                scope.launch { snackbarHostState.showSnackbar(resources.getString(R.string.preview_obsidian_missing)) }
+            },
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -589,6 +604,13 @@ fun CategoryScreen(
                     }
                 },
                 actions = {
+                    // The whole note, rendered, with a way into Obsidian.
+                    IconButton(onClick = { showPreview = true }) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.Article,
+                            contentDescription = stringResource(R.string.preview_show_note),
+                        )
+                    }
                     TodoSortMenu(
                         sort = settings.todoSort,
                         sortGroup = settings.todoSortGroup,
