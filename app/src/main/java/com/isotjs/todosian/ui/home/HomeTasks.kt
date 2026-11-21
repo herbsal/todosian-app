@@ -16,6 +16,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
+import com.isotjs.todosian.utils.SavedView
+import com.isotjs.todosian.utils.TagFilter
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -244,17 +252,43 @@ internal fun CalendarTab(
     onOpenCategory: (Uri) -> Unit,
     onToggleTodo: (Category, Todo) -> Unit,
     modifier: Modifier = Modifier,
+    savedViews: List<SavedView> = emptyList(),
 ) {
     var mode by rememberSaveable { mutableStateOf(CalendarMode.MONTH) }
     val today = LocalDate.now()
     var month by rememberSaveable { mutableStateOf(today.withDayOfMonth(1).toString()) }
     var selected by rememberSaveable { mutableStateOf(today.toString()) }
-    val tasks = remember(categories) { categories.flatMap { c -> c.openTodos.map { HomeTask(c, it) } } }
+    // The filter chips of the lists tab filter the calendar in place: one view at a time.
+    var viewKey by rememberSaveable { mutableStateOf<String?>(null) }
+    val activeView = savedViews.firstOrNull { viewKeyOf(it) == viewKey }
+    val tasks = remember(categories, activeView) {
+        categories.flatMap { c -> c.openTodos.map { HomeTask(c, it) } }
+            .filter { task -> activeView == null || TagFilter.matches(task.todo.text, activeView.terms) }
+    }
     val byDate = remember(tasks) {
         tasks.mapNotNull { task -> CalendarAgenda.dateOf(task.todo)?.let { it to task } }.groupBy({ it.first }, { it.second })
     }
 
     Column(modifier = modifier.fillMaxSize()) {
+        if (savedViews.isNotEmpty()) {
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 8.dp)) {
+                items(savedViews, key = { viewKeyOf(it) }) { view ->
+                    val isActive = viewKeyOf(view) == viewKey
+                    FilterChip(
+                        selected = isActive,
+                        onClick = { viewKey = if (isActive) null else viewKeyOf(view) },
+                        label = { Text(text = view.name) },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = if (isActive) Icons.Filled.Check else Icons.Filled.FilterList,
+                                contentDescription = null,
+                                modifier = Modifier.size(FilterChipDefaults.IconSize),
+                            )
+                        },
+                    )
+                }
+            }
+        }
         SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
             CalendarMode.entries.forEachIndexed { index, entry ->
                 SegmentedButton(
@@ -515,3 +549,5 @@ private fun DayCell(
         }
     }
 }
+
+private fun viewKeyOf(view: SavedView): String = "${view.folder}\u001F${view.name}"
