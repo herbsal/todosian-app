@@ -13,11 +13,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.isotjs.todosian.utils.TagDefinitions
+import com.isotjs.todosian.utils.TagHit
 import com.isotjs.todosian.utils.TagText
 
 /**
  * One chip per keyword of the folder's keyword note. Tapping sets or clears the keyword's tag in
  * [text]; in a named group (e.g. "Effort") only one keyword is set at a time.
+ * Keywords already [recognized] in the words show above as chips with their symbol and are left
+ * out here; picking another keyword of such a group drops the recognized one ([onOverride]).
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -26,6 +29,8 @@ fun TagQuickPicker(
     text: String,
     onTextChange: (String) -> Unit,
     modifier: Modifier = Modifier,
+    recognized: List<TagHit> = emptyList(),
+    onOverride: (TagHit) -> Unit = {},
 ) {
     if (definitions.isEmpty) return
     Column(
@@ -33,7 +38,8 @@ fun TagQuickPicker(
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         definitions.groups.forEach { group ->
-            if (group.terms.isEmpty()) return@forEach
+            val shown = group.terms.filter { term -> recognized.none { it.term == term } }
+            if (shown.isEmpty()) return@forEach
             group.name?.let { name ->
                 Text(
                     text = name,
@@ -43,10 +49,13 @@ fun TagQuickPicker(
                 )
             }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                group.terms.forEach { term ->
+                shown.forEach { term ->
                     FilterChip(
                         selected = TagText.hasTerm(text, term),
-                        onClick = { onTextChange(TagText.toggle(text, group, term)) },
+                        onClick = {
+                            if (group.exclusive) recognized.filter { it.group == group }.forEach(onOverride)
+                            onTextChange(TagText.toggle(text, group, term))
+                        },
                         label = { Text(text = term.label) },
                     )
                 }

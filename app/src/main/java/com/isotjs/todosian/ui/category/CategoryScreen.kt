@@ -329,6 +329,8 @@ fun CategoryScreen(
                         definitions = uiState.tagDefinitions,
                         text = sheetText,
                         onTextChange = { sheetText = it },
+                        recognized = recognition.tags,
+                        onOverride = { hit -> ignoredTags = ignoredTags + hit.term.primaryTag },
                     )
                 }
 
