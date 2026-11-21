@@ -92,3 +92,8 @@ private fun SortMenuItem(label: String, selected: Boolean, onClick: () -> Unit) 
         },
     )
 }
+
+/** The tag groups to sort by, from the tag notes of all lists shown, each name once. */
+fun sortGroupNames(definitions: Collection<com.isotjs.todosian.utils.TagDefinitions>): List<String> =
+    definitions.flatMap { d -> d.groups.mapNotNull { group -> group.name.takeIf { group.terms.isNotEmpty() } } }
+        .distinctBy { it.lowercase() }

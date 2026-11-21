@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -64,7 +65,7 @@ import kotlinx.coroutines.launch
 import java.time.LocalDate
 
 /** How far the sheet is pulled up to open the normal task sheet. */
-private val PULL_UP_DISTANCE = 56.dp
+private val PULL_UP_DISTANCE = 40.dp
 
 /** Name of the list quick tasks go to when no list is named and no default list is set. */
 private const val INBOX_NAME = "Inbox"
@@ -176,7 +177,16 @@ internal fun QuickAddSheet(
         }
     }
 
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        // The handle is where people pull: pulling it up opens the normal task sheet too.
+        dragHandle = {
+            Box(modifier = Modifier.pullUp(pullDistance) { currentOpenFull() }) {
+                BottomSheetDefaults.DragHandle()
+            }
+        },
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -184,22 +194,7 @@ internal fun QuickAddSheet(
                 .windowInsetsPadding(WindowInsets.ime)
                 .padding(bottom = 16.dp)
                 // The sheet is already fully open, so a pull upwards means "more": the normal task sheet.
-                // Only watched, never consumed, so pulling down still closes the sheet.
-                .pointerInput(Unit) {
-                    awaitEachGesture {
-                        val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-                        var dragged = 0f
-                        while (true) {
-                            val change = awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull { it.id == down.id } ?: break
-                            if (!change.pressed) break
-                            dragged += change.position.y - change.previousPosition.y
-                            if (dragged < -pullDistance) {
-                                currentOpenFull()
-                                break
-                            }
-                        }
-                    }
-                },
+                .pullUp(pullDistance) { currentOpenFull() },
         ) {
             Text(text = stringResource(R.string.quick_add_title), style = MaterialTheme.typography.titleLarge)
             Spacer(modifier = Modifier.height(12.dp))
@@ -269,6 +264,26 @@ internal fun QuickAddSheet(
                 TextButton(onClick = { save() }, enabled = text.isNotBlank() && !saving) {
                     Text(text = stringResource(R.string.action_save))
                 }
+            }
+        }
+    }
+}
+
+/**
+ * Calls [onPull] once the finger has moved [distance] upwards. The gesture is only watched,
+ * never consumed, so the sheet still closes when pulled down.
+ */
+private fun Modifier.pullUp(distance: Float, onPull: () -> Unit): Modifier = pointerInput(distance) {
+    awaitEachGesture {
+        val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+        var dragged = 0f
+        while (true) {
+            val change = awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull { it.id == down.id } ?: break
+            if (!change.pressed) break
+            dragged += change.position.y - change.previousPosition.y
+            if (dragged < -distance) {
+                onPull()
+                break
             }
         }
     }

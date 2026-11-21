@@ -2,9 +2,6 @@ package com.isotjs.todosian.ui.dailyfocus
 
 import com.isotjs.todosian.utils.TagDisplaySettings
 import android.net.Uri
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -61,6 +58,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.isotjs.todosian.R
 import com.isotjs.todosian.ui.components.rememberTagDefinitions
+import com.isotjs.todosian.ui.components.TaskItem
+import com.isotjs.todosian.ui.components.TaskSectionHeader
+import com.isotjs.todosian.ui.components.TodoSortMenu
+import com.isotjs.todosian.ui.components.sortGroupNames
+import com.isotjs.todosian.ui.components.groupedTaskRows
+import com.isotjs.todosian.utils.TodoSorting
 import com.isotjs.todosian.data.FileRepository
 import com.isotjs.todosian.data.settings.AppSettingsRepository
 import com.isotjs.todosian.data.settings.DailyFocusMode
@@ -71,12 +74,10 @@ import com.isotjs.todosian.utils.SavedView
 import com.isotjs.todosian.utils.TagFilter
 import com.isotjs.todosian.ui.components.TasksMetaEditor
 import com.isotjs.todosian.utils.TagDefinitions
-import com.isotjs.todosian.ui.components.TodoRow
 import com.isotjs.todosian.ui.components.TodoSheetMode
 import com.isotjs.todosian.ui.components.TodosianDimens
 import com.isotjs.todosian.ui.components.TodosianEmptyState
 import com.isotjs.todosian.ui.components.TodosianLoadingIndicator
-import com.isotjs.todosian.ui.components.TodosianSectionHeader
 import com.isotjs.todosian.utils.MarkdownParser
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
@@ -314,6 +315,17 @@ fun DailyFocusScreen(
                         )
                     }
                 },
+                actions = {
+                    TodoSortMenu(
+                        sort = settings.todoSort,
+                        sortGroup = settings.todoSortGroup,
+                        groupNames = sortGroupNames(tagDefinitionsByCategory.values),
+                        onSelect = { sort, group ->
+                            if (group != null) appSettingsRepository.setTodoSortGroup(group)
+                            appSettingsRepository.setTodoSort(sort)
+                        },
+                    )
+                },
             )
         },
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
@@ -344,9 +356,35 @@ fun DailyFocusScreen(
             return@Scaffold
         }
 
-        // Group tasks by category name
-        val grouped = remember(viewTasks, selectedTerms) {
-            viewTasks.filter { TagFilter.matches(it.todo.text, selectedTerms) }.groupBy { it.categoryName }
+        // Grouped by list like the lists tab, each list in the order of the sort button.
+        val grouped = remember(viewTasks, selectedTerms, settings.todoSort, settings.todoSortGroup, tagDefinitionsByCategory) {
+            viewTasks.filter { TagFilter.matches(it.todo.text, selectedTerms) }
+                .groupBy { it.categoryName }
+                .mapValues { (_, tasks) ->
+                    TodoSorting.sortAcrossLists(
+                        tasks,
+                        settings.todoSort,
+                        settings.todoSortGroup,
+                        { it.todo },
+                        { tagDefinitionsByCategory[it.categoryUri] ?: TagDefinitions.EMPTY },
+                    )
+                }
+        }
+        fun openEditor(task: DailyFocusTask) {
+            sheetMode = TodoSheetMode.Edit(task.todo)
+            sheetText = task.todo.text
+            sheetMeta = MarkdownParser.TasksMeta(
+                dueDate = task.todo.dueDate,
+                startDate = task.todo.startDate,
+                scheduledDate = task.todo.scheduledDate,
+                completionDate = task.todo.completionDate,
+                createdDate = task.todo.createdDate,
+                priority = task.todo.priority,
+                recurrence = task.todo.recurrence,
+                onCompletion = task.todo.onCompletion,
+                reminder = task.todo.reminder,
+            )
+            sheetTask = task
         }
 
         LazyColumn(
@@ -379,49 +417,21 @@ fun DailyFocusScreen(
                 }
             }
             grouped.forEach { (categoryName, tasksInGroup) ->
-                stickyHeader(key = "header_$categoryName") {
-                    TodosianSectionHeader(text = categoryName)
+                item(key = "header_$categoryName") {
+                    TaskSectionHeader(text = categoryName, color = MaterialTheme.colorScheme.primary)
                 }
-                items(
-                    items = tasksInGroup,
-                    key = { "${it.categoryUri}:${it.todo.id}" },
-                ) { task ->
-                    TodoRow(
-                        todo = task.todo,
-                        enableTasksPluginSupport = settings.enableTasksPluginSupport,
-                        useEmojisInUi = settings.tasksPluginUseEmojisInUi,
-                        tagDefinitions = tagDefinitionsByCategory[task.categoryUri] ?: TagDefinitions.EMPTY,
-                        tagDisplay = tagDisplay,
-                        onToggle = { viewModel.toggleTodo(task) },
-                        onEdit = {
-                            sheetMode = TodoSheetMode.Edit(task.todo)
-                            sheetText = task.todo.text
-                            sheetMeta = MarkdownParser.TasksMeta(
-                                dueDate = task.todo.dueDate,
-                                startDate = task.todo.startDate,
-                                scheduledDate = task.todo.scheduledDate,
-                                completionDate = task.todo.completionDate,
-                                createdDate = task.todo.createdDate,
-                                priority = task.todo.priority,
-                                recurrence = task.todo.recurrence,
-                                onCompletion = task.todo.onCompletion,
-                                reminder = task.todo.reminder,
-                            )
-                            sheetTask = task
-                        },
-                        onAddSubtask = {},
-                        onRequestDelete = { deleteTodoTarget = task },
-                        onRequestMove = null,
-                        allowMove = false,
-                        showSubtaskButton = false,
-                        modifier = Modifier.animateItem(
-                            fadeInSpec = tween(durationMillis = 180),
-                            placementSpec = spring(stiffness = Spring.StiffnessMediumLow),
-                            fadeOutSpec = tween(durationMillis = 160),
-                        ),
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                }
+                val byItem = tasksInGroup.associateBy { TaskItem(it.todo, it.categoryUri, it.categoryName) }
+                groupedTaskRows(
+                    section = "focus",
+                    items = byItem.keys.toList(),
+                    showListName = false,
+                    settings = settings,
+                    tagDefinitionsOf = { tagDefinitionsByCategory[it] ?: TagDefinitions.EMPTY },
+                    tagDisplay = tagDisplay,
+                    onToggle = { item -> byItem[item]?.let { viewModel.toggleTodo(it) } },
+                    onEdit = { item -> byItem[item]?.let(::openEditor) },
+                    onDelete = { item -> deleteTodoTarget = byItem[item] },
+                )
             }
             item { Spacer(modifier = Modifier.height(24.dp)) }
         }

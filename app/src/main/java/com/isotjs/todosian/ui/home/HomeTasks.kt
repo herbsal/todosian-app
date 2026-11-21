@@ -23,7 +23,6 @@ import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import com.isotjs.todosian.utils.SavedView
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -49,7 +48,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.pluralStringResource
@@ -60,8 +58,11 @@ import com.isotjs.todosian.R
 import com.isotjs.todosian.data.model.Category
 import com.isotjs.todosian.data.model.Todo
 import com.isotjs.todosian.data.settings.AppSettings
-import com.isotjs.todosian.ui.components.TodoRow
-import com.isotjs.todosian.ui.components.groupedRowShape
+import com.isotjs.todosian.ui.components.TaskItem
+import com.isotjs.todosian.ui.components.TaskSectionHeader
+import com.isotjs.todosian.ui.components.groupedTaskRows
+import com.isotjs.todosian.data.settings.TodoSort
+import com.isotjs.todosian.utils.TodoSorting
 import com.isotjs.todosian.utils.AgendaBucket
 import com.isotjs.todosian.utils.CalendarAgenda
 import com.isotjs.todosian.utils.TagDefinitions
@@ -71,17 +72,26 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 
-/** A task with the list it belongs to. */
-internal data class HomeTask(val category: Category, val todo: Todo)
-
 private fun Category.shortName(): String = displayName.substringAfterLast('/')
 
-/** The first open tasks of a list: dated ones first (earliest first), then the rest in file order. */
-internal fun previewTasks(category: Category, count: Int): List<Todo> {
+private fun Category.item(todo: Todo) = TaskItem(todo, uri, shortName())
+
+/**
+ * The first open tasks of a list. In file order (the default) dated ones come first (earliest
+ * first), then the rest in file order; any other order is the one chosen with the sort button.
+ */
+internal fun previewTasks(category: Category, count: Int, settings: AppSettings, definitions: TagDefinitions): List<Todo> {
     val topLevel = category.openTodos.filter { it.indentLevel == 0 }
+    if (settings.todoSort != TodoSort.FILE_ORDER) {
+        return TodoSorting.sortAcrossLists(topLevel, settings.todoSort, settings.todoSortGroup, { it }, { definitions }).take(count)
+    }
     val (dated, undated) = topLevel.partition { CalendarAgenda.dateOf(it) != null }
     return (dated.sortedBy { CalendarAgenda.dateOf(it) } + undated).take(count)
 }
+
+/** Tasks of several lists in the order of the sort button; in file order as given. */
+private fun List<TaskItem>.sortedBy(settings: AppSettings, tagDefinitions: Map<Uri, TagDefinitions>): List<TaskItem> =
+    TodoSorting.sortAcrossLists(this, settings.todoSort, settings.todoSortGroup, { it.todo }, { tagDefinitions[it.listUri] ?: TagDefinitions.EMPTY })
 
 /**
  * Tab "Lists" with tasks instead of tiles: per list a header with the number of open tasks,
@@ -120,7 +130,8 @@ internal fun HomeTaskSections(
                 )
             }
             if (!collapsed) {
-                val preview = previewTasks(category, settings.homeTasksPerList)
+                val definitions = tagDefinitions[category.uri] ?: TagDefinitions.EMPTY
+                val preview = previewTasks(category, settings.homeTasksPerList, settings, definitions)
                 val more = category.openTodos.count { it.indentLevel == 0 } - preview.size
                 val rows = preview.size + if (more > 0) 1 else 0
                 if (preview.isEmpty()) {
@@ -133,18 +144,17 @@ internal fun HomeTaskSections(
                         )
                     }
                 }
-                itemsIndexed(preview, key = { _, todo -> "todo:$key:${todo.lineIndex}:${todo.text}" }) { index, todo ->
-                    HomeTodoRow(
-                        todo = todo,
-                        settings = settings,
-                        tagDefinitions = tagDefinitions[category.uri] ?: TagDefinitions.EMPTY,
-                        tagDisplay = tagDisplay,
-                        index = index,
-                        count = rows,
-                        onToggle = { onToggleTodo(category, todo) },
-                        onOpen = { onOpenCategory(category.uri) },
-                    )
-                }
+                groupedTaskRows(
+                    section = "list",
+                    items = preview.map { category.item(it) },
+                    showListName = false,
+                    settings = settings,
+                    tagDefinitionsOf = { definitions },
+                    tagDisplay = tagDisplay,
+                    onToggle = { onToggleTodo(category, it.todo) },
+                    onEdit = { onOpenCategory(category.uri) },
+                    extraRows = rows - preview.size,
+                )
                 if (more > 0) {
                     item(key = "more:$key") {
                         MoreRow(more = more, onClick = { onOpenCategory(category.uri) })
@@ -193,34 +203,6 @@ private fun ListHeader(name: String, open: Int, overdue: Int, collapsed: Boolean
 }
 
 @Composable
-private fun HomeTodoRow(
-    todo: Todo,
-    settings: AppSettings,
-    tagDefinitions: TagDefinitions,
-    tagDisplay: TagDisplaySettings,
-    index: Int,
-    count: Int,
-    onToggle: () -> Unit,
-    onOpen: () -> Unit,
-) {
-    TodoRow(
-        todo = todo,
-        enableTasksPluginSupport = settings.enableTasksPluginSupport,
-        useEmojisInUi = settings.tasksPluginUseEmojisInUi,
-        onToggle = onToggle,
-        onEdit = onOpen,
-        onAddSubtask = {},
-        onRequestDelete = {},
-        onRequestMove = null,
-        showSubtaskButton = false,
-        tagDefinitions = tagDefinitions,
-        tagDisplay = tagDisplay,
-        shape = groupedRowShape(index, count),
-        showDivider = index > 0,
-    )
-}
-
-@Composable
 private fun MoreRow(more: Int, onClick: () -> Unit) {
     Box(
         modifier = Modifier
@@ -260,10 +242,16 @@ internal fun CalendarTab(
     // The filter chips of the lists tab filter the calendar in place: one view at a time.
     var viewKey by rememberSaveable { mutableStateOf<String?>(null) }
     val activeView = savedViews.firstOrNull { viewKeyOf(it) == viewKey }
-    val tasks = remember(categories, activeView) {
-        categories.flatMap { c -> c.openTodos.map { HomeTask(c, it) } }
+    val tasks = remember(categories, activeView, settings.todoSort, settings.todoSortGroup, tagDefinitions) {
+        categories.flatMap { c -> c.openTodos.map { c.item(it) } }
             .filter { task -> activeView == null || activeView.matches(task.todo.text) }
+            // Days and agenda buckets keep their date order; tasks of the same day follow the sort button.
+            .sortedBy(settings, tagDefinitions)
     }
+    val categoryByUri = remember(categories) { categories.associateBy { it.uri } }
+    val toggle: (TaskItem) -> Unit = { item -> categoryByUri[item.listUri]?.let { onToggleTodo(it, item.todo) } }
+    val open: (TaskItem) -> Unit = { item -> onOpenCategory(item.listUri) }
+    val definitionsOf: (Uri) -> TagDefinitions = { tagDefinitions[it] ?: TagDefinitions.EMPTY }
     val byDate = remember(tasks) {
         tasks.mapNotNull { task -> CalendarAgenda.dateOf(task.todo)?.let { it to task } }.groupBy({ it.first }, { it.second })
     }
@@ -315,7 +303,7 @@ internal fun CalendarTab(
                 }
                 val dayTasks = byDate[selectedDay].orEmpty()
                 item(key = "day-header") {
-                    CalendarHeader(text = dayTitle(selectedDay, today) + " · ${dayTasks.size}", color = MaterialTheme.colorScheme.primary)
+                    TaskSectionHeader(text = dayTitle(selectedDay, today) + " · ${dayTasks.size}", color = MaterialTheme.colorScheme.primary)
                 }
                 if (dayTasks.isEmpty()) {
                     item(key = "day-empty") {
@@ -327,13 +315,13 @@ internal fun CalendarTab(
                         )
                     }
                 }
-                taskRows("day", dayTasks, settings, tagDefinitions, tagDisplay, onOpenCategory, onToggleTodo)
+                groupedTaskRows("day", dayTasks, true, settings, definitionsOf, tagDisplay, toggle, open)
                 val overdue = byDate.filterKeys { it < today }.toSortedMap().values.flatten()
                 if (selectedDay == today && overdue.isNotEmpty()) {
                     item(key = "overdue-header") {
-                        CalendarHeader(text = stringResource(R.string.calendar_overdue) + " · ${overdue.size}", color = MaterialTheme.colorScheme.error)
+                        TaskSectionHeader(text = stringResource(R.string.calendar_overdue) + " · ${overdue.size}", color = MaterialTheme.colorScheme.error)
                     }
-                    taskRows("overdue", overdue, settings, tagDefinitions, tagDisplay, onOpenCategory, onToggleTodo)
+                    groupedTaskRows("overdue", overdue, true, settings, definitionsOf, tagDisplay, toggle, open)
                 }
             } else {
                 val agenda = CalendarAgenda.agenda(tasks, today) { it.todo }
@@ -349,12 +337,12 @@ internal fun CalendarTab(
                 }
                 agenda.forEach { (bucket, items) ->
                     item(key = "bucket:$bucket") {
-                        CalendarHeader(
+                        TaskSectionHeader(
                             text = stringResource(bucketLabel(bucket)) + " · ${items.size}",
                             color = if (bucket == AgendaBucket.OVERDUE) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                    taskRows(bucket.name, items, settings, tagDefinitions, tagDisplay, onOpenCategory, onToggleTodo)
+                    groupedTaskRows(bucket.name, items, true, settings, definitionsOf, tagDisplay, toggle, open)
                 }
             }
         }
@@ -367,59 +355,6 @@ private fun bucketLabel(bucket: AgendaBucket): Int = when (bucket) {
     AgendaBucket.TOMORROW -> R.string.calendar_tomorrow
     AgendaBucket.THIS_WEEK -> R.string.calendar_this_week
     AgendaBucket.LATER -> R.string.calendar_later
-}
-
-private fun LazyListScope.taskRows(
-    section: String,
-    tasks: List<HomeTask>,
-    settings: AppSettings,
-    tagDefinitions: Map<Uri, TagDefinitions>,
-    tagDisplay: TagDisplaySettings,
-    onOpenCategory: (Uri) -> Unit,
-    onToggleTodo: (Category, Todo) -> Unit,
-) {
-    itemsIndexed(tasks, key = { _, t -> "$section:${t.category.uri}:${t.todo.lineIndex}:${t.todo.text}" }) { index, task ->
-        val shape = groupedRowShape(index, tasks.size)
-        // One surface per task with the list name below, so tasks from different lists can be told apart.
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(shape)
-                .background(MaterialTheme.colorScheme.surfaceContainer),
-        ) {
-            TodoRow(
-                todo = task.todo,
-                enableTasksPluginSupport = settings.enableTasksPluginSupport,
-                useEmojisInUi = settings.tasksPluginUseEmojisInUi,
-                onToggle = { onToggleTodo(task.category, task.todo) },
-                onEdit = { onOpenCategory(task.category.uri) },
-                onAddSubtask = {},
-                onRequestDelete = {},
-                onRequestMove = null,
-                showSubtaskButton = false,
-                tagDefinitions = tagDefinitions[task.category.uri] ?: TagDefinitions.EMPTY,
-                tagDisplay = tagDisplay,
-                shape = RectangleShape,
-                showDivider = index > 0,
-            )
-            Text(
-                text = task.category.shortName(),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(start = 40.dp, bottom = 6.dp),
-            )
-        }
-    }
-}
-
-@Composable
-private fun CalendarHeader(text: String, color: Color) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.titleSmall,
-        color = color,
-        modifier = Modifier.padding(start = 4.dp, top = 12.dp, bottom = 4.dp),
-    )
 }
 
 @Composable
@@ -438,7 +373,7 @@ private fun MonthGrid(
     month: LocalDate,
     today: LocalDate,
     selected: LocalDate,
-    byDate: Map<LocalDate, List<HomeTask>>,
+    byDate: Map<LocalDate, List<TaskItem>>,
     onSelect: (LocalDate) -> Unit,
     onMonthChange: (LocalDate) -> Unit,
 ) {
@@ -503,7 +438,7 @@ private fun DayCell(
     inMonth: Boolean,
     isToday: Boolean,
     isSelected: Boolean,
-    tasks: List<HomeTask>,
+    tasks: List<TaskItem>,
     overdue: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
