@@ -262,7 +262,8 @@ fun CategoryScreen(
                     maxLines = TaskTextField.MAX_LINES,
                     keyboardOptions = TaskTextField.keyboardOptions,
                     label = { Text(text = stringResource(hintRes)) },
-                    trailingIcon = if (isNewTask && !uiState.tagDefinitions.isEmpty) {
+                    // Always for a new task, as in quick capture: it also switches the list words.
+                    trailingIcon = if (isNewTask) {
                         {
                             RecognitionToggle(
                                 enabled = settings.tagRecognition,

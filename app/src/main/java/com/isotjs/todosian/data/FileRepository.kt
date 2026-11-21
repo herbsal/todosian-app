@@ -662,7 +662,10 @@ class SafFileRepository(
     override suspend fun getTagDefinitions(noteUri: Uri?): TagDefinitions = withContext(Dispatchers.IO) {
         val folder = tagFolderOf(noteUri) ?: return@withContext TagDefinitions.EMPTY
         runCatching {
-            val lines = findTagNote(appContext, folder)?.let { readLinesInternal(it) }.orEmpty()
+            // A folder without its own tag note (e.g. an extra folder) uses the main folder's.
+            val note = findTagNote(appContext, folder)
+                ?: getFolderUri()?.takeIf { it != folder }?.let { findTagNote(appContext, it) }
+            val lines = note?.let { readLinesInternal(it) }.orEmpty()
             rememberTagNote(folder, lines)
             TagDefinitionParser.parse(lines)
         }.onFailure { Log.w(TAG, "Reading the keyword note failed", it) }
