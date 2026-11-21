@@ -10,6 +10,9 @@ import java.net.URLEncoder
  * - `[[Notiz]]`, `[[Notiz|Name]]` and `[[Notiz#Abschnitt]]` become links to [NOTE_LINK_SCHEME]
  * - callouts (`> [!tip] Titel`) become quotes with a bold title
  * - front matter and `%%comments%%` are left out
+ * - a single line break stays a line break, and a line right after a list item starts its own
+ *   paragraph instead of joining the item (Obsidian has no "lazy" list lines)
+ * - tags (`#30min`) are shown as code, so they stand out like in Obsidian
  */
 object ObsidianMarkdown {
     /** Links to other notes: `todosian-note:<name>`, the name URL-encoded. */
@@ -21,6 +24,10 @@ object ObsidianMarkdown {
     private val MARKDOWN_IMAGE = Regex("""!\[([^\]]*)]\(\s*<?([^)\s>]+)>?(?:\s+"[^"]*")?\s*\)""")
     private val CALLOUT = Regex("""^(\s*(?:>\s*)+)\[!([\w-]+)][+-]?\s*(.*)$""")
     private val COMMENT = Regex("""%%.*?%%""", RegexOption.DOT_MATCHES_ALL)
+    private val FENCE = Regex("""^\s*(```|~~~)""")
+    private val LIST_ITEM = Regex("""^\s*([-*+]|\d+[.)])\s""")
+    private val HEADING = Regex("""^\s{0,3}#{1,6}(\s|$)""")
+    private val TAG = Regex("""(^|\s)(#[\p{L}\p{N}_/-]*[\p{L}_/-][\p{L}\p{N}_/-]*)""")
 
     /**
      * [resolveFile] gets a file name or path as written in the note and returns a URI the image
@@ -28,7 +35,48 @@ object ObsidianMarkdown {
      */
     fun prepare(text: String, resolveFile: (String) -> String?): String {
         val body = COMMENT.replace(stripFrontMatter(text), "")
-        return body.lines().joinToString("\n") { line -> prepareLine(line, resolveFile) }
+        val lines = body.lines()
+        val out = ArrayList<String>(lines.size + 8)
+        var inFence = false
+        lines.forEachIndexed { index, line ->
+            if (FENCE.containsMatchIn(line)) {
+                inFence = !inFence
+                out.add(line)
+                return@forEachIndexed
+            }
+            if (inFence) {
+                out.add(line)
+                return@forEachIndexed
+            }
+            val previous = lines.getOrNull(index - 1)
+            if (previous != null && LIST_ITEM.containsMatchIn(previous) && line.isNotBlank() && !continuesList(line)) {
+                out.add("")
+            }
+            var prepared = markTags(prepareLine(line, resolveFile))
+            val next = lines.getOrNull(index + 1)
+            if (next != null && next.isNotBlank() && line.isNotBlank() && !HEADING.containsMatchIn(line) &&
+                !line.trimStart().startsWith("|") && !FENCE.containsMatchIn(next) &&
+                !(LIST_ITEM.containsMatchIn(line) && !continuesList(next))
+            ) {
+                // Two spaces: a hard line break, as Obsidian shows a single line break.
+                prepared = prepared.trimEnd() + "  "
+            }
+            out.add(prepared)
+        }
+        return out.joinToString("\n")
+    }
+
+    /** A line that still belongs to the list above it: indented, another item, or a quote/table/heading of its own. */
+    private fun continuesList(line: String): Boolean =
+        line.first().isWhitespace() || LIST_ITEM.containsMatchIn(line) || line.startsWith(">") ||
+            line.startsWith("|") || HEADING.containsMatchIn(line)
+
+    /** Tags outside code become code spans; links and headings are left alone. */
+    private fun markTags(line: String): String {
+        if (!line.contains('#')) return line
+        return line.split('`').mapIndexed { i, part ->
+            if (i % 2 == 1) part else TAG.replace(part) { "${it.groupValues[1]}`${it.groupValues[2]}`" }
+        }.joinToString("`")
     }
 
     private fun prepareLine(line: String, resolveFile: (String) -> String?): String {
