@@ -199,6 +199,9 @@ interface FileRepository {
     /** The saved views of all folders, in folder order. */
     suspend fun getSavedViews(): List<SavedView>
 
+    /** The saved views last read, at once; null before the first read. */
+    fun cachedSavedViews(): List<SavedView>? = null
+
     /** The lines of the profile note [name]; null when there is none. */
     suspend fun readReminderProfile(folderUri: Uri, name: String): List<String>?
 
@@ -716,8 +719,13 @@ class SafFileRepository(
                     ?: TagDefinitions.EMPTY
                 SavedViews.parse(readLinesInternal(note), definitions, folder.toString())
             }.getOrDefault(emptyList())
-        }
+        }.also { savedViewsCache = it }
     }
+
+    @Volatile
+    private var savedViewsCache: List<SavedView>? = null
+
+    override fun cachedSavedViews(): List<SavedView>? = savedViewsCache
 
     override suspend fun readReminderProfile(folderUri: Uri, name: String): List<String>? = withContext(Dispatchers.IO) {
         runCatching {

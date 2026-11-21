@@ -5,6 +5,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.runtime.remember
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
@@ -39,7 +40,7 @@ class MainActivity : ComponentActivity() {
         val initialAddTaskRequest = addTaskSignal.value
         setContent {
             val settings = appSettingsRepository.settings.collectAsStateWithLifecycle(
-                initialValue = com.isotjs.todosian.data.settings.AppSettings(),
+                initialValue = remember { appSettingsRepository.current },
             ).value
 
             val systemDark = isSystemInDarkTheme()

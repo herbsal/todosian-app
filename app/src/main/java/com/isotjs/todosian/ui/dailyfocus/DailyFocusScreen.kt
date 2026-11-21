@@ -60,8 +60,8 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.isotjs.todosian.R
+import com.isotjs.todosian.ui.components.rememberTagDefinitions
 import com.isotjs.todosian.data.FileRepository
-import com.isotjs.todosian.data.settings.AppSettings
 import com.isotjs.todosian.data.settings.AppSettingsRepository
 import com.isotjs.todosian.data.settings.DailyFocusMode
 import com.isotjs.todosian.ui.components.TagFilterBar
@@ -96,12 +96,18 @@ fun DailyFocusScreen(
     embedded: Boolean = false,
 ) {
     val isView = viewName != null
-    val savedView by produceState<SavedView?>(null, viewFolder, viewName) {
-        value = viewName?.let { name -> fileRepository.getSavedViews().firstOrNull { it.folder == viewFolder && it.name == name } }
+    // The view as last read first, so its tasks show at once instead of an empty list.
+    val savedView by produceState(
+        viewName?.let { name -> fileRepository.cachedSavedViews()?.firstOrNull { it.folder == viewFolder && it.name == name } },
+        viewFolder,
+        viewName,
+    ) {
+        val read = viewName?.let { name -> fileRepository.getSavedViews().firstOrNull { it.folder == viewFolder && it.name == name } }
+        if (read != value) value = read
     }
     // Collect settings once to seed the ViewModel factory
     val settings by appSettingsRepository.settings.collectAsStateWithLifecycle(
-        initialValue = AppSettings(),
+        initialValue = remember { appSettingsRepository.current },
     )
 
     val viewModel: DailyFocusViewModel = viewModel(
@@ -139,27 +145,13 @@ fun DailyFocusScreen(
     var sheetText by remember { mutableStateOf("") }
     var sheetMeta by remember { mutableStateOf(MarkdownParser.TasksMeta()) }
     var sheetTask by remember { mutableStateOf<DailyFocusTask?>(null) }
-    val sheetTagDefinitions by produceState(
-        fileRepository.cachedTagDefinitions(sheetTask?.categoryUri) ?: TagDefinitions.EMPTY,
-        sheetTask?.categoryUri,
-    ) {
-        value = sheetTask?.categoryUri?.let { fileRepository.getTagDefinitions(it) } ?: TagDefinitions.EMPTY
-    }
+    val sheetTagDefinitions = rememberTagDefinitions(fileRepository, sheetTask?.categoryUri)
     var deleteTodoTarget by remember { mutableStateOf<DailyFocusTask?>(null) }
     var tagFilterKeys by rememberSaveable { mutableStateOf("") }
     val selectedTagKeys = remember(tagFilterKeys) { tagFilterKeys.split(TAG_FILTER_SEPARATOR).filter { it.isNotEmpty() }.toSet() }
     val categoryUris = remember(uiState.tasks) { uiState.tasks.map { it.categoryUri }.distinct() }
     // Keyword notes of the folders the tasks come from, so the chips use their labels and synonyms.
-    // Start with the tags last read, so the rows show symbols at once, not `#tag` first.
-    val tagDefinitionsByCategory by produceState(
-        categoryUris.associateWith { fileRepository.cachedTagDefinitions(it) ?: TagDefinitions.EMPTY },
-        categoryUris,
-    ) {
-        val cached = categoryUris.associateWith { fileRepository.cachedTagDefinitions(it) ?: TagDefinitions.EMPTY }
-        if (cached != value) value = cached
-        val fresh = categoryUris.associateWith { fileRepository.getTagDefinitions(it) }
-        if (fresh != value) value = fresh
-    }
+    val tagDefinitionsByCategory = rememberTagDefinitions(fileRepository, categoryUris)
     // A saved view shows only its keywords; until it is loaded, nothing.
     val viewTasks = remember(uiState.tasks, isView, savedView) {
         val view = savedView

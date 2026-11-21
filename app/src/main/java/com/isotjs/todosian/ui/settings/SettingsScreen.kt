@@ -182,7 +182,7 @@ fun SettingsScreen(
     var showChangelogSheet by remember { mutableStateOf(false) }
 
     val settings by appSettingsRepository.settings.collectAsStateWithLifecycle(
-        initialValue = AppSettings(),
+        initialValue = remember { appSettingsRepository.current },
     )
     val storageState by viewModel.storageState.collectAsStateWithLifecycle()
 

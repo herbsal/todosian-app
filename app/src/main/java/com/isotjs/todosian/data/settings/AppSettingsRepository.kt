@@ -11,6 +11,12 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 interface AppSettingsRepository {
     val settings: Flow<AppSettings>
 
+    /**
+     * The settings as they are now, read at once. Screens start with these instead of the defaults,
+     * so the first frame already uses the user's choices (tag symbols, daily focus mode).
+     */
+    val current: AppSettings get() = AppSettings()
+
     fun setThemeMode(themeMode: ThemeMode)
     fun setDynamicColorEnabled(enabled: Boolean)
 
@@ -102,6 +108,8 @@ class SharedPrefsAppSettingsRepository(
             prefs.unregisterOnSharedPreferenceChangeListener(listener)
         }
     }.distinctUntilChanged()
+
+    override val current: AppSettings get() = readSettings()
 
     override fun setThemeMode(themeMode: ThemeMode) {
         prefs.edit { putString(KEY_THEME_MODE, themeMode.name) }
