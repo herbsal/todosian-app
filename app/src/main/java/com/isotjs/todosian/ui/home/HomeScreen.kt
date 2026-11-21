@@ -87,6 +87,8 @@ import androidx.lifecycle.Lifecycle
 import com.isotjs.todosian.BuildConfig
 import com.isotjs.todosian.R
 import com.isotjs.todosian.ui.components.rememberTagDefinitions
+import com.isotjs.todosian.ui.components.TodoSortMenu
+import com.isotjs.todosian.ui.components.sortGroupNames
 import com.isotjs.todosian.data.VaultSync
 import com.isotjs.todosian.ui.preview.NotePreviewSheet
 import com.isotjs.todosian.utils.ObsidianLinks
@@ -512,6 +514,16 @@ fun HomeScreen(
                 actions = {
                     // Shown only while changed notes are read for more than half a second.
                     if (!(syncProgress?.firstBuild == true && uiState.categories.isEmpty())) SyncIndicator(syncProgress)
+                    // One order for the tasks of all tabs and lists, also inside a list.
+                    TodoSortMenu(
+                        sort = settings.todoSort,
+                        sortGroup = settings.todoSortGroup,
+                        groupNames = sortGroupNames(tagDefinitionsByList.values),
+                        onSelect = { sort, group ->
+                            if (group != null) appSettingsRepository.setTodoSortGroup(group)
+                            appSettingsRepository.setTodoSort(sort)
+                        },
+                    )
                     IconButton(onClick = { showSearch = true }) {
                         Icon(imageVector = Icons.Filled.Search, contentDescription = stringResource(R.string.cd_search))
                     }

@@ -62,4 +62,22 @@ class TodoSortingTest {
         val list = listOf(todo(0, "a"), todo(1, "b", prio = TasksPriority.HIGH), todo(2, "c"))
         assertEquals(listOf("b", "a", "c"), texts(TodoSorting.sort(list, TodoSort.PRIORITY_HIGH_TO_LOW)))
     }
+
+    @Test
+    fun `tasks of several lists sort with the tag note of their own list`() {
+        val a = TagDefinitionParser.parse(listOf("## Aufwand", "- 5 Min: #5min", "- 2 h: #2h"))
+        val b = TagDefinitionParser.parse(listOf("## Aufwand", "- Kurz: #kurz", "- Lang: #lang"))
+        val items = listOf(
+            "a" to todo(0, "Steuer #2h", due = "2026-12-01"),
+            "b" to todo(0, "Rasen #lang"),
+            "b" to todo(1, "Müll #kurz", due = "2026-11-22"),
+            "a" to todo(1, "Anrufen #5min"),
+        )
+        val defs = mapOf("a" to a, "b" to b)
+        fun sorted(sort: TodoSort) = TodoSorting.sortAcrossLists(items, sort, "Aufwand", { it.second }, { defs.getValue(it.first) })
+            .map { it.second.text }
+        assertEquals(listOf("Müll #kurz", "Anrufen #5min", "Steuer #2h", "Rasen #lang"), sorted(TodoSort.TAG_GROUP))
+        assertEquals(listOf("Müll #kurz", "Steuer #2h", "Rasen #lang", "Anrufen #5min"), sorted(TodoSort.DUE_DATE_EARLIEST_FIRST))
+        assertEquals(items.map { it.second.text }, sorted(TodoSort.FILE_ORDER))
+    }
 }
