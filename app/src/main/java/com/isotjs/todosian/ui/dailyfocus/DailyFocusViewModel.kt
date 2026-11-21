@@ -1,5 +1,6 @@
 package com.isotjs.todosian.ui.dailyfocus
 
+import com.isotjs.todosian.utils.DailyFocusFilter
 import android.net.Uri
 import androidx.core.net.toUri
 import androidx.annotation.StringRes
@@ -114,7 +115,7 @@ class DailyFocusViewModel(
 
                 MarkdownParser.parse(lines, markers)
                     .filter { !it.isDone }
-                    .filter { todo -> showAllOpen || matchesFocusMode(todo, mode, today) }
+                    .filter { todo -> showAllOpen || DailyFocusFilter.matches(todo, mode, today) }
                     .forEach { todo ->
                         tasks.add(
                             DailyFocusTask(
@@ -258,7 +259,7 @@ class DailyFocusViewModel(
 
             MarkdownParser.parse(lines, markers)
                 .filter { !it.isDone }
-                .filter { todo -> showAllOpen || matchesFocusMode(todo, mode, today) }
+                .filter { todo -> showAllOpen || DailyFocusFilter.matches(todo, mode, today) }
                 .forEach { todo ->
                     tasks.add(
                         DailyFocusTask(
@@ -280,17 +281,6 @@ class DailyFocusViewModel(
         val remaining = inFlightWrites.decrementAndGet().coerceAtLeast(0)
         if (remaining == 0 && pendingRefreshFromObserver.getAndSet(false)) {
             refreshFromDisk(showLoading = false)
-        }
-    }
-}
-
-private fun matchesFocusMode(todo: Todo, mode: DailyFocusMode, today: String): Boolean {
-    return when (mode) {
-        DailyFocusMode.TODAY -> todo.dueDate == today
-        DailyFocusMode.OVERDUE -> todo.dueDate?.let { it < today } == true
-        DailyFocusMode.TODAY_AND_OVERDUE -> {
-            val due = todo.dueDate ?: return false
-            due <= today
         }
     }
 }

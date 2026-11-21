@@ -58,6 +58,8 @@ import com.isotjs.todosian.ui.components.TodosianLoadingIndicator
 import com.isotjs.todosian.ui.theme.TodosianTheme
 import com.isotjs.todosian.utils.SavedView
 import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.Star
+import com.isotjs.todosian.data.settings.DailyFocusMode
 import kotlinx.coroutines.launch
 
 /**
@@ -289,6 +291,28 @@ private fun WidgetConfigureScreen(
                         )
                     }
                     items(
+                        items = DailyFocusMode.entries,
+                        key = { "focus\u001F${it.name}" },
+                    ) { mode ->
+                        ListItem(
+                            headlineContent = { Text(text = stringResource(R.string.home_daily_focus_title)) },
+                            supportingContent = { Text(text = stringResource(focusModeLabel(mode))) },
+                            leadingContent = {
+                                Icon(
+                                    imageVector = Icons.Filled.Star,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                )
+                            },
+                            colors = ListItemDefaults.colors(
+                                containerColor = Color.Transparent,
+                            ),
+                            modifier = Modifier.clickable {
+                                onConfirm(WidgetSelection(null, null, focusMode = mode))
+                            },
+                        )
+                    }
+                    items(
                         items = savedViews,
                         key = { "view\u001F${it.folder}\u001F${it.name}" },
                     ) { view ->
@@ -343,6 +367,12 @@ private fun WidgetConfigureScreen(
             }
         }
     }
+}
+
+private fun focusModeLabel(mode: DailyFocusMode): Int = when (mode) {
+    DailyFocusMode.TODAY -> R.string.settings_daily_focus_mode_today
+    DailyFocusMode.OVERDUE -> R.string.settings_daily_focus_mode_overdue
+    DailyFocusMode.TODAY_AND_OVERDUE -> R.string.settings_daily_focus_mode_today_overdue
 }
 
 private const val ALL_LISTS_KEY = "all_lists"

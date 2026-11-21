@@ -15,7 +15,11 @@ import androidx.glance.appwidget.state.getAppWidgetState
 import androidx.glance.appwidget.state.updateAppWidgetState
 import androidx.glance.appwidget.updateAll
 import androidx.glance.state.PreferencesGlanceStateDefinition
+import com.isotjs.todosian.R
 import com.isotjs.todosian.TodosianApplication
+import com.isotjs.todosian.data.settings.DailyFocusMode
+import com.isotjs.todosian.utils.DailyFocusFilter
+import java.time.LocalDate
 import com.isotjs.todosian.data.FileRepository
 import com.isotjs.todosian.data.model.Category
 import com.isotjs.todosian.data.model.Todo
@@ -32,6 +36,7 @@ internal val KEY_SELECTED_CATEGORY_NAME = stringPreferencesKey("selected_categor
 internal val KEY_SHOW_COMPLETED = booleanPreferencesKey("show_completed")
 internal val KEY_SELECTED_VIEW_NAME = stringPreferencesKey("selected_view_name")
 internal val KEY_SELECTED_VIEW_FOLDER = stringPreferencesKey("selected_view_folder")
+internal val KEY_SELECTED_FOCUS_MODE = stringPreferencesKey("selected_focus_mode")
 private const val ITEM_KEY_PREFIX = "widget_item_"
 
 /**
@@ -53,9 +58,12 @@ internal data class WidgetSelection(
     /** A saved view (quick view) instead of a note: its open tasks from all folders. */
     val viewName: String? = null,
     val viewFolder: String? = null,
+    /** The daily focus with its own mode, over all lists. */
+    val focusMode: DailyFocusMode? = null,
 ) {
     val isView: Boolean get() = viewName != null
-    val isAllLists: Boolean get() = categoryUri == null && viewName == null
+    val isFocus: Boolean get() = focusMode != null
+    val isAllLists: Boolean get() = categoryUri == null && viewName == null && focusMode == null
 
     fun writeTo(prefs: MutablePreferences) {
         if (viewName != null) prefs[KEY_SELECTED_VIEW_NAME] = viewName
@@ -66,6 +74,8 @@ internal data class WidgetSelection(
         else prefs.remove(KEY_SELECTED_CATEGORY_URI)
         if (categoryName != null) prefs[KEY_SELECTED_CATEGORY_NAME] = categoryName
         else prefs.remove(KEY_SELECTED_CATEGORY_NAME)
+        if (focusMode != null) prefs[KEY_SELECTED_FOCUS_MODE] = focusMode.name
+        else prefs.remove(KEY_SELECTED_FOCUS_MODE)
     }
 
     companion object {
@@ -77,6 +87,7 @@ internal data class WidgetSelection(
                 prefs[KEY_SELECTED_CATEGORY_NAME],
                 prefs[KEY_SELECTED_VIEW_NAME],
                 prefs[KEY_SELECTED_VIEW_FOLDER],
+                prefs[KEY_SELECTED_FOCUS_MODE]?.let { raw -> runCatching { DailyFocusMode.valueOf(raw) }.getOrNull() },
             )
     }
 }
@@ -277,6 +288,7 @@ object WidgetRefresher {
                             ?: savedViews.firstOrNull { it.name.equals(selection.viewName, ignoreCase = true) }
                     },
                     showCompleted = showCompletedFlags[index],
+                    focusTitle = context.getString(R.string.home_daily_focus_title),
                 )
                 runCatching {
                     updateAppWidgetState(context, PreferencesGlanceStateDefinition, glanceId) { prefs ->
@@ -308,7 +320,27 @@ object WidgetRefresher {
         selection: WidgetSelection,
         view: SavedView?,
         showCompleted: Boolean,
+        focusTitle: String = "",
     ): WidgetSnapshot {
+        selection.focusMode?.let { mode ->
+            // Daily focus: the tasks due in the chosen mode from all lists, earliest due first.
+            val today = LocalDate.now().toString()
+            val focusItems = categories.flatMap { category ->
+                category.todos.filter { DailyFocusFilter.matches(it, mode, today) }.map { todo ->
+                    WidgetTaskItem(categoryUri = category.uri.toString(), categoryName = category.displayName, todo = todo)
+                }
+            }.sortedWith(compareBy<WidgetTaskItem> { it.todo.dueDate.orEmpty() }.thenBy { it.categoryName.lowercase() }.thenBy { it.todo.lineIndex })
+            val active = focusItems.filter { !it.todo.isDone }
+            val completed = focusItems.filter { it.todo.isDone }
+            return WidgetSnapshot(
+                hasFolder = hasFolder,
+                activeCount = active.size,
+                items = filterCompletedItems(active + completed, showCompleted).take(MAX_TASKS),
+                title = focusTitle,
+                selectedCategoryUri = null,
+                missingList = false,
+            )
+        }
         if (selection.isView && view == null) {
             // The view was renamed or removed from the views note.
             return WidgetSnapshot(
