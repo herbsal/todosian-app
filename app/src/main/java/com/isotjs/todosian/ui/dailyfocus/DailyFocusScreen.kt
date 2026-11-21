@@ -33,6 +33,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.ScaffoldDefaults
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -90,6 +91,8 @@ fun DailyFocusScreen(
     modifier: Modifier = Modifier,
     viewFolder: String? = null,
     viewName: String? = null,
+    /** Shown as a tab of the home screen: no own top bar, refreshed whenever the tab opens. */
+    embedded: Boolean = false,
 ) {
     val isView = viewName != null
     val savedView by produceState<SavedView?>(null, viewFolder, viewName) {
@@ -111,6 +114,10 @@ fun DailyFocusScreen(
         ),
     )
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    if (embedded) {
+        // The tab stays in memory between visits; show what changed meanwhile.
+        LaunchedEffect(viewModel) { viewModel.refreshFromDisk(showLoading = false) }
+    }
 
     val resources = LocalResources.current
     val snackbarHostState = remember { SnackbarHostState() }
@@ -291,8 +298,9 @@ fun DailyFocusScreen(
     }
 
     Scaffold(
+        contentWindowInsets = if (embedded) WindowInsets(0, 0, 0, 0) else ScaffoldDefaults.contentWindowInsets,
         topBar = {
-            TopAppBar(
+            if (!embedded) TopAppBar(
                 title = { Text(text = viewName ?: stringResource(R.string.daily_focus_screen_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {

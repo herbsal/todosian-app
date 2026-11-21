@@ -139,9 +139,6 @@ fun TodosianApp(
                 onOpenSettings = {
                     navController.navigate(Routes.Settings)
                 },
-                onOpenDailyFocus = {
-                    navController.navigate(Routes.DailyFocus)
-                },
                 onOpenView = { view ->
                     navController.navigate(Routes.savedView(view.folder, view.name))
                 },

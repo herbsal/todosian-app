@@ -9,14 +9,11 @@ import androidx.compose.runtime.produceState
 import androidx.compose.foundation.layout.size
 import com.isotjs.todosian.utils.SavedView
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
@@ -74,7 +71,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.platform.LocalResources
-import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -89,6 +85,9 @@ import com.isotjs.todosian.BuildConfig
 import com.isotjs.todosian.R
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
+import com.isotjs.todosian.ui.dailyfocus.DailyFocusScreen
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -99,7 +98,6 @@ import com.isotjs.todosian.data.FileRepository
 import com.isotjs.todosian.data.PreferencesManager
 import com.isotjs.todosian.data.settings.AppSettingsRepository
 import com.isotjs.todosian.data.settings.CategorySort
-import com.isotjs.todosian.data.settings.DailyFocusMode
 import com.isotjs.todosian.data.model.Category
 import com.isotjs.todosian.ui.components.ChangelogBottomSheet
 import com.isotjs.todosian.ui.components.TodosianDimens
@@ -124,7 +122,6 @@ fun HomeScreen(
     preferencesManager: PreferencesManager,
     onOpenCategory: (android.net.Uri) -> Unit,
     onOpenSettings: () -> Unit,
-    onOpenDailyFocus: () -> Unit,
     onOpenView: (SavedView) -> Unit,
     refreshSignal: Long,
     onRequireOnboarding: () -> Unit,
@@ -181,6 +178,7 @@ fun HomeScreen(
     }
 
     var tab by rememberSaveable { mutableStateOf(HomeTab.LISTS) }
+    val shownTab = if (tab == HomeTab.FOCUS && !settings.showDailyFocus) HomeTab.LISTS else tab
     val tagDisplay = remember(settings.tagDisplay) { TagDisplaySettings.decode(settings.tagDisplay) }
     // Tags per list (from the Tags note of its folder), for the symbols in the task rows.
     val tagDefinitionsByList by produceState(emptyMap<android.net.Uri, TagDefinitions>(), uiState.categories) {
@@ -407,14 +405,28 @@ fun HomeScreen(
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         bottomBar = {
             NavigationBar {
+                // Daily focus on the left, as its own tab; hidden when switched off in the settings.
+                if (settings.showDailyFocus) {
+                    val remaining = uiState.remainingFor(settings.dailyFocusMode)
+                    NavigationBarItem(
+                        selected = shownTab == HomeTab.FOCUS,
+                        onClick = { tab = HomeTab.FOCUS },
+                        icon = {
+                            BadgedBox(badge = { if (remaining > 0) Badge { Text(text = remaining.toString()) } }) {
+                                Icon(Icons.Filled.Star, contentDescription = null)
+                            }
+                        },
+                        label = { Text(text = stringResource(R.string.home_daily_focus_title)) },
+                    )
+                }
                 NavigationBarItem(
-                    selected = tab == HomeTab.LISTS,
+                    selected = shownTab == HomeTab.LISTS,
                     onClick = { tab = HomeTab.LISTS },
                     icon = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = null) },
                     label = { Text(text = stringResource(R.string.home_tab_lists)) },
                 )
                 NavigationBarItem(
-                    selected = tab == HomeTab.CALENDAR,
+                    selected = shownTab == HomeTab.CALENDAR,
                     onClick = { tab = HomeTab.CALENDAR },
                     icon = { Icon(Icons.Filled.CalendarMonth, contentDescription = null) },
                     label = { Text(text = stringResource(R.string.home_tab_calendar)) },
@@ -438,7 +450,7 @@ fun HomeScreen(
                     contentDescription = stringResource(R.string.cd_quick_add),
                 )
             }
-            if (tab == HomeTab.LISTS) {
+            if (shownTab == HomeTab.LISTS) {
             Spacer(modifier = Modifier.width(12.dp))
             FloatingActionButton(
                 onClick = { showNewCategorySheet = true },
@@ -463,6 +475,16 @@ fun HomeScreen(
         },
         modifier = modifier.fillMaxSize(),
     ) { padding ->
+        if (shownTab == HomeTab.FOCUS) {
+            DailyFocusScreen(
+                fileRepository = fileRepository,
+                appSettingsRepository = appSettingsRepository,
+                onBack = {},
+                embedded = true,
+                modifier = Modifier.padding(padding),
+            )
+            return@Scaffold
+        }
         val categories = remember(uiState.categories, settings.categorySort) {
             when (settings.categorySort) {
                 CategorySort.A_Z -> uiState.categories.sortedBy { it.displayName.lowercase() }
@@ -508,20 +530,6 @@ fun HomeScreen(
 
                     HomeContentState.EMPTY -> {
                         Column(modifier = Modifier.fillMaxSize()) {
-                            AnimatedVisibility(
-                                visible = settings.showDailyFocus,
-                                enter = fadeIn(tween(180)) + expandVertically(tween(220)),
-                                exit = fadeOut(tween(140)) + shrinkVertically(tween(200)),
-                            ) {
-                                Column {
-                                    DailyFocusBanner(
-                                        remaining = uiState.remainingFor(settings.dailyFocusMode),
-                                        mode = settings.dailyFocusMode,
-                                        onClick = onOpenDailyFocus,
-                                    )
-                                    Spacer(modifier = Modifier.height(16.dp))
-                                }
-                            }
                             BoxWithConstraints(
                                 modifier = Modifier
                                     .weight(1f)
@@ -542,8 +550,9 @@ fun HomeScreen(
                         }
                     }
 
-                    HomeContentState.DATA -> if (tab == HomeTab.CALENDAR) {
+                    HomeContentState.DATA -> if (shownTab == HomeTab.CALENDAR) {
                         CalendarTab(
+                            savedViews = savedViews,
                             categories = categories,
                             settings = settings,
                             tagDefinitions = tagDefinitionsByList,
@@ -553,20 +562,6 @@ fun HomeScreen(
                         )
                     } else {
                         Column(modifier = Modifier.fillMaxSize()) {
-                            AnimatedVisibility(
-                                visible = settings.showDailyFocus,
-                                enter = fadeIn(tween(180)) + expandVertically(tween(220)),
-                                exit = fadeOut(tween(140)) + shrinkVertically(tween(200)),
-                            ) {
-                                Column {
-                                    DailyFocusBanner(
-                                        remaining = uiState.remainingFor(settings.dailyFocusMode),
-                                        mode = settings.dailyFocusMode,
-                                        onClick = onOpenDailyFocus,
-                                    )
-                                    Spacer(modifier = Modifier.height(16.dp))
-                                }
-                            }
 
                             if (savedViews.isNotEmpty()) {
                                 SavedViewsRow(views = savedViews, onOpen = onOpenView)
@@ -628,7 +623,7 @@ fun HomeScreen(
     }
 }
 
-private enum class HomeTab { LISTS, CALENDAR }
+private enum class HomeTab { FOCUS, LISTS, CALENDAR }
 
 private enum class HomeContentState {
     LOADING,
@@ -678,50 +673,6 @@ private fun validateCategoryNameForRename(input: String): RenameCategoryValidati
         normalizedFileName = normalized,
         errorMessageResId = null,
     )
-}
-
-@Composable
-private fun DailyFocusBanner(
-    remaining: Int,
-    mode: DailyFocusMode,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Card(
-        onClick = onClick,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
-        shape = MaterialTheme.shapes.extraLarge,
-        modifier = modifier.fillMaxWidth(),
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-        ) {
-            Icon(
-                imageVector = Icons.Filled.Star,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onPrimaryContainer,
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = stringResource(R.string.home_daily_focus_title),
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
-            )
-            Text(
-                text = pluralStringResource(
-                    when (mode) {
-                        DailyFocusMode.TODAY -> R.plurals.home_daily_focus_subtitle_today
-                        DailyFocusMode.OVERDUE -> R.plurals.home_daily_focus_subtitle_overdue
-                        DailyFocusMode.TODAY_AND_OVERDUE -> R.plurals.home_daily_focus_subtitle_today_overdue
-                    },
-                    remaining,
-                    remaining,
-                ),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f),
-            )
-        }
-    }
 }
 
 @Composable
