@@ -1,6 +1,11 @@
 package com.isotjs.todosian.ui.components
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.isImeVisible
+import androidx.compose.runtime.Composable
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
@@ -33,5 +38,21 @@ internal fun Modifier.clearFocusOnTap(): Modifier = composed {
             focusManager.clearFocus()
             keyboard?.hide()
         }
+    }
+}
+
+/**
+ * Back while the keyboard is open only closes the keyboard (and leaves the text field); the
+ * sheet stays. Put it inside a task sheet's content so it comes before the sheet's own Back.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+internal fun KeyboardFirstBackHandler() {
+    val imeVisible = WindowInsets.isImeVisible
+    val focusManager = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
+    BackHandler(enabled = imeVisible) {
+        keyboard?.hide()
+        focusManager.clearFocus()
     }
 }

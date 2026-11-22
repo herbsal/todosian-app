@@ -67,6 +67,7 @@ import com.isotjs.todosian.ui.components.fieldValueFor
 import com.isotjs.todosian.ui.components.tagsSetIn
 import com.isotjs.todosian.ui.components.TagSettleEffect
 import com.isotjs.todosian.ui.components.clearFocusOnTap
+import com.isotjs.todosian.ui.components.KeyboardFirstBackHandler
 import com.isotjs.todosian.ui.components.ListPickerChip
 import com.isotjs.todosian.ui.components.endsTypedWord
 import com.isotjs.todosian.ui.components.oneLineValue
@@ -252,6 +253,7 @@ internal fun QuickAddSheet(
             }
         },
     ) {
+        KeyboardFirstBackHandler()
         Column(
             modifier = Modifier
                 .fillMaxWidth()
