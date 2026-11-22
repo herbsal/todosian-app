@@ -80,6 +80,8 @@ interface AppSettingsRepository {
 
     fun setAiCleanupHintShown() {}
 
+    fun setAiModel(model: String) {}
+
     fun setHomeLayout(layout: HomeLayout) {}
     fun setStartTab(tab: StartTab) {}
 
@@ -255,6 +257,10 @@ class SharedPrefsAppSettingsRepository(
         prefs.edit { putBoolean(KEY_AI_CLEANUP_HINT, true) }
     }
 
+    override fun setAiModel(model: String) {
+        prefs.edit { putString(KEY_AI_MODEL, model) }
+    }
+
     override fun setHomeLayout(layout: HomeLayout) {
         prefs.edit { putString(KEY_HOME_LAYOUT, layout.name) }
     }
@@ -345,6 +351,7 @@ class SharedPrefsAppSettingsRepository(
             tagRecognitionRemoveWords = prefs.getBoolean(KEY_TAG_RECOGNITION_REMOVE, true),
             aiCleanupEnabled = prefs.getBoolean(KEY_AI_CLEANUP, true),
             aiCleanupHintShown = prefs.getBoolean(KEY_AI_CLEANUP_HINT, false),
+            aiModel = prefs.getString(KEY_AI_MODEL, null).orEmpty(),
             startTab = prefs.getString(KEY_START_TAB, null)
                 ?.let { raw -> runCatching { StartTab.valueOf(raw) }.getOrNull() } ?: StartTab.LISTS,
             homeLayout = prefs.getString(KEY_HOME_LAYOUT, null)
@@ -414,6 +421,7 @@ class SharedPrefsAppSettingsRepository(
         private const val KEY_TAG_RECOGNITION_REMOVE = "tag_recognition_remove_words"
         private const val KEY_AI_CLEANUP = "ai_cleanup"
         private const val KEY_AI_CLEANUP_HINT = "ai_cleanup_hint_shown"
+        private const val KEY_AI_MODEL = "ai_model"
         private const val KEY_HOME_LAYOUT = "home_layout"
         private const val KEY_START_TAB = "start_tab"
         private const val KEY_HOME_TASKS_PER_LIST = "home_tasks_per_list"

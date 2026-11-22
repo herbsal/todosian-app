@@ -136,8 +136,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.isotjs.todosian.data.ai.AiCleanup
-import com.isotjs.todosian.data.ai.AiStatus
+import com.isotjs.todosian.ui.components.AiSettingsPanel
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.isotjs.todosian.BuildConfig
 import com.isotjs.todosian.R
@@ -2152,50 +2151,10 @@ private enum class SettingsSection(@StringRes val title: Int, @StringRes val sum
     EXPERT(R.string.settings_section_expert, R.string.settings_section_expert_summary),
 }
 
-/** Gemini Nano on this device: whether it is there, loading it (only on a tap), and the switch. */
+/** Gemini Nano on this device: what is there, what can be loaded, the variant and the switch. */
 @Composable
 private fun AiSettingsGroup(settings: AppSettings, appSettingsRepository: AppSettingsRepository) {
-    val status by AiCleanup.status.collectAsStateWithLifecycle()
-    val context = LocalContext.current
-    LaunchedEffect(Unit) { AiCleanup.refresh() }
-    val statusText = when (val current = status) {
-        AiStatus.Unknown -> stringResource(R.string.settings_ai_status_unknown)
-        AiStatus.Available -> stringResource(R.string.settings_ai_status_available)
-        AiStatus.Downloadable -> stringResource(R.string.settings_ai_status_downloadable)
-        AiStatus.Preparing -> stringResource(R.string.settings_ai_status_preparing)
-        AiStatus.Unavailable -> stringResource(R.string.settings_ai_status_unavailable)
-        is AiStatus.Downloading -> current.bytes?.takeIf { it > 0 }?.let { bytes ->
-            stringResource(R.string.settings_ai_status_downloading_bytes, android.text.format.Formatter.formatShortFileSize(context, bytes))
-        } ?: stringResource(R.string.settings_ai_status_downloading)
-    }
     SettingsGroup(title = null) {
-        SettingsInfoRow(
-            icon = Icons.Filled.AutoAwesome,
-            title = stringResource(R.string.settings_ai_status),
-            subtitle = statusText,
-            trailing = if (status == AiStatus.Downloadable) {
-                { TextButton(onClick = { AiCleanup.download() }) { Text(text = stringResource(R.string.settings_ai_download)) } }
-            } else {
-                null
-            },
-        )
-
-        SettingsDivider()
-
-        SettingsSwitchRow(
-            icon = Icons.Filled.AutoAwesome,
-            title = stringResource(R.string.settings_ai_cleanup),
-            subtitle = stringResource(R.string.settings_ai_cleanup_subtitle),
-            checked = settings.aiCleanupEnabled && status != AiStatus.Unavailable,
-            onCheckedChange = { appSettingsRepository.setAiCleanupEnabled(it) },
-            enabled = status != AiStatus.Unavailable,
-        )
-
-        SettingsDivider()
-
-        SettingsInfoRow(
-            icon = Icons.Filled.Info,
-            title = stringResource(R.string.settings_ai_note),
-        )
+        AiSettingsPanel(settings = settings, appSettingsRepository = appSettingsRepository)
     }
 }

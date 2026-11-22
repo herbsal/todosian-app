@@ -6,8 +6,12 @@ import com.google.mlkit.genai.common.FeatureStatus
 import com.google.mlkit.genai.common.GenAiException
 import com.google.mlkit.genai.prompt.GenerativeModel
 import com.google.mlkit.genai.prompt.Generation
+import com.google.mlkit.genai.prompt.ModelPreference
+import com.google.mlkit.genai.prompt.ModelReleaseStage
 import com.google.mlkit.genai.prompt.TextPart
 import com.google.mlkit.genai.prompt.generateContentRequest
+import com.google.mlkit.genai.prompt.generationConfig
+import com.google.mlkit.genai.prompt.modelConfig
 import com.isotjs.todosian.utils.TaskMarkers
 import com.isotjs.todosian.utils.ai.AiCleanupPrompt
 import com.isotjs.todosian.utils.ai.AiTextGuard
@@ -21,30 +25,41 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeout
+import java.util.concurrent.ConcurrentHashMap
 
-/** Whether Gemini Nano can clean up text on this device. */
+/** Whether a Gemini Nano model can clean up text on this device. */
 sealed interface AiStatus {
     /** Not checked yet. */
     data object Unknown : AiStatus
 
-    /** No Gemini Nano here (device not supported, unlocked bootloader, AICore missing or too old). */
+    /** Not here (device not supported, unlocked bootloader, AICore missing or too old). */
     data object Unavailable : AiStatus
 
-    /** Supported, but the model is not on the device yet. Loading it needs the person's yes. */
+    /** Supported, but this model is not on the device yet. Loading it needs the person's yes. */
     data object Downloadable : AiStatus
 
-    /** The model is being loaded; [bytes] so far, when known. */
-    data class Downloading(val bytes: Long?) : AiStatus
+    /** The model is being loaded: [bytes] of [total] so far, when known. */
+    data class Downloading(val bytes: Long?, val total: Long?) : AiStatus
 
     /** AICore is still setting up after an update or restart. */
     data object Preparing : AiStatus
 
     data object Available : AiStatus
 }
+
+/**
+ * The Gemini Nano variants the Prompt API offers on consumer devices. AICore may already hold one
+ * of them (e.g. for Pixel features) and not the other, so each is checked on its own.
+ */
+enum class AiModel { FULL, FAST }
+
+/** What AICore says about one [AiModel]; [name] is the base model's name once it is there. */
+data class AiModelInfo(val status: AiStatus = AiStatus.Unknown, val name: String? = null)
 
 sealed interface AiCleanupResult {
     data class Cleaned(val text: String) : AiCleanupResult
@@ -68,57 +83,121 @@ object AiCleanup {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val mutex = Mutex()
+
+    private val _models = MutableStateFlow(AiModel.entries.associateWith { AiModelInfo() })
+
+    /** Every variant with its status, for the settings. */
+    val models: StateFlow<Map<AiModel, AiModelInfo>> = _models.asStateFlow()
+
     private val _status = MutableStateFlow<AiStatus>(AiStatus.Unknown)
+
+    /** The status of the model in use (see [activeModel]). */
     val status: StateFlow<AiStatus> = _status.asStateFlow()
 
-    private var model: GenerativeModel? = null
-    private var downloadJob: Job? = null
-    private var warmedUp = false
+    /** The person's choice; null = use whichever variant is on the device, preferring [AiModel.FULL]. */
+    @Volatile
+    var preferred: AiModel? = null
+        set(value) {
+            field = value
+            publishActive()
+        }
 
-    private fun model(): GenerativeModel = model ?: Generation.getClient().also { model = it }
+    private val clients = mutableMapOf<AiModel, GenerativeModel>()
+    private val downloadJobs = ConcurrentHashMap<AiModel, Job>()
+    private val warmedUp: MutableSet<AiModel> = ConcurrentHashMap.newKeySet()
+
+    private fun client(model: AiModel): GenerativeModel = synchronized(clients) {
+        clients.getOrPut(model) {
+            val config = generationConfig {
+                modelConfig = modelConfig {
+                    releaseStage = ModelReleaseStage.STABLE
+                    preference = when (model) {
+                        AiModel.FULL -> ModelPreference.FULL
+                        AiModel.FAST -> ModelPreference.FAST
+                    }
+                }
+            }
+            Generation.getClient(config)
+        }
+    }
+
+    /** The variant cleanups use: the chosen one, else one already on the device, else [AiModel.FULL]. */
+    fun activeModel(): AiModel {
+        preferred?.let { return it }
+        val models = _models.value
+        return AiModel.entries.firstOrNull { models[it]?.status == AiStatus.Available }
+            ?: AiModel.entries.firstOrNull { models[it]?.status is AiStatus.Downloading }
+            ?: AiModel.entries.firstOrNull { models[it]?.status == AiStatus.Downloadable }
+            ?: AiModel.FULL
+    }
+
+    private fun publishActive() {
+        val models = _models.value
+        _status.value = when {
+            models.values.all { it.status == AiStatus.Unknown } -> AiStatus.Unknown
+            models.values.all { it.status == AiStatus.Unavailable } -> AiStatus.Unavailable
+            else -> models[activeModel()]?.status ?: AiStatus.Unknown
+        }
+    }
 
     /** Checks again what the device offers; cheap, and AICore can change with an update. */
     fun refresh() {
-        scope.launch { check() }
+        scope.launch { checkAll() }
     }
 
-    private suspend fun check(): AiStatus {
-        if (_status.value is AiStatus.Downloading && downloadJob?.isActive == true) return _status.value
+    private suspend fun checkAll() {
+        AiModel.entries.forEach { check(it) }
+        val active = activeModel()
+        if (_models.value[active]?.status == AiStatus.Available && warmedUp.add(active)) {
+            runCatching { client(active).warmup() }
+        }
+    }
+
+    private suspend fun check(model: AiModel): AiStatus {
+        if (downloadJobs[model]?.isActive == true) return _models.value[model]?.status ?: AiStatus.Unknown
         val status = try {
-            when (model().checkStatus()) {
+            when (client(model).checkStatus()) {
                 FeatureStatus.AVAILABLE -> AiStatus.Available
                 FeatureStatus.DOWNLOADABLE -> AiStatus.Downloadable
-                FeatureStatus.DOWNLOADING -> AiStatus.Downloading(null)
+                FeatureStatus.DOWNLOADING -> AiStatus.Downloading(null, null)
                 else -> AiStatus.Unavailable
             }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            Log.w(TAG, "Gemini Nano status not available", e)
+            Log.w(TAG, "Gemini Nano status for $model not available", e)
             if (isPreparing(e)) AiStatus.Preparing else AiStatus.Unavailable
         }
-        _status.value = status
-        if (status == AiStatus.Available && !warmedUp) {
-            warmedUp = true
-            runCatching { model().warmup() }
+        val name = if (status == AiStatus.Available) {
+            runCatching { client(model).getBaseModelName() }.getOrNull()?.takeIf { it.isNotBlank() }
+        } else {
+            null
         }
+        setModel(model, AiModelInfo(status, name))
         return status
     }
 
-    /** Loads the model through AICore. Only after the person agreed. */
-    fun download() {
-        if (downloadJob?.isActive == true) return
-        downloadJob = scope.launch {
-            _status.value = AiStatus.Downloading(null)
+    private fun setModel(model: AiModel, info: AiModelInfo) {
+        _models.update { it + (model to info) }
+        publishActive()
+    }
+
+    /** Loads [model] through AICore. Only after the person agreed. */
+    fun download(model: AiModel = activeModel()) {
+        if (downloadJobs[model]?.isActive == true) return
+        downloadJobs[model] = scope.launch {
+            var total: Long? = null
+            setModel(model, AiModelInfo(AiStatus.Downloading(null, null)))
             try {
-                model().download().collect { step ->
+                client(model).download().collect { step ->
                     when (step) {
-                        is DownloadStatus.DownloadStarted -> _status.value = AiStatus.Downloading(0)
-                        is DownloadStatus.DownloadProgress -> _status.value = AiStatus.Downloading(step.totalBytesDownloaded)
-                        is DownloadStatus.DownloadFailed -> {
-                            Log.w(TAG, "Gemini Nano download failed", step.e)
-                            _status.value = AiStatus.Downloadable
+                        is DownloadStatus.DownloadStarted -> {
+                            total = step.bytesToDownload.takeIf { it > 0 }
+                            setModel(model, AiModelInfo(AiStatus.Downloading(0, total)))
                         }
+                        is DownloadStatus.DownloadProgress ->
+                            setModel(model, AiModelInfo(AiStatus.Downloading(step.totalBytesDownloaded, total)))
+                        is DownloadStatus.DownloadFailed -> Log.w(TAG, "Gemini Nano download failed", step.e)
                         else -> Unit
                     }
                 }
@@ -126,9 +205,20 @@ object AiCleanup {
                 throw e
             } catch (e: Exception) {
                 Log.w(TAG, "Gemini Nano download failed", e)
+            } finally {
+                downloadJobs.remove(model)
             }
-            check()
+            check(model)
         }
+    }
+
+    /**
+     * Stops following the download of [model]. The Prompt API has no call to cancel or delete a
+     * model; AICore may finish a download it already started and keeps models other apps use.
+     */
+    fun cancelDownload(model: AiModel) {
+        downloadJobs.remove(model)?.cancel()
+        scope.launch { check(model) }
     }
 
     /**
@@ -141,12 +231,13 @@ object AiCleanup {
         verify: (String) -> Boolean = { true },
     ): AiCleanupResult {
         if (text.isBlank()) return AiCleanupResult.Unchanged
-        if (check() != AiStatus.Available) return AiCleanupResult.Failed(AiFailure.NOT_READY)
+        val model = activeModel()
+        if (check(model) != AiStatus.Available) return AiCleanupResult.Failed(AiFailure.NOT_READY)
         val masked = AiTextGuard.mask(text, markers)
         val prompt = AiCleanupPrompt.build(masked.text)
         return mutex.withLock {
             try {
-                val answer = withTimeout(TIMEOUT_MS) { generate(prompt, retryWhenBusy = true) }
+                val answer = withTimeout(TIMEOUT_MS) { generate(client(model), prompt, retryWhenBusy = true) }
                 val restored = AiTextGuard.restore(AiCleanupPrompt.answerOf(answer), masked)
                 when {
                     restored == null -> AiCleanupResult.Failed(AiFailure.UNSAFE)
@@ -168,9 +259,9 @@ object AiCleanup {
         }
     }
 
-    private suspend fun generate(prompt: String, retryWhenBusy: Boolean): String {
+    private suspend fun generate(client: GenerativeModel, prompt: String, retryWhenBusy: Boolean): String {
         return try {
-            val response = model().generateContent(
+            val response = client.generateContent(
                 generateContentRequest(TextPart(prompt)) {
                     temperature = 0.1f
                     topK = 1
@@ -182,7 +273,7 @@ object AiCleanup {
         } catch (e: GenAiException) {
             if (retryWhenBusy && e.errorCode == GenAiException.ErrorCode.BUSY) {
                 delay(BUSY_RETRY_MS)
-                generate(prompt, retryWhenBusy = false)
+                generate(client, prompt, retryWhenBusy = false)
             } else {
                 throw e
             }

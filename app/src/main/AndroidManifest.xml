@@ -23,6 +23,11 @@
         android:name="android.permission.ACCESS_NETWORK_STATE"
         tools:node="remove" />
 
+    <!-- Shows in the AI settings whether the system app AICore (Gemini Nano) is installed. -->
+    <queries>
+        <package android:name="com.google.android.aicore" />
+    </queries>
+
     <application
         android:name=".TodosianApplication"
         android:allowBackup="true"
