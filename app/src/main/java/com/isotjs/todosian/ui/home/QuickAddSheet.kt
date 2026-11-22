@@ -26,8 +26,6 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.SheetValue
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -58,12 +56,12 @@ import com.isotjs.todosian.data.settings.NewTodoFilePosition
 import com.isotjs.todosian.ui.components.RecognitionToggle
 import com.isotjs.todosian.ui.components.RecognizedDateChip
 import com.isotjs.todosian.ui.components.RecognizedTagChips
-import com.isotjs.todosian.ui.components.RemovableChip
 import com.isotjs.todosian.ui.components.TaskInputRecognizer
 import com.isotjs.todosian.ui.components.TaskTextField
 import com.isotjs.todosian.ui.components.fieldValueFor
 import com.isotjs.todosian.ui.components.tagsSetIn
 import com.isotjs.todosian.ui.components.TagSettleEffect
+import com.isotjs.todosian.ui.components.ListPickerChip
 import com.isotjs.todosian.ui.components.endsTypedWord
 import com.isotjs.todosian.ui.components.oneLineValue
 import com.isotjs.todosian.utils.TagRecognition
@@ -123,7 +121,6 @@ internal fun QuickAddSheet(
     var field by remember { mutableStateOf(TextFieldValue()) }
     var wordTyped by remember { mutableStateOf(false) }
     var chosenList by remember { mutableStateOf<Category?>(null) }
-    var showListMenu by remember { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
 
@@ -170,13 +167,8 @@ internal fun QuickAddSheet(
         val rest = if (!settings.tagRecognition) withoutList else {
             TagRecognition.settle(withoutList, withoutList.length, definitions, ignoredTags, settings.tagRecognitionRemoveWords, finishedOnly = false)?.text ?: withoutList
         }
-        val list = currentTarget
-        if (list != null) {
-            onOpenFullAdd(list.uri, rest.trim())
-        } else {
-            // No list yet: the Inbox, as when saving here, so the same task form opens and not the list picker.
-            scope.launch { onOpenFullAdd(fileRepository.createCategoryByName(INBOX_NAME).getOrNull(), rest.trim()) }
-        }
+        // Without a list yet the task sheet goes to the Inbox too (created when saving).
+        onOpenFullAdd(currentTarget?.uri, rest.trim())
     }
     val currentOpenFull by rememberUpdatedState({ openFull() })
     val pullDistance = with(LocalDensity.current) { PULL_UP_DISTANCE.toPx() }
@@ -297,35 +289,17 @@ internal fun QuickAddSheet(
             )
             Spacer(modifier = Modifier.height(8.dp))
             // The list chip: where the task goes. Tapping it picks another list.
-            Box {
-                val listLabel = target?.displayName?.substringAfterLast('/') ?: INBOX_NAME
-                RemovableChip(
-                    label = stringResource(R.string.quick_add_list_chip, listLabel),
-                    onRemove = null,
-                    onClick = { showListMenu = true },
-                )
-                DropdownMenu(expanded = showListMenu, onDismissRequest = { showListMenu = false }) {
-                    if (firstPass.list != null || chosenList != null) {
-                        DropdownMenuItem(
-                            text = { Text(text = stringResource(R.string.quick_add_list_not_recognized)) },
-                            onClick = {
-                                chosenList = null
-                                ignoreList = true
-                                showListMenu = false
-                            },
-                        )
-                    }
-                    categories.forEach { category ->
-                        DropdownMenuItem(
-                            text = { Text(text = category.displayName) },
-                            onClick = {
-                                chosenList = category
-                                showListMenu = false
-                            },
-                        )
-                    }
-                }
-            }
+            ListPickerChip(
+                categories = categories,
+                target = target,
+                recognized = firstPass.list != null,
+                chosen = chosenList != null,
+                onChoose = { chosenList = it },
+                onIgnore = {
+                    chosenList = null
+                    ignoreList = true
+                },
+            )
             recognition.date?.let { date ->
                 Spacer(modifier = Modifier.height(8.dp))
                 RecognizedDateChip(match = date, onIgnore = { ignoreDate = true })

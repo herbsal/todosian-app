@@ -81,6 +81,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.Lifecycle
 import com.isotjs.todosian.BuildConfig
 import com.isotjs.todosian.R
+import com.isotjs.todosian.ui.components.AddTaskSheet
 import com.isotjs.todosian.ui.components.UndoSnackbarEffect
 import com.isotjs.todosian.ui.components.rememberTagDefinitions
 import com.isotjs.todosian.ui.components.TodoSortMenu
@@ -135,7 +136,6 @@ fun HomeScreen(
     preferencesManager: PreferencesManager,
     onOpenCategory: (android.net.Uri) -> Unit,
     onOpenSettings: () -> Unit,
-    onOpenAddTask: (listUri: android.net.Uri?, text: String) -> Unit,
     refreshSignal: Long,
     onRequireOnboarding: () -> Unit,
     modifier: Modifier = Modifier,
@@ -218,6 +218,7 @@ fun HomeScreen(
 
     var showNewCategorySheet by remember { mutableStateOf(false) }
     var showQuickAdd by remember { mutableStateOf(false) }
+    var fullAdd by remember { mutableStateOf<Pair<android.net.Uri?, String>?>(null) }
     var showSearch by remember { mutableStateOf(false) }
     var previewUri by remember { mutableStateOf<Uri?>(null) }
     var conflictToMerge by remember { mutableStateOf<NoteConflict?>(null) }
@@ -246,8 +247,29 @@ fun HomeScreen(
                 scope.launch { snackbarHostState.showSnackbar(resources.getString(R.string.quick_add_failed)) }
             },
             onOpenFullAdd = { uri, text ->
+                // All options open right here, over the current view (lists, calendar or daily focus).
+                fullAdd = uri to text
                 showQuickAdd = false
-                onOpenAddTask(uri, text)
+            },
+        )
+    }
+    fullAdd?.let { (uri, text) ->
+        AddTaskSheet(
+            categories = uiState.categories,
+            settings = settings,
+            fileRepository = fileRepository,
+            appSettingsRepository = appSettingsRepository,
+            initialListUri = uri,
+            initialText = text,
+            defaultListUri = preferencesManager.getDefaultAddTaskFileUri(),
+            onDismiss = { fullAdd = null },
+            onSaved = { listName ->
+                fullAdd = null
+                viewModel.refresh(showLoading = false)
+                scope.launch { snackbarHostState.showSnackbar(resources.getString(R.string.quick_add_saved, listName)) }
+            },
+            onFailed = {
+                scope.launch { snackbarHostState.showSnackbar(resources.getString(R.string.quick_add_failed)) }
             },
         )
     }

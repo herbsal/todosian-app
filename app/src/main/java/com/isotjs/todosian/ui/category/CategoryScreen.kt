@@ -87,6 +87,9 @@ import com.isotjs.todosian.ui.components.RecognizedTagChips
 import com.isotjs.todosian.ui.components.fieldValueFor
 import com.isotjs.todosian.ui.components.tagsSetIn
 import com.isotjs.todosian.ui.components.TagSettleEffect
+import com.isotjs.todosian.ui.components.AddTaskSheet
+import com.isotjs.todosian.data.model.Category
+import androidx.compose.runtime.produceState
 import com.isotjs.todosian.ui.components.endsTypedWord
 import com.isotjs.todosian.ui.components.oneLineValue
 import com.isotjs.todosian.ui.components.settleTags
@@ -231,18 +234,43 @@ fun CategoryScreen(
         )
     }
 
-    var autoOpenedAddTodo by remember { mutableStateOf(false) }
+    // New tasks: the same "Add task" sheet as everywhere, with this list chosen and changeable.
+    var addTaskText by remember { mutableStateOf<String?>(null) }
+    var autoOpenedAddTodo by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         if (autoOpenAddTodo && !autoOpenedAddTodo) {
             autoOpenedAddTodo = true
-            sheetMode = TodoSheetMode.Add
-            sheetText = initialAddText
-            sheetMeta = if (settings.enableTasksPluginSupport) {
-                MarkdownParser.TasksMeta(createdDate = LocalDate.now().toString())
-            } else {
-                MarkdownParser.TasksMeta()
+            addTaskText = initialAddText
+        }
+    }
+    val addTaskLists by produceState(emptyList<Category>(), addTaskText != null) {
+        if (addTaskText != null && value.isEmpty()) {
+            value = fileRepository.getIndexedCategories(settings.toTaskMarkers()).ifEmpty {
+                fileRepository.getCategories(settings.toTaskMarkers()).getOrNull().orEmpty()
             }
         }
+    }
+    addTaskText?.let { initialText ->
+        AddTaskSheet(
+            categories = addTaskLists,
+            settings = settings,
+            fileRepository = fileRepository,
+            appSettingsRepository = appSettingsRepository,
+            initialListUri = categoryUri,
+            initialListName = uiState.title.ifBlank { null },
+            initialText = initialText,
+            onDismiss = { addTaskText = null },
+            onSaved = { listName ->
+                addTaskText = null
+                viewModel.refreshFromDisk(showLoading = false)
+                if (listName != uiState.title.substringAfterLast('/')) {
+                    scope.launch { snackbarHostState.showSnackbar(resources.getString(R.string.quick_add_saved, listName)) }
+                }
+            },
+            onFailed = {
+                scope.launch { snackbarHostState.showSnackbar(resources.getString(R.string.quick_add_failed)) }
+            },
+        )
     }
 
     if (sheetMode != null) {
@@ -739,15 +767,7 @@ fun CategoryScreen(
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         floatingActionButton = {
             FloatingActionButton(
-                onClick = {
-                    sheetMode = TodoSheetMode.Add
-                    sheetText = ""
-                    sheetMeta = if (settings.enableTasksPluginSupport) {
-                        MarkdownParser.TasksMeta(createdDate = LocalDate.now().toString())
-                    } else {
-                        MarkdownParser.TasksMeta()
-                    }
-                },
+                onClick = { addTaskText = "" },
                 shape = todosianFabShape(),
                 // See HomeScreen: concave shadow tessellation freezes the RenderThread.
                 elevation = FloatingActionButtonDefaults.elevation(
