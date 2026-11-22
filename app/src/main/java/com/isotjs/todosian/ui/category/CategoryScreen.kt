@@ -329,15 +329,26 @@ fun CategoryScreen(
                         definitions = uiState.tagDefinitions,
                         text = sheetText,
                         onTextChange = { sheetText = it },
+                        recognized = recognition.tags,
+                        onOverride = { hit -> ignoredTags = ignoredTags + hit.term.primaryTag },
                     )
                 }
 
                 if (settings.enableTasksPluginSupport) {
                     Spacer(modifier = Modifier.height(12.dp))
+                    // A date recognized in the words shows in the date rows right away. Changing a row
+                    // takes it over: its words leave the text and the rows hold the date from then on.
+                    val recognizedDate = recognition.date
+                    val shownMeta = if (recognizedDate == null) sheetMeta else {
+                        applyRecognizedDate(recognizedDate, sheetText, sheetMeta, tasksPlugin = true, markers = settings.toTaskMarkers()).second
+                    }
                     TasksMetaEditor(
                         mode = sheetMode,
-                        meta = sheetMeta,
-                        onMetaChange = { sheetMeta = it },
+                        meta = shownMeta,
+                        onMetaChange = { changed ->
+                            if (recognizedDate != null) sheetText = recognizedDate.text
+                            sheetMeta = changed
+                        },
                         useEmojisInUi = settings.tasksPluginUseEmojisInUi,
                         modifier = Modifier
                             .bringIntoViewRequester(recurrenceBringIntoView)
