@@ -235,7 +235,7 @@ internal class TaskDraft(initial: String) {
     val text: String get() = TagText.join(words, tags)
 
     /** [text] with the field's cursor, for turning tag words into tags. */
-    val value: TextFieldValue get() = TextFieldValue(text, field.selection, field.composition)
+    val value: TextFieldValue get() = TextFieldValue(text, this.field.selection, this.field.composition)
 
     /** A change typed or dictated in the field. */
     fun type(value: TextFieldValue) {
