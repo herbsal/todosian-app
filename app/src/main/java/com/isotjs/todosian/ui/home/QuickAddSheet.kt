@@ -66,6 +66,7 @@ import com.isotjs.todosian.ui.components.TaskTextField
 import com.isotjs.todosian.ui.components.fieldValueFor
 import com.isotjs.todosian.ui.components.tagsSetIn
 import com.isotjs.todosian.ui.components.TagSettleEffect
+import com.isotjs.todosian.ui.components.clearFocusOnTap
 import com.isotjs.todosian.ui.components.ListPickerChip
 import com.isotjs.todosian.ui.components.endsTypedWord
 import com.isotjs.todosian.ui.components.oneLineValue
@@ -255,7 +256,8 @@ internal fun QuickAddSheet(
                 .windowInsetsPadding(WindowInsets.ime)
                 .padding(bottom = 16.dp)
                 // The sheet is already fully open, so a pull upwards means "more": the normal task sheet.
-                .pullUp(pullDistance) { currentOpenFull() },
+                .pullUp(pullDistance) { currentOpenFull() }
+                .clearFocusOnTap(),
         ) {
             Text(text = stringResource(R.string.quick_add_title), style = MaterialTheme.typography.titleLarge)
             Spacer(modifier = Modifier.height(12.dp))
