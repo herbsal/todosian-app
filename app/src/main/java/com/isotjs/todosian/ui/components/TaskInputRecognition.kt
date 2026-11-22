@@ -6,9 +6,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.InputChip
@@ -23,6 +21,8 @@ import kotlinx.coroutines.delay
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
@@ -117,18 +117,37 @@ internal fun applyRecognizedDate(
     }
 }
 
-/** ✨ at the end of the text field: turns finding tags (and lists) in the words on or off. */
+/** ✨ with "#" at the end of the text field: turns finding tags (and lists) in the words on or off. */
 @Composable
 fun RecognitionToggle(enabled: Boolean, onToggle: () -> Unit) {
-    IconButton(onClick = onToggle) {
-        Icon(
-            imageVector = if (enabled) Icons.Filled.AutoAwesome else Icons.Outlined.AutoAwesome,
-            contentDescription = stringResource(
-                if (enabled) R.string.recognition_toggle_on else R.string.recognition_toggle_off,
-            ),
+    val description = stringResource(
+        if (enabled) R.string.recognition_toggle_on else R.string.recognition_toggle_off,
+    )
+    IconButton(onClick = onToggle, modifier = Modifier.semantics { contentDescription = description }) {
+        BadgedSparkle(
+            badge = "#",
+            filled = enabled,
             tint = if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
+}
+
+/**
+ * True when [cleaned] still says the same list, date, time and tags as [original]: the AI cleanup
+ * must only drop filler words, so a result that changes what the words mean is not used.
+ */
+internal fun keepsRecognized(
+    original: String,
+    cleaned: String,
+    recognize: (text: String, now: LocalDateTime) -> TaskRecognition,
+): Boolean {
+    val now = LocalDateTime.now()
+    val before = recognize(original, now)
+    val after = recognize(cleaned, now)
+    return before.list?.name == after.list?.name &&
+        before.date?.date == after.date?.date &&
+        before.date?.time == after.date?.time &&
+        before.tags.map { it.term.primaryTag }.toSet() == after.tags.map { it.term.primaryTag }.toSet()
 }
 
 @Composable

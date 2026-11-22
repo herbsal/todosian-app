@@ -639,4 +639,39 @@
     <string name="category_discard_draft_message">Deine Änderungen an dieser Aufgabe gehen verloren.</string>
     <string name="category_discard_draft_discard">Verwerfen</string>
     <string name="category_discard_draft_keep">Weiter bearbeiten</string>
+
+    <!-- AI cleanup (Gemini Nano) -->
+    <string name="ai_cleanup_button">Mit KI aufräumen (Gemini Nano, auf dem Gerät)</string>
+    <string name="ai_cleanup_downloading">KI-Modell wird geladen</string>
+    <string name="ai_cleanup_done">Mit KI aufgeräumt</string>
+    <string name="ai_cleanup_undo">Rückgängig</string>
+    <string name="ai_cleanup_running">KI räumt auf…</string>
+    <string name="ai_cleanup_failed_busy">KI gerade beschäftigt, bitte gleich nochmal</string>
+    <string name="ai_cleanup_failed_limit">KI-Tageslimit erreicht</string>
+    <string name="ai_cleanup_failed_timeout">KI hat zu lange gebraucht</string>
+    <string name="ai_cleanup_failed_unsafe">KI konnte den Text nicht sicher aufräumen, er bleibt wie er war</string>
+    <string name="ai_cleanup_failed_not_ready">KI wird vorbereitet, das kann dauern</string>
+    <string name="ai_cleanup_failed_other">KI-Aufräumen hat nicht geklappt</string>
+    <string name="ai_cleanup_unchanged">KI hat nichts zum Aufräumen gefunden</string>
+    <string name="ai_cleanup_download_title">KI-Modell laden?</string>
+    <string name="ai_cleanup_download_message">Gemini Nano wird einmalig über die System-App AICore geladen, am besten im WLAN. Danach läuft das Aufräumen offline, deine Texte verlassen das Handy nicht.</string>
+    <string name="ai_cleanup_download_confirm">Laden</string>
+    <string name="ai_cleanup_download_cancel">Nicht jetzt</string>
+    <string name="ai_cleanup_hint_title">Mit KI aufräumen</string>
+    <string name="ai_cleanup_hint_message">Entfernt Füllwörter und Wiederholungen aus der Aufgabe, mit Gemini Nano. Läuft nur auf diesem Gerät, Texte verlassen das Handy nicht. Tags, Datum und Listen bleiben, wie sie sind. KI kann Fehler machen: Rückgängig geht immer.</string>
+    <string name="ai_cleanup_hint_confirm">Verstanden</string>
+    <string name="settings_section_ai">KI (Gemini Nano)</string>
+    <string name="settings_section_ai_summary">Aufgabentexte auf dem Gerät aufräumen</string>
+    <string name="settings_ai_cleanup">KI-Aufräumen anzeigen</string>
+    <string name="settings_ai_cleanup_subtitle">Ein ✨ mit „AI“ neben dem Textfeld entfernt Füllwörter und Wiederholungen</string>
+    <string name="settings_ai_status">Status</string>
+    <string name="settings_ai_status_unknown">Wird geprüft…</string>
+    <string name="settings_ai_status_available">Bereit, läuft offline</string>
+    <string name="settings_ai_status_downloadable">Unterstützt, Modell noch nicht geladen</string>
+    <string name="settings_ai_status_downloading">Modell wird geladen…</string>
+    <string name="settings_ai_status_downloading_bytes">Modell wird geladen… %1$s</string>
+    <string name="settings_ai_status_preparing">KI wird vorbereitet, das kann dauern</string>
+    <string name="settings_ai_status_unavailable">Auf diesem Gerät nicht verfügbar (Gerät nicht unterstützt, entsperrter Bootloader oder AICore fehlt)</string>
+    <string name="settings_ai_download">Modell laden</string>
+    <string name="settings_ai_note">Läuft nur auf diesem Gerät. Texte verlassen das Handy nicht. KI kann Fehler machen.</string>
 </resources>
