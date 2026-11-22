@@ -95,6 +95,12 @@ class TagRecognitionTest {
     }
 
     @Test
+    fun settleAllTakesTheLastWordsToo() {
+        val all = TagRecognition.settle("Müll Alex #5min Energie niedrig", 30, definitions, finishedOnly = false)!!
+        assertEquals("Müll Alex #person/alex #5min #energie/niedrig", all.text)
+    }
+
+    @Test
     fun settleSkipsIgnoredTags() {
         assertEquals(null, TagRecognition.settle("Müll 5 Minuten ", 15, definitions, ignoredTags = setOf("#5min")))
     }

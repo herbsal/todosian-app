@@ -16,6 +16,10 @@ import androidx.compose.material3.InputChipDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
@@ -172,23 +176,73 @@ fun RecognizedTagChips(
 internal fun fieldValueFor(field: TextFieldValue, text: String): TextFieldValue =
     if (field.text == text) field else TextFieldValue(text, TextRange(text.length))
 
+/** A typed change in a task's text field, kept on one line. */
+internal fun oneLineValue(typed: TextFieldValue): TextFieldValue {
+    val oneLine = TaskTextField.oneLine(typed.text)
+    return if (oneLine == typed.text) typed else TextFieldValue(oneLine, TextRange(typed.selection.end.coerceAtMost(oneLine.length)))
+}
+
 /**
- * A typed change in a task's text field: one line, and with [settle] finished tag words become
- * tags ([TagRecognition.settle]). Returns the new value and the words each new tag replaced.
+ * True when [typed] is [previous] plus one space or punctuation mark typed at the cursor, the
+ * end of a word on the keyboard. Dictation inserts whole words and is left alone: changing the
+ * text under it stops the microphone.
  */
-internal fun typedTaskText(
-    previous: String,
-    typed: TextFieldValue,
-    settle: Boolean,
+internal fun endsTypedWord(previous: String, typed: TextFieldValue): Boolean {
+    val text = typed.text
+    val at = typed.selection.end - 1
+    if (!typed.selection.collapsed || text.length != previous.length + 1 || at !in text.indices) return false
+    return !text[at].isLetterOrDigit() && text.removeRange(at, at + 1) == previous
+}
+
+/** How long typing must rest after a word before its tag words turn into the tag. */
+private const val SETTLE_DELAY_MS = 700L
+
+/**
+ * [value] with its tag words turned into tags ([TagRecognition.settle]); with [all] also the last
+ * words, as when leaving the field. Null when nothing changes. The map holds the words each tag replaced.
+ */
+internal fun settleTags(
+    value: TextFieldValue,
     definitions: TagDefinitions,
     ignoredTags: Set<String>,
     removeWords: Boolean,
-): Pair<TextFieldValue, Map<String, String>> {
-    val oneLine = TaskTextField.oneLine(typed.text)
-    val value = if (oneLine == typed.text) typed else TextFieldValue(oneLine, TextRange(typed.selection.end.coerceAtMost(oneLine.length)))
-    if (!settle || value.text == previous || !value.selection.collapsed) return value to emptyMap()
-    val settled = TagRecognition.settle(value.text, value.selection.end, definitions, ignoredTags, removeWords) ?: return value to emptyMap()
+    all: Boolean,
+): Pair<TextFieldValue, Map<String, String>>? {
+    val settled = TagRecognition.settle(
+        text = value.text,
+        cursor = value.selection.end,
+        definitions = definitions,
+        ignoredTags = ignoredTags,
+        removeWords = removeWords,
+        finishedOnly = !all,
+    ) ?: return null
     return TextFieldValue(settled.text, TextRange(settled.cursor)) to settled.replaced
+}
+
+/**
+ * Turns finished tag words into tags a moment after a word was typed on the keyboard
+ * ([wordTyped], see [endsTypedWord]); not while the keyboard still composes a word and never
+ * during dictation, where changing the text would stop the microphone.
+ */
+@Composable
+internal fun TagSettleEffect(
+    value: TextFieldValue,
+    wordTyped: Boolean,
+    enabled: Boolean,
+    definitions: TagDefinitions,
+    ignoredTags: Set<String>,
+    removeWords: Boolean,
+    onSettled: (TextFieldValue, Map<String, String>) -> Unit,
+) {
+    val current by rememberUpdatedState(value)
+    val latest by rememberUpdatedState(onSettled)
+    LaunchedEffect(value.text, wordTyped, enabled, definitions) {
+        if (!enabled || !wordTyped || definitions.isEmpty) return@LaunchedEffect
+        delay(SETTLE_DELAY_MS)
+        val now = current
+        if (now.text != value.text || now.composition != null) return@LaunchedEffect
+        settleTags(now, definitions, ignoredTags, removeWords, all = false)?.let { (settled, replaced) -> latest(settled, replaced) }
+    }
 }
 
 @Composable

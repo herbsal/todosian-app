@@ -133,6 +133,8 @@ class CategoryViewModel(
                     completedTodos = completed.sortedBy { it.lineIndex },
                     lines = lines,
                     moveTargets = _uiState.value.moveTargets,
+                    // Read on their own above; a fresh state must not drop them.
+                    tagDefinitions = _uiState.value.tagDefinitions,
                 )
             } finally {
                 if (pullRefresh) {
