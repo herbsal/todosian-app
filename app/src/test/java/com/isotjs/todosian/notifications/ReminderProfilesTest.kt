@@ -12,9 +12,9 @@ import java.time.LocalTime
 
 class ReminderProfilesTest {
     private val profile = ReminderProfileParser.parse(
-        "Alex",
+        "Michael",
         """
-        # Alex
+        # Michael
 
         Text before the first keyword is ignored.
         - 07:00

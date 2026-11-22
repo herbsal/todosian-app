@@ -304,7 +304,7 @@ fun CategoryScreen(
             val aiCleanup = remember(sheetMode) { AiCleanupState() }
             val aiShown = aiCleanupShown(settings)
             val isNewTask = sheetMode == TodoSheetMode.Add || sheetMode == TodoSheetMode.AddSubtask
-            // C2 and tag recognition: "morgen 17 Uhr", "5 Minuten", "Alex" in a new task's words.
+            // C2 and tag recognition: "morgen 17 Uhr", "5 Minuten", "Michael" in a new task's words.
             val recognition = remember(sheetText, isNewTask, ignoreDateInText, ignoredTags, settings.tagRecognition, uiState.tagDefinitions) {
                 TaskInputRecognizer.recognize(
                     text = sheetText,

@@ -47,7 +47,7 @@ import java.time.format.FormatStyle
 
 /**
  * What a new task's words say besides the task: a list ("@Haushalt", "auf die Einkaufsliste"),
- * a date ("morgen 17 Uhr") and tags of the tag note ("5 Minuten", "Alex"). Found in this order,
+ * a date ("morgen 17 Uhr") and tags of the tag note ("5 Minuten", "Michael"). Found in this order,
  * each on the text without the earlier ones, so "in 2 Stunden" stays a time.
  */
 data class TaskRecognition(

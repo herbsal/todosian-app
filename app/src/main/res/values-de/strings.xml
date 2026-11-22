@@ -428,7 +428,7 @@
     <string name="settings_person_scope_all">Alle Aufgaben</string>
     <string name="settings_person_scope_unassigned">Aufgaben ohne Person</string>
     <string name="settings_person_scope_nobody">Keine Aufgaben</string>
-    <string name="settings_person_scope_hint">Gilt nur für Erinnerungen auf diesem Gerät, auch für ⏰. Personen sind die Tags einer Gruppe, z. B. Person: #person/alex.</string>
+    <string name="settings_person_scope_hint">Gilt nur für Erinnerungen auf diesem Gerät, auch für ⏰. Personen sind die Tags einer Gruppe, z. B. Person: #person/michael.</string>
     <string name="settings_person_scope_no_groups">Noch keine Tag-Gruppen. Lege unter Tags und Profile eine Gruppe wie „Person“ mit einem Tag pro Person an.</string>
     <string name="settings_person_scope_group">Gruppe mit Personen</string>
     <string name="settings_person_scope_people">Erinnern an Aufgaben von</string>

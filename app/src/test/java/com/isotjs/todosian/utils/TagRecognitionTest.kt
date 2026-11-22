@@ -15,7 +15,7 @@ class TagRecognitionTest {
             "- Niedrig: #energie/niedrig",
             "- Hoch: #energie/hoch",
             "## Person",
-            "- Alex: #person/alex",
+            "- Michael: #person/michael",
             "- Sam: #person/sam",
         ),
     )
@@ -24,17 +24,17 @@ class TagRecognitionTest {
 
     @Test
     fun findsPeopleEffortAndEnergy() {
-        assertEquals(listOf("Alex", "5 Min", "Niedrig"), labels("Alex Müll rausbringen 5 Minuten wenig Energie"))
+        assertEquals(listOf("Michael", "5 Min", "Niedrig"), labels("Michael Müll rausbringen 5 Minuten wenig Energie"))
         assertEquals(listOf("2 Std", "Hoch"), labels("Garage aufräumen 2 Std. Energie hoch"))
         assertEquals(listOf("30 Min"), labels("Steuer halbe Stunde"))
-        assertEquals(listOf("Alex", "Sam"), labels("Alex und Sam Kino"))
+        assertEquals(listOf("Michael", "Sam"), labels("Michael und Sam Kino"))
     }
 
     @Test
     fun leavesAloneWhatIsNoTag() {
         assertEquals(emptyList<String>(), labels("Tisch niedrig stellen"))
         assertEquals(emptyList<String>(), labels("in 2 Stunden Wäsche"))
-        assertEquals(emptyList<String>(), labels("Alexander anrufen"))
+        assertEquals(emptyList<String>(), labels("Michaela anrufen"))
         // Already tagged.
         assertEquals(emptyList<String>(), labels("Müll #5min"))
     }
@@ -46,11 +46,11 @@ class TagRecognitionTest {
 
     @Test
     fun applyRemovesWordsButKeepsNames() {
-        val text = "Alex Müll rausbringen 5 Minuten, wenig Energie"
+        val text = "Michael Müll rausbringen 5 Minuten, wenig Energie"
         val hits = TagRecognition.find(text, definitions)
-        assertEquals("Alex Müll rausbringen #person/alex #5min #energie/niedrig", TagRecognition.apply(text, hits, removeWords = true))
+        assertEquals("Michael Müll rausbringen #person/michael #5min #energie/niedrig", TagRecognition.apply(text, hits, removeWords = true))
         assertEquals(
-            "Alex Müll rausbringen 5 Minuten, wenig Energie #person/alex #5min #energie/niedrig",
+            "Michael Müll rausbringen 5 Minuten, wenig Energie #person/michael #5min #energie/niedrig",
             TagRecognition.apply(text, hits, removeWords = false),
         )
     }
@@ -61,9 +61,9 @@ class TagRecognitionTest {
     @Test
     fun settleReplacesFinishedWordsOnly() {
         // Still typing "5 Minuten": nothing yet.
-        assertEquals(null, settle("Nudeltopf 5 Minuten"))
-        val done = settle("Nudeltopf 5 Minuten ")!!
-        assertEquals("Nudeltopf #5min ", done.text)
+        assertEquals(null, settle("Werkzeugkasten 5 Minuten"))
+        val done = settle("Werkzeugkasten 5 Minuten ")!!
+        assertEquals("Werkzeugkasten #5min ", done.text)
         assertEquals(done.text.length, done.cursor)
         assertEquals(mapOf("#5min" to "5 Minuten"), done.replaced)
         // Dictated in one go: words at the very end wait for the next character.
@@ -73,9 +73,9 @@ class TagRecognitionTest {
 
     @Test
     fun settleKeepsPeoplesNamesAndTheCursor() {
-        val done = settle("Alex anrufen", cursor = 5)!!
-        assertEquals("Alex #person/alex anrufen", done.text)
-        assertEquals(5 + " #person/alex".length, done.cursor)
+        val done = settle("Michael anrufen", cursor = 8)!!
+        assertEquals("Michael #person/michael anrufen", done.text)
+        assertEquals(8 + " #person/michael".length, done.cursor)
         // Cursor before the words: it stays where it is.
         val early = settle("Müll 5 Minuten jetzt", cursor = 2)!!
         assertEquals("Müll #5min jetzt", early.text)
@@ -96,8 +96,8 @@ class TagRecognitionTest {
 
     @Test
     fun settleAllTakesTheLastWordsToo() {
-        val all = TagRecognition.settle("Müll Alex #5min Energie niedrig", 30, definitions, finishedOnly = false)!!
-        assertEquals("Müll Alex #person/alex #5min #energie/niedrig", all.text)
+        val all = TagRecognition.settle("Müll Michael #5min Energie niedrig", 30, definitions, finishedOnly = false)!!
+        assertEquals("Müll Michael #person/michael #5min #energie/niedrig", all.text)
     }
 
     @Test
@@ -107,25 +107,25 @@ class TagRecognitionTest {
 
     @Test
     fun unsettleBringsTheWordsBack() {
-        assertEquals("Nudeltopf 5 Minuten ", TagRecognition.unsettle("Nudeltopf #5min ", "#5min", "5 Minuten"))
-        assertEquals("Alex anrufen", TagRecognition.unsettle("Alex #person/alex anrufen", "#person/alex", "Alex"))
+        assertEquals("Werkzeugkasten 5 Minuten ", TagRecognition.unsettle("Werkzeugkasten #5min ", "#5min", "5 Minuten"))
+        assertEquals("Michael anrufen", TagRecognition.unsettle("Michael #person/michael anrufen", "#person/michael", "Michael"))
         assertEquals("Müll", TagRecognition.unsettle("Müll #5min", "#5min", null))
     }
 
     @Test
     fun noDefinitionsNoHits() {
-        assertEquals(emptyList<TagHit>(), TagRecognition.find("Alex 5 Minuten", TagDefinitions.EMPTY))
+        assertEquals(emptyList<TagHit>(), TagRecognition.find("Michael 5 Minuten", TagDefinitions.EMPTY))
     }
 
     @Test
     fun ownWordsSetTheTag() {
         val own = TagDefinitionParser.parse(
-            listOf("## ⏱ Aufwand", "- 30 Min: #30min \"dreißig Minuten\", \"kurz mal\"", "## 👤 Person", "- Alex: #person/alex \"Papa\""),
+            listOf("## ⏱ Aufwand", "- 30 Min: #30min \"dreißig Minuten\", \"kurz mal\"", "## 👤 Person", "- Michael: #person/michael \"Papa\""),
         )
         val text = "Papa Rasen mähen dreißig Minuten"
         val hits = TagRecognition.find(text, own)
-        assertEquals(listOf("Alex", "30 Min"), hits.map { it.term.label })
-        assertEquals("Papa Rasen mähen #person/alex #30min", TagRecognition.apply(text, hits, removeWords = true))
+        assertEquals(listOf("Michael", "30 Min"), hits.map { it.term.label })
+        assertEquals("Papa Rasen mähen #person/michael #30min", TagRecognition.apply(text, hits, removeWords = true))
         assertEquals(listOf("30 Min"), TagRecognition.find("Kurz mal aufräumen", own).map { it.term.label })
     }
 }

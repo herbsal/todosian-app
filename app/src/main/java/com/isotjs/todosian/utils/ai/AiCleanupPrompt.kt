@@ -7,7 +7,7 @@ package com.isotjs.todosian.utils.ai
 object AiCleanupPrompt {
 
     private val examples = listOf(
-        "ähm ja also Nudeltopf, den Nudeltopf aufräumen" to "Nudeltopf aufräumen",
+        "ähm ja also Werkzeugkasten, den Werkzeugkasten aufräumen" to "Werkzeugkasten aufräumen",
         "also ich muss halt äh den Kinderarzt anrufen ⟦1⟧ ⟦2⟧" to "Kinderarzt anrufen ⟦1⟧ ⟦2⟧",
         "ja Termin, nein, Zahnarzt Termin für Lena vereinbaren" to "Zahnarzttermin für Lena vereinbaren",
         "morgen 17 Uhr ähm Müll rausbringen ⟦1⟧" to "Morgen 17 Uhr Müll rausbringen ⟦1⟧",

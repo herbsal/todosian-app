@@ -6,7 +6,7 @@ import org.junit.Test
 
 class NewTasksTest {
     private val milk = SeenTask("Milch kaufen", "- [ ] Milch kaufen")
-    private val dentist = SeenTask("Zahnarzt anrufen #alex", "- [ ] Zahnarzt anrufen #alex 📅 2026-11-21")
+    private val dentist = SeenTask("Zahnarzt anrufen #michael", "- [ ] Zahnarzt anrufen #michael 📅 2026-11-21")
 
     @Test
     fun firstLookFindsNothing() {
@@ -29,7 +29,7 @@ class NewTasksTest {
     @Test
     fun changedDateOrCaseIsNotNew() {
         val previous = setOf(dentist.key)
-        val moved = SeenTask("zahnarzt anrufen #alex ", "- [ ] zahnarzt anrufen #alex 📅 2026-11-25")
+        val moved = SeenTask("zahnarzt anrufen #michael ", "- [ ] zahnarzt anrufen #michael 📅 2026-11-25")
         assertTrue(NewTasks.detect(previous, listOf(moved), emptySet()).isEmpty())
     }
 }

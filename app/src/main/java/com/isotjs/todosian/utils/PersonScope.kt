@@ -2,7 +2,7 @@ package com.isotjs.todosian.utils
 
 /**
  * Whose tasks remind on this device, for one folder. People are the keywords of the keyword
- * group [group] (e.g. "Person" with `#person/alex`). A task assigned to one of [persons]
+ * group [group] (e.g. "Person" with `#person/michael`). A task assigned to one of [persons]
  * (primary tags) reminds; a task without any person of the group reminds when
  * [includeUnassigned] is set. Stored per device, so everyone sharing a folder decides alone.
  */
