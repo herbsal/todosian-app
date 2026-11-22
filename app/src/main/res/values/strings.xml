@@ -635,4 +635,8 @@
     <string name="undo_history_summary">Undo or redo your last actions</string>
     <string name="undo_history_empty">No actions yet. The list starts anew when the app restarts.</string>
     <string name="undo_history_undone">Undone</string>
+    <string name="category_discard_draft_title">Discard draft?</string>
+    <string name="category_discard_draft_message">Your changes to this task will be lost.</string>
+    <string name="category_discard_draft_discard">Discard</string>
+    <string name="category_discard_draft_keep">Keep editing</string>
 </resources>

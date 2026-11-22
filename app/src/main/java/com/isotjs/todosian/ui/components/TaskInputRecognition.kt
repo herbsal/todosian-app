@@ -19,6 +19,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import com.isotjs.todosian.R
 import com.isotjs.todosian.utils.DateMatch
@@ -29,8 +31,11 @@ import com.isotjs.todosian.utils.NaturalDates
 import com.isotjs.todosian.utils.REMINDER_MARKER
 import com.isotjs.todosian.utils.TagDefinitions
 import com.isotjs.todosian.utils.TagDisplay
+import com.isotjs.todosian.utils.TagGroup
 import com.isotjs.todosian.utils.TagHit
 import com.isotjs.todosian.utils.TagRecognition
+import com.isotjs.todosian.utils.TagTerm
+import com.isotjs.todosian.utils.TagText
 import com.isotjs.todosian.utils.TaskMarkers
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -132,19 +137,58 @@ fun RecognizedDateChip(match: DateMatch, onIgnore: (() -> Unit)?) {
     RemovableChip(label = label, onRemove = onIgnore)
 }
 
-/** One chip per recognized tag, e.g. "⏱ 5 Min"; tapping one leaves that tag out. */
+/** Keywords of the tag note already set in [text] as tags, in the note's order. */
+internal fun tagsSetIn(text: String, definitions: TagDefinitions): List<Pair<TagGroup, TagTerm>> =
+    definitions.groups.flatMap { group -> group.terms.filter { TagText.hasTerm(text, it) }.map { group to it } }
+
+/**
+ * One chip with its symbol per tag of the task, e.g. "⏱ 5 Min": the tags already in the text
+ * ([set]) and those still written as words ([hits]). ✕ leaves the tag out.
+ */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun RecognizedTagChips(hits: List<TagHit>, onRemove: (TagHit) -> Unit, modifier: Modifier = Modifier) {
-    if (hits.isEmpty()) return
+fun RecognizedTagChips(
+    hits: List<TagHit>,
+    onRemove: (TagHit) -> Unit,
+    modifier: Modifier = Modifier,
+    set: List<Pair<TagGroup, TagTerm>> = emptyList(),
+    onRemoveSet: (TagGroup, TagTerm) -> Unit = { _, _ -> },
+) {
+    if (hits.isEmpty() && set.isEmpty()) return
     FlowRow(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
+        set.forEach { (group, term) ->
+            RemovableChip(label = "${TagDisplay.iconFor(group)} ${term.label}", onRemove = { onRemoveSet(group, term) })
+        }
         hits.forEach { hit ->
             RemovableChip(label = "${TagDisplay.iconFor(hit.group)} ${hit.term.label}", onRemove = { onRemove(hit) })
         }
     }
+}
+
+/** The field's value for [text]: the typed one with its cursor, or [text] with the cursor at the end. */
+internal fun fieldValueFor(field: TextFieldValue, text: String): TextFieldValue =
+    if (field.text == text) field else TextFieldValue(text, TextRange(text.length))
+
+/**
+ * A typed change in a task's text field: one line, and with [settle] finished tag words become
+ * tags ([TagRecognition.settle]). Returns the new value and the words each new tag replaced.
+ */
+internal fun typedTaskText(
+    previous: String,
+    typed: TextFieldValue,
+    settle: Boolean,
+    definitions: TagDefinitions,
+    ignoredTags: Set<String>,
+    removeWords: Boolean,
+): Pair<TextFieldValue, Map<String, String>> {
+    val oneLine = TaskTextField.oneLine(typed.text)
+    val value = if (oneLine == typed.text) typed else TextFieldValue(oneLine, TextRange(typed.selection.end.coerceAtMost(oneLine.length)))
+    if (!settle || value.text == previous || !value.selection.collapsed) return value to emptyMap()
+    val settled = TagRecognition.settle(value.text, value.selection.end, definitions, ignoredTags, removeWords) ?: return value to emptyMap()
+    return TextFieldValue(settled.text, TextRange(settled.cursor)) to settled.replaced
 }
 
 @Composable

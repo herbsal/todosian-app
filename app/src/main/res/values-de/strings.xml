@@ -635,4 +635,8 @@
     <string name="undo_history_summary">Letzte Aktionen rückgängig machen oder wiederholen</string>
     <string name="undo_history_empty">Noch keine Aktionen. Die Liste beginnt neu, wenn die App neu startet.</string>
     <string name="undo_history_undone">Rückgängig gemacht</string>
+    <string name="category_discard_draft_title">Entwurf verwerfen?</string>
+    <string name="category_discard_draft_message">Deine Änderungen an dieser Aufgabe gehen verloren.</string>
+    <string name="category_discard_draft_discard">Verwerfen</string>
+    <string name="category_discard_draft_keep">Weiter bearbeiten</string>
 </resources>

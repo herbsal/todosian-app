@@ -55,6 +55,57 @@ class TagRecognitionTest {
         )
     }
 
+    private fun settle(text: String, cursor: Int = text.length, removeWords: Boolean = true) =
+        TagRecognition.settle(text, cursor, definitions, removeWords = removeWords)
+
+    @Test
+    fun settleReplacesFinishedWordsOnly() {
+        // Still typing "5 Minuten": nothing yet.
+        assertEquals(null, settle("Nudeltopf 5 Minuten"))
+        val done = settle("Nudeltopf 5 Minuten ")!!
+        assertEquals("Nudeltopf #5min ", done.text)
+        assertEquals(done.text.length, done.cursor)
+        assertEquals(mapOf("#5min" to "5 Minuten"), done.replaced)
+        // Dictated in one go: words at the very end wait for the next character.
+        assertEquals("Müll #5min, wenig Energie", settle("Müll 5 Minuten, wenig Energie")!!.text)
+        assertEquals("Müll #5min, #energie/niedrig ", settle("Müll 5 Minuten, wenig Energie ")!!.text)
+    }
+
+    @Test
+    fun settleKeepsPeoplesNamesAndTheCursor() {
+        val done = settle("Alex anrufen", cursor = 5)!!
+        assertEquals("Alex #person/alex anrufen", done.text)
+        assertEquals(5 + " #person/alex".length, done.cursor)
+        // Cursor before the words: it stays where it is.
+        val early = settle("Müll 5 Minuten jetzt", cursor = 2)!!
+        assertEquals("Müll #5min jetzt", early.text)
+        assertEquals(2, early.cursor)
+        // Cursor on the words: they may still change.
+        assertEquals(null, settle("Müll 5 Minuten jetzt", cursor = 9))
+    }
+
+    @Test
+    fun settleWithoutRemovingWordsAddsTheTag() {
+        assertEquals("Müll 5 Minuten #5min ", settle("Müll 5 Minuten ", removeWords = false)!!.text)
+    }
+
+    @Test
+    fun settleNewWordsWinInExclusiveGroups() {
+        assertEquals("Garage #2h ", settle("Garage #5min 2 Stunden ")!!.text)
+    }
+
+    @Test
+    fun settleSkipsIgnoredTags() {
+        assertEquals(null, TagRecognition.settle("Müll 5 Minuten ", 15, definitions, ignoredTags = setOf("#5min")))
+    }
+
+    @Test
+    fun unsettleBringsTheWordsBack() {
+        assertEquals("Nudeltopf 5 Minuten ", TagRecognition.unsettle("Nudeltopf #5min ", "#5min", "5 Minuten"))
+        assertEquals("Alex anrufen", TagRecognition.unsettle("Alex #person/alex anrufen", "#person/alex", "Alex"))
+        assertEquals("Müll", TagRecognition.unsettle("Müll #5min", "#5min", null))
+    }
+
     @Test
     fun noDefinitionsNoHits() {
         assertEquals(emptyList<TagHit>(), TagRecognition.find("Alex 5 Minuten", TagDefinitions.EMPTY))
