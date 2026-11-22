@@ -92,6 +92,7 @@ import com.isotjs.todosian.ui.components.RecognizedTagChips
 import com.isotjs.todosian.ui.components.fieldValueFor
 import com.isotjs.todosian.ui.components.tagsSetIn
 import com.isotjs.todosian.ui.components.TagSettleEffect
+import com.isotjs.todosian.ui.components.clearFocusOnTap
 import com.isotjs.todosian.ui.components.AddTaskSheet
 import com.isotjs.todosian.data.model.Category
 import androidx.compose.runtime.produceState
@@ -353,6 +354,7 @@ fun CategoryScreen(
                     .windowInsetsPadding(WindowInsets.ime)
                     .padding(bottom = 16.dp)
                     .verticalScroll(scrollState),
+                    .clearFocusOnTap(),
             ) {
                 Text(
                     text = stringResource(titleRes),
