@@ -5,21 +5,14 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -57,27 +50,22 @@ import kotlinx.coroutines.launch
  */
 @Composable
 fun BadgedSparkle(badge: String, filled: Boolean, tint: Color, badgeColor: Color = tint) {
-    Box(modifier = Modifier.size(28.dp), contentAlignment = Alignment.Center) {
+    // One star with the badge ("AI", "#") in place of the small star top right.
+    Box(modifier = Modifier.size(26.dp)) {
         Icon(
-            imageVector = if (filled) Icons.Filled.AutoAwesome else Icons.Outlined.AutoAwesome,
+            imageVector = if (filled) SingleSparkleFilled else SingleSparkleOutlined,
             contentDescription = null,
             tint = tint,
             modifier = Modifier.size(20.dp).align(Alignment.BottomStart),
         )
-        Surface(
-            color = MaterialTheme.colorScheme.surface,
-            shape = RoundedCornerShape(4.dp),
-            modifier = Modifier.align(Alignment.TopEnd).offset(x = 2.dp, y = (-1).dp),
-        ) {
-            Text(
-                text = badge,
-                color = badgeColor,
-                fontSize = 9.sp,
-                lineHeight = 9.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(horizontal = 1.dp),
-            )
-        }
+        Text(
+            text = badge,
+            color = badgeColor,
+            fontSize = 10.sp,
+            lineHeight = 10.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.align(Alignment.TopEnd),
+        )
     }
 }
 
@@ -188,10 +176,11 @@ fun AiCleanupButton(
     }
 
     val description = stringResource(R.string.ai_cleanup_button)
-    IconButton(
+    EdgeIconButton(
         onClick = ::tap,
+        selected = false,
         enabled = !state.running,
-        modifier = Modifier.semantics { contentDescription = description },
+        description = description,
     ) {
         if (state.running || status is AiStatus.Downloading) {
             CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.tertiary)

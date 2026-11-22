@@ -2,17 +2,14 @@ package com.isotjs.todosian.ui.components
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.isotjs.todosian.utils.TagDefinitions
+import com.isotjs.todosian.utils.TagDisplay
 import com.isotjs.todosian.utils.TagHit
 import com.isotjs.todosian.utils.TagText
 
@@ -22,7 +19,6 @@ import com.isotjs.todosian.utils.TagText
  * Keywords [recognized] in the words show as selected too; tapping one leaves it out, and picking
  * another keyword of such a group drops the recognized one ([onOverride]).
  */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun TagQuickPicker(
     definitions: TagDefinitions,
@@ -35,18 +31,12 @@ fun TagQuickPicker(
     if (definitions.isEmpty) return
     Column(
         modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         definitions.groups.forEach { group ->
-            group.name?.let { name ->
-                Text(
-                    text = name,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp),
-                )
-            }
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            // One row per group, its name in front ("Dauer", "Energie", "Person"), each chip with the group's symbol.
+            val icon = TagDisplay.iconFor(group)
+            MetaRow(label = group.name) {
                 group.terms.forEach { term ->
                     val hit = recognized.firstOrNull { it.term == term }
                     FilterChip(
@@ -59,7 +49,7 @@ fun TagQuickPicker(
                                 onTextChange(TagText.toggle(text, group, term))
                             }
                         },
-                        label = { Text(text = term.label) },
+                        label = { Text(text = "$icon ${term.label}", maxLines = 1) },
                     )
                 }
             }

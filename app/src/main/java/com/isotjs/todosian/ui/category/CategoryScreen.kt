@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -85,6 +86,9 @@ import com.isotjs.todosian.ui.components.AiCleanupButton
 import com.isotjs.todosian.ui.components.AiCleanupNotice
 import com.isotjs.todosian.ui.components.AiCleanupState
 import com.isotjs.todosian.ui.components.RecognitionToggle
+import com.isotjs.todosian.ui.components.EdgeFieldMinHeight
+import com.isotjs.todosian.ui.components.EdgeFieldTrailingSpace
+import com.isotjs.todosian.ui.components.FieldWithEdgeButtons
 import com.isotjs.todosian.ui.components.aiCleanupShown
 import com.isotjs.todosian.ui.components.keepsRecognized
 import com.isotjs.todosian.ui.components.RecognizedDateChip
@@ -365,6 +369,44 @@ fun CategoryScreen(
                     style = MaterialTheme.typography.titleLarge,
                 )
                 Spacer(modifier = Modifier.height(12.dp))
+                // Tag recognition always for a new task, as in quick capture: it also switches
+                // the list words. The AI cleanup also when editing an existing task.
+                val hasEdgeButtons = isNewTask || aiShown
+                FieldWithEdgeButtons(
+                    buttons = {
+                        if (isNewTask) {
+                            RecognitionToggle(
+                                enabled = settings.tagRecognition,
+                                onToggle = { appSettingsRepository.setTagRecognition(!settings.tagRecognition) },
+                            )
+                        }
+                        if (aiShown) {
+                            val recognizeWords: (String, LocalDateTime) -> TaskRecognition = { words, now ->
+                                TaskInputRecognizer.recognize(
+                                    text = words,
+                                    definitions = uiState.tagDefinitions,
+                                    recognizeTagsAndLists = isNewTask && settings.tagRecognition,
+                                    ignoreDate = !isNewTask || ignoreDateInText,
+                                    ignoredTags = ignoredTags,
+                                    now = now,
+                                )
+                            }
+                            AiCleanupButton(
+                                state = aiCleanup,
+                                settings = settings,
+                                appSettingsRepository = appSettingsRepository,
+                                currentText = { sheetText },
+                                onCleaned = { cleaned ->
+                                    sheetField = TextFieldValue(cleaned, TextRange(cleaned.length))
+                                    sheetText = cleaned
+                                },
+                                markers = settings.toTaskMarkers(),
+                                protect = { words -> protectedWords(words, recognizeWords) },
+                                verify = { original, cleaned -> keepsRecognized(original, cleaned, recognizeWords) },
+                            )
+                        }
+                    },
+                ) {
                 OutlinedTextField(
                     value = fieldValueFor(sheetField, sheetText),
                     onValueChange = { typed ->
@@ -376,49 +418,14 @@ fun CategoryScreen(
                     maxLines = TaskTextField.MAX_LINES,
                     keyboardOptions = TaskTextField.keyboardOptions,
                     label = { Text(text = stringResource(hintRes)) },
-                    // Tag recognition always for a new task, as in quick capture: it also switches
-                    // the list words. The AI cleanup also when editing an existing task.
-                    trailingIcon = if (isNewTask || aiShown) {
-                        {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                if (aiShown) {
-                                    val recognizeWords: (String, LocalDateTime) -> TaskRecognition = { words, now ->
-                                        TaskInputRecognizer.recognize(
-                                            text = words,
-                                            definitions = uiState.tagDefinitions,
-                                            recognizeTagsAndLists = isNewTask && settings.tagRecognition,
-                                            ignoreDate = !isNewTask || ignoreDateInText,
-                                            ignoredTags = ignoredTags,
-                                            now = now,
-                                        )
-                                    }
-                                    AiCleanupButton(
-                                        state = aiCleanup,
-                                        settings = settings,
-                                        appSettingsRepository = appSettingsRepository,
-                                        currentText = { sheetText },
-                                        onCleaned = { cleaned ->
-                                            sheetField = TextFieldValue(cleaned, TextRange(cleaned.length))
-                                            sheetText = cleaned
-                                        },
-                                        markers = settings.toTaskMarkers(),
-                                        protect = { words -> protectedWords(words, recognizeWords) },
-                                        verify = { original, cleaned -> keepsRecognized(original, cleaned, recognizeWords) },
-                                    )
-                                }
-                                if (isNewTask) {
-                                    RecognitionToggle(
-                                        enabled = settings.tagRecognition,
-                                        onToggle = { appSettingsRepository.setTagRecognition(!settings.tagRecognition) },
-                                    )
-                                }
-                            }
-                        }
+                    trailingIcon = if (hasEdgeButtons) {
+                        { EdgeFieldTrailingSpace() }
                     } else {
                         null
                     },
                     modifier = Modifier
                         .fillMaxWidth()
+                        .then(if (hasEdgeButtons) Modifier.heightIn(min = EdgeFieldMinHeight) else Modifier)
                         .bringIntoViewRequester(todoTextBringIntoView)
                         .onFocusEvent { focusState ->
                             if (focusState.isFocused) {
@@ -435,6 +442,7 @@ fun CategoryScreen(
                             fieldFocused = focusState.isFocused
                         },
                 )
+                }
                 AiCleanupNotice(
                     state = aiCleanup,
                     currentText = sheetText,

@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.windowInsetsPadding
@@ -136,8 +137,9 @@ fun AddTaskSheet(
     val tasksPlugin = settings.enableTasksPluginSupport
     val markers = remember(settings) { settings.toTaskMarkers() }
 
-    var text by remember { mutableStateOf(initialText) }
-    var field by remember { mutableStateOf(TextFieldValue()) }
+    // The words in the field; tags of the tag note show as chips below it.
+    val draft = remember { TaskDraft(initialText) }
+    val text = draft.text
     var meta by remember {
         mutableStateOf(if (tasksPlugin) MarkdownParser.TasksMeta(createdDate = LocalDate.now().toString()) else MarkdownParser.TasksMeta())
     }
@@ -161,7 +163,7 @@ fun AddTaskSheet(
     val sheetState = rememberModalBottomSheetState(
         skipPartiallyExpanded = true,
         confirmValueChange = { value ->
-            if (value == SheetValue.Hidden && text.isNotBlank() && !closing) {
+            if (value == SheetValue.Hidden && draft.text.isNotBlank() && !closing) {
                 askDiscard = true
                 false
             } else {
@@ -196,13 +198,17 @@ fun AddTaskSheet(
     val loadedDefinitions by produceState(fileRepository.cachedTagDefinitions(target?.uri) ?: TagDefinitions.EMPTY, target?.uri) {
         value = fileRepository.getTagDefinitions(target?.uri)
     }
-    LaunchedEffect(loadedDefinitions) { definitions = loadedDefinitions }
+    LaunchedEffect(loadedDefinitions) {
+        definitions = loadedDefinitions
+        // Tags already in the text (e.g. from quick capture) move to the chips.
+        draft.setText(draft.text, loadedDefinitions, draft.field.selection.end)
+    }
     LaunchedEffect(Unit) { runCatching { focusRequester.requestFocus() } }
 
-    fun setText(value: TextFieldValue, replaced: Map<String, String> = emptyMap()) {
+    /** A new whole text (words and tags), e.g. with tag words turned into tags. */
+    fun setText(full: String, cursor: Int = full.length, replaced: Map<String, String> = emptyMap()) {
         replacedWords = replacedWords + replaced
-        field = value
-        text = value.text
+        draft.setText(full, definitions, cursor)
     }
 
     fun close() {
@@ -297,18 +303,12 @@ fun AddTaskSheet(
         ) {
             Text(text = stringResource(R.string.category_add_todo_title), style = MaterialTheme.typography.titleLarge)
             Spacer(modifier = Modifier.height(12.dp))
-            OutlinedTextField(
-                value = fieldValueFor(field, text),
-                onValueChange = { typed ->
-                    val value = oneLineValue(typed)
-                    if (value.text != text) wordTyped = endsTypedWord(text, value)
-                    setText(value)
-                },
-                maxLines = TaskTextField.MAX_LINES,
-                keyboardOptions = TaskTextField.keyboardOptions,
-                label = { Text(text = stringResource(R.string.category_add_todo_hint)) },
-                trailingIcon = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+            FieldWithEdgeButtons(
+                buttons = {
+                        RecognitionToggle(
+                            enabled = settings.tagRecognition,
+                            onToggle = { appSettingsRepository.setTagRecognition(!settings.tagRecognition) },
+                        )
                         if (aiShown) {
                             val recognizeWords: (String, LocalDateTime) -> TaskRecognition = { words, now ->
                                 TaskInputRecognizer.recognize(
@@ -326,39 +326,52 @@ fun AddTaskSheet(
                                 state = aiCleanup,
                                 settings = settings,
                                 appSettingsRepository = appSettingsRepository,
-                                currentText = { text },
-                                onCleaned = { cleaned -> setText(TextFieldValue(cleaned, TextRange(cleaned.length))) },
+                                currentText = { draft.words },
+                                onCleaned = { cleaned -> draft.replaceWords(cleaned) },
                                 markers = markers,
                                 protect = { words -> protectedWords(words, recognizeWords) },
                                 verify = { original, cleaned -> keepsRecognized(original, cleaned, recognizeWords) },
                             )
                         }
-                        RecognitionToggle(
-                            enabled = settings.tagRecognition,
-                            onToggle = { appSettingsRepository.setTagRecognition(!settings.tagRecognition) },
-                        )
+                },
+            ) {
+            OutlinedTextField(
+                value = draft.field,
+                onValueChange = { typed ->
+                    val value = oneLineValue(typed)
+                    if (value.text != draft.words) wordTyped = endsTypedWord(draft.words, value)
+                    draft.type(value)
+                    // A tag typed with # moves to the chips once its word ends.
+                    if (wordTyped && TagText.tagsIn(value.text).any { definitions.termFor(it) != null }) {
+                        draft.setText(draft.text, definitions, value.selection.end)
                     }
                 },
+                maxLines = TaskTextField.MAX_LINES,
+                keyboardOptions = TaskTextField.keyboardOptions,
+                label = { Text(text = stringResource(R.string.category_add_todo_hint)) },
+                trailingIcon = { EdgeFieldTrailingSpace() },
                 modifier = Modifier
                     .fillMaxWidth()
+                    .heightIn(min = EdgeFieldMinHeight)
                     .focusRequester(focusRequester)
                     .onFocusEvent { state ->
                         if (!state.isFocused && fieldFocused && settings.tagRecognition) {
                             // Leaving the field: the last tag words (also dictated ones) become tags.
-                            settleTags(fieldValueFor(field, text), definitions, ignoredTags, settings.tagRecognitionRemoveWords, all = true)
-                                ?.let { (value, replaced) -> setText(value, replaced) }
+                            settleTags(draft.value, definitions, ignoredTags, settings.tagRecognitionRemoveWords, all = true)
+                                ?.let { (value, replaced) -> setText(value.text, value.selection.end, replaced) }
                         }
                         fieldFocused = state.isFocused
                     },
             )
+            }
             AiCleanupNotice(
                 state = aiCleanup,
-                currentText = text,
-                onUndo = { original -> setText(TextFieldValue(original, TextRange(original.length))) },
+                currentText = draft.words,
+                onUndo = { original -> draft.replaceWords(original) },
             )
             // Finished tag words typed on the keyboard turn into the tag: "5 Minuten " → "#5min ".
             TagSettleEffect(
-                value = fieldValueFor(field, text),
+                value = draft.value,
                 wordTyped = wordTyped,
                 enabled = settings.tagRecognition,
                 definitions = definitions,
@@ -366,7 +379,7 @@ fun AddTaskSheet(
                 removeWords = settings.tagRecognitionRemoveWords,
                 onSettled = { value, replaced ->
                     wordTyped = false
-                    setText(value, replaced)
+                    setText(value.text, value.selection.end, replaced)
                 },
             )
             Spacer(modifier = Modifier.height(8.dp))
@@ -396,11 +409,44 @@ fun AddTaskSheet(
                     onRemoveSet = { _, term ->
                         val tag = term.tags.firstOrNull { t -> TagText.tagsIn(text).any { it.equals(t, ignoreCase = true) } } ?: term.primaryTag
                         ignoredTags = ignoredTags + term.primaryTag
-                        text = TagRecognition.unsettle(text, tag, replacedWords[tag])
+                        setText(TagRecognition.unsettle(text, tag, replacedWords[tag]))
                     },
                 )
             }
 
+            if (!definitions.isEmpty) {
+                Spacer(modifier = Modifier.height(8.dp))
+                TagQuickPicker(
+                    definitions = definitions,
+                    text = text,
+                    onTextChange = { setText(it) },
+                    recognized = recognition.tags,
+                    onOverride = { hit -> ignoredTags = ignoredTags + hit.term.primaryTag },
+                )
+            }
+
+            if (tasksPlugin) {
+                Spacer(modifier = Modifier.height(12.dp))
+                // A date recognized in the words shows in the date rows right away. Changing a row
+                // takes it over: its words leave the text and the rows hold the date from then on.
+                val recognizedDate = recognition.date
+                val shownMeta = if (recognizedDate == null) meta else {
+                    applyRecognizedDate(recognizedDate, text, meta, tasksPlugin = true, markers = markers).second
+                }
+                TasksMetaEditor(
+                    mode = TodoSheetMode.Add,
+                    meta = shownMeta,
+                    onMetaChange = { changed ->
+                        if (recognizedDate != null) {
+                            // The date words leave the text (list words too; the list stays chosen).
+                            if (chosenList == null) chosenList = recognition.list?.let { byName[it.name] }
+                            setText(recognizedDate.text)
+                        }
+                        meta = changed
+                    },
+                    useEmojisInUi = settings.tasksPluginUseEmojisInUi,
+                )
+            }
             // U1: an optional small first step, saved as a subtask with its own ⏰.
             val step = firstStep
             if (step == null) {
@@ -425,39 +471,6 @@ fun AddTaskSheet(
                 }
             }
 
-            if (!definitions.isEmpty) {
-                Spacer(modifier = Modifier.height(8.dp))
-                TagQuickPicker(
-                    definitions = definitions,
-                    text = text,
-                    onTextChange = { text = it },
-                    recognized = recognition.tags,
-                    onOverride = { hit -> ignoredTags = ignoredTags + hit.term.primaryTag },
-                )
-            }
-
-            if (tasksPlugin) {
-                Spacer(modifier = Modifier.height(12.dp))
-                // A date recognized in the words shows in the date rows right away. Changing a row
-                // takes it over: its words leave the text and the rows hold the date from then on.
-                val recognizedDate = recognition.date
-                val shownMeta = if (recognizedDate == null) meta else {
-                    applyRecognizedDate(recognizedDate, text, meta, tasksPlugin = true, markers = markers).second
-                }
-                TasksMetaEditor(
-                    mode = TodoSheetMode.Add,
-                    meta = shownMeta,
-                    onMetaChange = { changed ->
-                        if (recognizedDate != null) {
-                            // The date words leave the text (list words too; the list stays chosen).
-                            if (chosenList == null) chosenList = recognition.list?.let { byName[it.name] }
-                            text = recognizedDate.text
-                        }
-                        meta = changed
-                    },
-                    useEmojisInUi = settings.tasksPluginUseEmojisInUi,
-                )
-            }
             Spacer(modifier = Modifier.height(16.dp))
             Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
                 TextButton(onClick = { close() }) { Text(text = stringResource(R.string.action_cancel)) }

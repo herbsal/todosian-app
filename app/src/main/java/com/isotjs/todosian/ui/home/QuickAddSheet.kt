@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.windowInsetsPadding
@@ -61,9 +62,12 @@ import com.isotjs.todosian.ui.components.keepsRecognized
 import com.isotjs.todosian.ui.components.rememberAiCleanupState
 import com.isotjs.todosian.ui.components.RecognizedDateChip
 import com.isotjs.todosian.ui.components.RecognizedTagChips
+import com.isotjs.todosian.ui.components.TaskDraft
+import com.isotjs.todosian.ui.components.EdgeFieldMinHeight
+import com.isotjs.todosian.ui.components.EdgeFieldTrailingSpace
+import com.isotjs.todosian.ui.components.FieldWithEdgeButtons
 import com.isotjs.todosian.ui.components.TaskInputRecognizer
 import com.isotjs.todosian.ui.components.TaskTextField
-import com.isotjs.todosian.ui.components.fieldValueFor
 import com.isotjs.todosian.ui.components.tagsSetIn
 import com.isotjs.todosian.ui.components.TagSettleEffect
 import com.isotjs.todosian.ui.components.clearFocusOnTap
@@ -108,14 +112,16 @@ internal fun QuickAddSheet(
     onFailed: () -> Unit,
     onOpenFullAdd: (listUri: Uri?, text: String) -> Unit,
 ) {
-    var text by remember { mutableStateOf("") }
+    // The words in the field; tags of the tag note show as chips below it.
+    val draft = remember { TaskDraft("") }
+    val text = draft.text
     // Typed words are not dropped by a swipe, a tap beside the sheet or Back: first ask.
     var askDiscard by remember { mutableStateOf(false) }
     var closing by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(
         skipPartiallyExpanded = true,
         confirmValueChange = { value ->
-            if (value == SheetValue.Hidden && text.isNotBlank() && !closing) {
+            if (value == SheetValue.Hidden && draft.text.isNotBlank() && !closing) {
                 askDiscard = true
                 false
             } else {
@@ -129,7 +135,6 @@ internal fun QuickAddSheet(
     var ignoredTags by remember { mutableStateOf(emptySet<String>()) }
     // Words that finished tag words were turned into, to bring them back when a tag is removed.
     var replacedWords by remember { mutableStateOf(emptyMap<String, String>()) }
-    var field by remember { mutableStateOf(TextFieldValue()) }
     var wordTyped by remember { mutableStateOf(false) }
     var chosenList by remember { mutableStateOf<Category?>(null) }
     var saving by remember { mutableStateOf(false) }
@@ -175,7 +180,8 @@ internal fun QuickAddSheet(
         if (openingFull) return
         openingFull = true
         // List words go, the list is chosen; date and tag words stay for the task sheet to recognize.
-        val withoutList = currentFirstPass.list?.let { ListRecognition.remove(text, it) } ?: text
+        val full = draft.text
+        val withoutList = currentFirstPass.list?.let { ListRecognition.remove(full, it) } ?: full
         // Tag words become tags here, also the last (dictated) ones, so the task sheet shows them as tags.
         val rest = if (!settings.tagRecognition) withoutList else {
             TagRecognition.settle(withoutList, withoutList.length, definitions, ignoredTags, settings.tagRecognitionRemoveWords, finishedOnly = false)?.text ?: withoutList
@@ -266,19 +272,12 @@ internal fun QuickAddSheet(
         ) {
             Text(text = stringResource(R.string.quick_add_title), style = MaterialTheme.typography.titleLarge)
             Spacer(modifier = Modifier.height(12.dp))
-            OutlinedTextField(
-                value = fieldValueFor(field, text),
-                onValueChange = { typed ->
-                    val value = oneLineValue(typed)
-                    if (value.text != text) wordTyped = endsTypedWord(text, value)
-                    field = value
-                    text = value.text
-                },
-                maxLines = TaskTextField.MAX_LINES,
-                keyboardOptions = TaskTextField.keyboardOptions,
-                label = { Text(text = stringResource(R.string.quick_add_hint)) },
-                trailingIcon = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+            FieldWithEdgeButtons(
+                buttons = {
+                        RecognitionToggle(
+                            enabled = settings.tagRecognition,
+                            onToggle = { appSettingsRepository.setTagRecognition(!settings.tagRecognition) },
+                        )
                         if (aiShown) {
                             val recognizeWords: (String, LocalDateTime) -> TaskRecognition = { words, now ->
                                 TaskInputRecognizer.recognize(
@@ -296,37 +295,44 @@ internal fun QuickAddSheet(
                                 state = aiCleanup,
                                 settings = settings,
                                 appSettingsRepository = appSettingsRepository,
-                                currentText = { text },
-                                onCleaned = { cleaned ->
-                                    field = TextFieldValue(cleaned, TextRange(cleaned.length))
-                                    text = cleaned
-                                },
+                                currentText = { draft.words },
+                                onCleaned = { cleaned -> draft.replaceWords(cleaned) },
                                 markers = settings.toTaskMarkers(),
                                 protect = { words -> protectedWords(words, recognizeWords) },
                                 verify = { original, cleaned -> keepsRecognized(original, cleaned, recognizeWords) },
                             )
                         }
-                        RecognitionToggle(
-                            enabled = settings.tagRecognition,
-                            onToggle = { appSettingsRepository.setTagRecognition(!settings.tagRecognition) },
-                        )
+                },
+            ) {
+            OutlinedTextField(
+                value = draft.field,
+                onValueChange = { typed ->
+                    val value = oneLineValue(typed)
+                    if (value.text != draft.words) wordTyped = endsTypedWord(draft.words, value)
+                    draft.type(value)
+                    // A tag typed with # moves to the chips once its word ends.
+                    if (wordTyped && TagText.tagsIn(value.text).any { definitions.termFor(it) != null }) {
+                        draft.setText(draft.text, definitions, value.selection.end)
                     }
                 },
+                maxLines = TaskTextField.MAX_LINES,
+                keyboardOptions = TaskTextField.keyboardOptions,
+                label = { Text(text = stringResource(R.string.quick_add_hint)) },
+                trailingIcon = { EdgeFieldTrailingSpace() },
                 modifier = Modifier
                     .fillMaxWidth()
+                    .heightIn(min = EdgeFieldMinHeight)
                     .focusRequester(focusRequester),
             )
+            }
             AiCleanupNotice(
                 state = aiCleanup,
-                currentText = text,
-                onUndo = { original ->
-                    field = TextFieldValue(original, TextRange(original.length))
-                    text = original
-                },
+                currentText = draft.words,
+                onUndo = { original -> draft.replaceWords(original) },
             )
             // Finished tag words typed on the keyboard turn into the tag: "5 Minuten " → "#5min ".
             TagSettleEffect(
-                value = fieldValueFor(field, text),
+                value = draft.value,
                 wordTyped = wordTyped,
                 enabled = settings.tagRecognition,
                 definitions = definitions,
@@ -335,8 +341,7 @@ internal fun QuickAddSheet(
                 onSettled = { value, replaced ->
                     replacedWords = replacedWords + replaced
                     wordTyped = false
-                    field = value
-                    text = value.text
+                    draft.setText(value.text, definitions, value.selection.end)
                 },
             )
             Spacer(modifier = Modifier.height(8.dp))
@@ -366,7 +371,7 @@ internal fun QuickAddSheet(
                     onRemoveSet = { _, term ->
                         val tag = term.tags.firstOrNull { TagText.tagsIn(text).any { t -> t.equals(it, ignoreCase = true) } } ?: term.primaryTag
                         ignoredTags = ignoredTags + term.primaryTag
-                        text = TagRecognition.unsettle(text, tag, replacedWords[tag])
+                        draft.setText(TagRecognition.unsettle(text, tag, replacedWords[tag]), definitions)
                     },
                 )
             }
