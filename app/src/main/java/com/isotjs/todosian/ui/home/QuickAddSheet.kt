@@ -23,7 +23,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.BottomSheetDefaults
+import androidx.compose.material3.SheetValue
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -59,6 +61,12 @@ import com.isotjs.todosian.ui.components.RecognizedTagChips
 import com.isotjs.todosian.ui.components.RemovableChip
 import com.isotjs.todosian.ui.components.TaskInputRecognizer
 import com.isotjs.todosian.ui.components.TaskTextField
+import com.isotjs.todosian.ui.components.fieldValueFor
+import com.isotjs.todosian.ui.components.tagsSetIn
+import com.isotjs.todosian.ui.components.typedTaskText
+import com.isotjs.todosian.utils.TagRecognition
+import com.isotjs.todosian.utils.TagText
+import androidx.compose.ui.text.input.TextFieldValue
 import com.isotjs.todosian.utils.MarkdownParser
 import com.isotjs.todosian.utils.TagDefinitions
 import kotlinx.coroutines.launch
@@ -89,12 +97,28 @@ internal fun QuickAddSheet(
     onFailed: () -> Unit,
     onOpenFullAdd: (listUri: Uri?, text: String) -> Unit,
 ) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val scope = rememberCoroutineScope()
     var text by remember { mutableStateOf("") }
+    // Typed words are not dropped by a swipe, a tap beside the sheet or Back: first ask.
+    var askDiscard by remember { mutableStateOf(false) }
+    var closing by remember { mutableStateOf(false) }
+    val sheetState = rememberModalBottomSheetState(
+        skipPartiallyExpanded = true,
+        confirmValueChange = { value ->
+            if (value == SheetValue.Hidden && text.isNotBlank() && !closing) {
+                askDiscard = true
+                false
+            } else {
+                true
+            }
+        },
+    )
+    val scope = rememberCoroutineScope()
     var ignoreDate by remember { mutableStateOf(false) }
     var ignoreList by remember { mutableStateOf(false) }
     var ignoredTags by remember { mutableStateOf(emptySet<String>()) }
+    // Words that finished tag words were turned into, to bring them back when a tag is removed.
+    var replacedWords by remember { mutableStateOf(emptyMap<String, String>()) }
+    var field by remember { mutableStateOf(TextFieldValue()) }
     var chosenList by remember { mutableStateOf<Category?>(null) }
     var showListMenu by remember { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
@@ -178,12 +202,33 @@ internal fun QuickAddSheet(
             }.getOrNull() != null
             saving = false
             if (written) {
+                closing = true
                 sheetState.hide()
                 onSaved(listName)
             } else {
                 onFailed()
             }
         }
+    }
+
+    if (askDiscard) {
+        AlertDialog(
+            onDismissRequest = { askDiscard = false },
+            title = { Text(text = stringResource(R.string.category_discard_draft_title)) },
+            text = { Text(text = stringResource(R.string.category_discard_draft_message)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    askDiscard = false
+                    closing = true
+                    scope.launch { sheetState.hide() }.invokeOnCompletion { onDismiss() }
+                }) { Text(text = stringResource(R.string.category_discard_draft_discard)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { askDiscard = false }) {
+                    Text(text = stringResource(R.string.category_discard_draft_keep))
+                }
+            },
+        )
     }
 
     ModalBottomSheet(
@@ -208,8 +253,21 @@ internal fun QuickAddSheet(
             Text(text = stringResource(R.string.quick_add_title), style = MaterialTheme.typography.titleLarge)
             Spacer(modifier = Modifier.height(12.dp))
             OutlinedTextField(
-                value = text,
-                onValueChange = { text = TaskTextField.oneLine(it) },
+                value = fieldValueFor(field, text),
+                onValueChange = { typed ->
+                    // Finished tag words turn into the tag right away: "5 Minuten " → "#5min ".
+                    val (value, replaced) = typedTaskText(
+                        previous = text,
+                        typed = typed,
+                        settle = settings.tagRecognition,
+                        definitions = definitions,
+                        ignoredTags = ignoredTags,
+                        removeWords = settings.tagRecognitionRemoveWords,
+                    )
+                    replacedWords = replacedWords + replaced
+                    field = value
+                    text = value.text
+                },
                 maxLines = TaskTextField.MAX_LINES,
                 keyboardOptions = TaskTextField.keyboardOptions,
                 label = { Text(text = stringResource(R.string.quick_add_hint)) },
@@ -258,9 +316,19 @@ internal fun QuickAddSheet(
                 Spacer(modifier = Modifier.height(8.dp))
                 RecognizedDateChip(match = date, onIgnore = { ignoreDate = true })
             }
-            if (recognition.tags.isNotEmpty()) {
+            val tagsSet = tagsSetIn(text, definitions)
+            if (recognition.tags.isNotEmpty() || tagsSet.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(8.dp))
-                RecognizedTagChips(hits = recognition.tags, onRemove = { hit -> ignoredTags = ignoredTags + hit.term.primaryTag })
+                RecognizedTagChips(
+                    hits = recognition.tags,
+                    onRemove = { hit -> ignoredTags = ignoredTags + hit.term.primaryTag },
+                    set = tagsSet,
+                    onRemoveSet = { _, term ->
+                        val tag = term.tags.firstOrNull { TagText.tagsIn(text).any { t -> t.equals(it, ignoreCase = true) } } ?: term.primaryTag
+                        ignoredTags = ignoredTags + term.primaryTag
+                        text = TagRecognition.unsettle(text, tag, replacedWords[tag])
+                    },
+                )
             }
             Spacer(modifier = Modifier.height(16.dp))
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {

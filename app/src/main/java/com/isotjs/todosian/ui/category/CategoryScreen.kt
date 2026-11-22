@@ -84,6 +84,14 @@ import com.isotjs.todosian.ui.components.TagQuickPicker
 import com.isotjs.todosian.ui.components.RecognitionToggle
 import com.isotjs.todosian.ui.components.RecognizedDateChip
 import com.isotjs.todosian.ui.components.RecognizedTagChips
+import com.isotjs.todosian.ui.components.fieldValueFor
+import com.isotjs.todosian.ui.components.tagsSetIn
+import com.isotjs.todosian.ui.components.typedTaskText
+import com.isotjs.todosian.utils.TagRecognition
+import com.isotjs.todosian.utils.TagText
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.runtime.SideEffect
+import androidx.compose.material3.SheetValue
 import com.isotjs.todosian.ui.components.TaskInputRecognizer
 import com.isotjs.todosian.ui.components.applyRecognizedDate
 import com.isotjs.todosian.ui.components.TaskTextField
@@ -156,7 +164,21 @@ fun CategoryScreen(
     }
 
     val scope = rememberCoroutineScope()
-    val todoSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    // A draft with changes is not dropped by a swipe, a tap beside the sheet or Back: first ask.
+    var askDiscardDraft by remember { mutableStateOf(false) }
+    var draftChanged by remember { mutableStateOf(false) }
+    var closingSheet by remember { mutableStateOf(false) }
+    val todoSheetState = rememberModalBottomSheetState(
+        skipPartiallyExpanded = true,
+        confirmValueChange = { value ->
+            if (value == SheetValue.Hidden && draftChanged && !closingSheet) {
+                askDiscardDraft = true
+                false
+            } else {
+                true
+            }
+        },
+    )
     val moveSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     var sheetMode by remember { mutableStateOf<TodoSheetMode?>(null) }
@@ -168,6 +190,43 @@ fun CategoryScreen(
     var deleteTodoHasSubtasks by remember { mutableStateOf(false) }
     var moveTodoTarget by remember { mutableStateOf<Todo?>(null) }
     var showCopyOption by remember { mutableStateOf(false) }
+    // What the sheet held when it opened, to tell whether the draft has changed since.
+    val sheetOpened = remember(sheetMode) { Triple(sheetText, sheetMeta, sheetFirstStep) }
+    val changed = sheetMode != null && (
+        Triple(sheetText, sheetMeta, sheetFirstStep) != sheetOpened ||
+            ((sheetMode == TodoSheetMode.Add || sheetMode == TodoSheetMode.AddSubtask) && sheetText.isNotBlank())
+        )
+    SideEffect { draftChanged = changed }
+    val closeSheet: () -> Unit = {
+        closingSheet = false
+        sheetMode = null
+        sheetText = ""
+        sheetMeta = MarkdownParser.TasksMeta()
+        sheetParentTodo = null
+        sheetFirstStep = null
+    }
+    if (askDiscardDraft) {
+        AlertDialog(
+            onDismissRequest = { askDiscardDraft = false },
+            title = { Text(text = stringResource(R.string.category_discard_draft_title)) },
+            text = { Text(text = stringResource(R.string.category_discard_draft_message)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    askDiscardDraft = false
+                    scope.launch {
+                        closingSheet = true
+                        todoSheetState.hide()
+                        closeSheet()
+                    }
+                }) { Text(text = stringResource(R.string.category_discard_draft_discard)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { askDiscardDraft = false }) {
+                    Text(text = stringResource(R.string.category_discard_draft_keep))
+                }
+            },
+        )
+    }
 
     var autoOpenedAddTodo by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
@@ -197,6 +256,9 @@ fun CategoryScreen(
             val scrollState = rememberScrollState()
             var ignoreDateInText by remember(sheetMode) { mutableStateOf(false) }
             var ignoredTags by remember(sheetMode) { mutableStateOf(emptySet<String>()) }
+            // Words that finished tag words were turned into, to bring them back when a tag is removed.
+            var replacedWords by remember(sheetMode) { mutableStateOf(emptyMap<String, String>()) }
+            var sheetField by remember(sheetMode) { mutableStateOf(TextFieldValue()) }
             val isNewTask = sheetMode == TodoSheetMode.Add || sheetMode == TodoSheetMode.AddSubtask
             // C2 and tag recognition: "morgen 17 Uhr", "5 Minuten", "Alex" in a new task's words.
             val recognition = remember(sheetText, isNewTask, ignoreDateInText, ignoredTags, settings.tagRecognition, uiState.tagDefinitions) {
@@ -257,8 +319,21 @@ fun CategoryScreen(
                 )
                 Spacer(modifier = Modifier.height(12.dp))
                 OutlinedTextField(
-                    value = sheetText,
-                    onValueChange = { sheetText = TaskTextField.oneLine(it) },
+                    value = fieldValueFor(sheetField, sheetText),
+                    onValueChange = { typed ->
+                        // Finished tag words turn into the tag right away: "5 Minuten " → "#5min ".
+                        val (value, replaced) = typedTaskText(
+                            previous = sheetText,
+                            typed = typed,
+                            settle = isNewTask && settings.tagRecognition,
+                            definitions = uiState.tagDefinitions,
+                            ignoredTags = ignoredTags,
+                            removeWords = settings.tagRecognitionRemoveWords,
+                        )
+                        replacedWords = replacedWords + replaced
+                        sheetField = value
+                        sheetText = value.text
+                    },
                     maxLines = TaskTextField.MAX_LINES,
                     keyboardOptions = TaskTextField.keyboardOptions,
                     label = { Text(text = stringResource(hintRes)) },
@@ -289,11 +364,19 @@ fun CategoryScreen(
                     Spacer(modifier = Modifier.height(8.dp))
                     RecognizedDateChip(match = dateMatch, onIgnore = { ignoreDateInText = true })
                 }
-                if (recognition.tags.isNotEmpty()) {
+                // The task's tags with their symbol: those set in the text and those still in words.
+                val tagsSet = if (isNewTask) tagsSetIn(sheetText, uiState.tagDefinitions) else emptyList()
+                if (recognition.tags.isNotEmpty() || tagsSet.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(8.dp))
                     RecognizedTagChips(
                         hits = recognition.tags,
                         onRemove = { hit -> ignoredTags = ignoredTags + hit.term.primaryTag },
+                        set = tagsSet,
+                        onRemoveSet = { _, term ->
+                            val tag = term.tags.firstOrNull { TagText.tagsIn(sheetText).any { t -> t.equals(it, ignoreCase = true) } } ?: term.primaryTag
+                            ignoredTags = ignoredTags + term.primaryTag
+                            sheetText = TagRecognition.unsettle(sheetText, tag, replacedWords[tag])
+                        },
                     )
                 }
 
@@ -367,13 +450,9 @@ fun CategoryScreen(
                     TextButton(
                         onClick = {
                             scope.launch {
+                                closingSheet = true
                                 todoSheetState.hide()
-                                sheetMode = null
-                                sheetText = ""
-                                sheetMeta = MarkdownParser.TasksMeta()
-                                sheetParentTodo = null
-                                sheetFirstStep = null
-                sheetFirstStep = null
+                                closeSheet()
                             }
                         },
                     ) {
@@ -427,13 +506,9 @@ fun CategoryScreen(
                                 null -> Unit
                             }
                             scope.launch {
+                                closingSheet = true
                                 todoSheetState.hide()
-                                sheetMode = null
-                                sheetText = ""
-                                sheetMeta = MarkdownParser.TasksMeta()
-                                sheetParentTodo = null
-                                sheetFirstStep = null
-                sheetFirstStep = null
+                                closeSheet()
                             }
                         },
                         enabled = sheetText.trim().isNotEmpty(),

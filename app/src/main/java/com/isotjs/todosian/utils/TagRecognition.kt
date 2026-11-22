@@ -5,6 +5,9 @@ data class TagHit(val group: TagGroup, val term: TagTerm, val start: Int, val en
     val phrase: IntRange get() = start until end
 }
 
+/** Text after [TagRecognition.settle]: [replaced] maps each tag set to the words it came from. */
+data class SettledTags(val text: String, val cursor: Int, val replaced: Map<String, String>)
+
 /**
  * Finds tags of the tag note written as plain words, e.g. dictated: "Alex Müll rausbringen
  * 5 Minuten wenig Energie" finds 👤 Alex, ⏱ 5 Min and 🔋 Niedrig. Only tags the note defines
@@ -74,6 +77,76 @@ object TagRecognition {
         }
         return result
     }
+
+    /**
+     * Turns finished tag words into the tag right in the text while typing: "5 Minuten " becomes
+     * "#5min ". A phrase counts as finished once something other than a letter or digit follows it
+     * and the cursor is not on it, so words still being typed stay. With [removeWords] the words
+     * give way to the tag; otherwise, and always for people ("Alex anrufen"), the tag follows them.
+     * A new tag of a group with one tag at a time replaces the group's tag already in the text.
+     * Returns null when nothing changes.
+     */
+    fun settle(
+        text: String,
+        cursor: Int,
+        definitions: TagDefinitions,
+        ignoredTags: Set<String> = emptySet(),
+        removeWords: Boolean = true,
+    ): SettledTags? {
+        val hits = find(text, definitions).filter { hit ->
+            hit.term.primaryTag !in ignoredTags &&
+                hit.end < text.length && !text[hit.end].isLetterOrDigit() &&
+                (cursor < hit.start || cursor > hit.end)
+        }
+        if (hits.isEmpty()) return null
+        var result = text
+        var c = cursor.coerceIn(0, text.length)
+        val replaced = mutableMapOf<String, String>()
+        hits.sortedByDescending { it.start }.forEach { hit ->
+            val phrase = result.substring(hit.start, hit.end)
+            val tag = hit.term.primaryTag
+            val replace = removeWords && !hit.group.isPerson
+            if (replace) {
+                result = result.replaceRange(hit.start, hit.end, tag)
+                if (c >= hit.end) c += tag.length - phrase.length else if (c > hit.start) c = hit.start + tag.length
+            } else {
+                result = result.substring(0, hit.end) + " " + tag + result.substring(hit.end)
+                if (c >= hit.end) c += tag.length + 1
+            }
+            replaced[tag] = phrase
+        }
+        // One tag at a time in such a group: the words just written win.
+        hits.filter { it.group.exclusive }.forEach { hit ->
+            hit.group.terms.filter { it != hit.term }.flatMap { it.tags }.forEach { other ->
+                tagToken(other).findAll(result).toList().asReversed().forEach { m ->
+                    val start = if (m.range.first > 0 && result[m.range.first - 1] == ' ') m.range.first - 1 else m.range.first
+                    val end = m.range.last + 1
+                    result = result.removeRange(start, end)
+                    if (c >= end) c -= end - start else if (c > start) c = start
+                }
+            }
+        }
+        return SettledTags(result, c.coerceIn(0, result.length), replaced)
+    }
+
+    /**
+     * Undoes [settle] for one tag: the tag leaves the text and, where it took the place of
+     * [phrase], the words come back there.
+     */
+    fun unsettle(text: String, tag: String, phrase: String?): String {
+        val m = tagToken(tag).find(text) ?: return text
+        val before = text.substring(0, m.range.first)
+        val after = text.substring(m.range.last + 1)
+        val restored = if (phrase == null || before.trimEnd().endsWith(phrase, ignoreCase = true)) {
+            before.removeSuffix(" ") + after
+        } else {
+            before + phrase + after
+        }
+        return restored.replace(Regex("""[ \t]{2,}"""), " ").trimStart()
+    }
+
+    private fun tagToken(tag: String): Regex =
+        Regex("""(?<![\p{L}\p{N}_])${Regex.escape(tag)}(?![\p{L}\p{N}_/\-])""", RegexOption.IGNORE_CASE)
 
     internal fun phrasesFor(group: TagGroup, term: TagTerm): List<String> {
         val words = mutableSetOf<String>()
