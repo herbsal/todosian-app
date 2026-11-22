@@ -47,8 +47,10 @@ data class WidgetTaskItem(
     val categoryUri: String,
     val categoryName: String,
     val todo: Todo,
-    /** The text as shown, with tags as symbols like in the app ("Müll · ⏱ 5 Min"). */
+    /** The title as shown, without the tags shown as symbols ("Müll rausbringen"). */
     val displayText: String = todo.text,
+    /** The tags as symbols, e.g. "⏱ 5 Min • 🔋 Niedrig"; shown under the title with list and date. */
+    val tagLine: String = "",
 )
 
 class TodosianWidget : GlanceAppWidget() {
@@ -274,12 +276,14 @@ class TodosianWidget : GlanceAppWidget() {
                         fontSize = 14.sp,
                         textDecoration = if (isDone) TextDecoration.LineThrough else TextDecoration.None,
                     ),
-                    maxLines = 1,
+                    // The whole title, over as many lines as it needs.
+                    maxLines = Int.MAX_VALUE,
                 )
 
                 val details = listOfNotNull(
                     item.categoryName.takeIf { it.isNotBlank() },
                     todo.dueDate?.let { "📅 $it" },
+                    item.tagLine.takeIf { it.isNotBlank() },
                 ).joinToString(" • ")
 
                 if (details.isNotEmpty()) {
@@ -289,7 +293,8 @@ class TodosianWidget : GlanceAppWidget() {
                             color = GlanceTheme.colors.onSurfaceVariant,
                             fontSize = 11.sp,
                         ),
-                        maxLines = 1,
+                        // All tags; wraps onto more lines when needed.
+                        maxLines = Int.MAX_VALUE,
                     )
                 }
             }
