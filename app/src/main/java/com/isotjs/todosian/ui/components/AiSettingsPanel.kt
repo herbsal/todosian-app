@@ -283,6 +283,7 @@ private fun modelLabel(model: AiModel): String = stringResource(
     when (model) {
         AiModel.FULL -> R.string.settings_ai_model_full
         AiModel.FAST -> R.string.settings_ai_model_fast
+        AiModel.REWRITE -> R.string.settings_ai_model_rewrite
     },
 )
 
@@ -291,12 +292,14 @@ private fun modelShortLabel(model: AiModel): String = stringResource(
     when (model) {
         AiModel.FULL -> R.string.settings_ai_model_full_short
         AiModel.FAST -> R.string.settings_ai_model_fast_short
+        AiModel.REWRITE -> R.string.settings_ai_model_rewrite_short
     },
 )
 
 private fun modelDescription(model: AiModel): Int = when (model) {
     AiModel.FULL -> R.string.settings_ai_model_full_description
     AiModel.FAST -> R.string.settings_ai_model_fast_description
+    AiModel.REWRITE -> R.string.settings_ai_model_rewrite_description
 }
 
 private fun aiCoreVersion(context: Context): String? = try {

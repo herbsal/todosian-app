@@ -40,6 +40,7 @@ class TodosianApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        com.isotjs.todosian.data.ai.AiCleanup.init(this)
 
         // A save cut off by a crash or a killed app is repaired before anything else reads the note.
         appScope.launch { fileRepository.recoverInterruptedWrites() }

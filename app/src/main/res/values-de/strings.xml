@@ -679,7 +679,7 @@
     <string name="settings_ai_aicore_manage">Verwalten</string>
     <string name="settings_ai_model_full">Gemini Nano · Vollständig</string>
     <string name="settings_ai_model_fast">Gemini Nano · Schnell</string>
-    <string name="settings_ai_model_full_short">Vollständig</string>
+    <string name="settings_ai_model_full_short">Voll</string>
     <string name="settings_ai_model_fast_short">Schnell</string>
     <string name="settings_ai_model_full_description">Beste Ergebnisse, etwas langsamer</string>
     <string name="settings_ai_model_fast_description">Kürzeste Wartezeit, Ergebnisse evtl. einfacher</string>
@@ -691,9 +691,12 @@
     <string name="settings_ai_model_downloading_of">Wird geladen… %1$s von %2$s</string>
     <string name="settings_ai_model_choice">Modell fürs Aufräumen</string>
     <string name="settings_ai_model_choice_subtitle">Jetzt: %1$s. Automatisch nimmt ein Modell, das schon auf dem Gerät ist.</string>
-    <string name="settings_ai_model_auto">Automatisch</string>
+    <string name="settings_ai_model_auto">Auto</string>
     <string name="settings_ai_download_cancel">Abbrechen</string>
     <string name="settings_ai_check_again">Erneut prüfen</string>
     <string name="settings_ai_delete_note">Todosian kann Modelle nicht löschen: Sie gehören zu AICore, andere Apps nutzen sie mit, und die Schnittstelle bietet kein Löschen. Abbrechen beendet das Mitverfolgen eines Downloads; einen begonnenen Download kann AICore trotzdem fertigstellen. „Verwalten“ öffnet AICore in den Systemeinstellungen.</string>
     <string name="widget_active_count">%1$d aktiv</string>
+    <string name="settings_ai_model_rewrite">Gemini Nano · Kürzen</string>
+    <string name="settings_ai_model_rewrite_short">Kürzen</string>
+    <string name="settings_ai_model_rewrite_description">Fertige Kürzen-Funktion von Google: kleiner Zusatz zum Gemini Nano, den AICore evtl. schon hält</string>
 </resources>

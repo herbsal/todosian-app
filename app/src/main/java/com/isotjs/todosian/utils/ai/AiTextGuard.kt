@@ -15,6 +15,11 @@ object AiTextGuard {
     /** [text] as the model sees it; [tokens] are the protected parts, placeholder n = tokens[n - 1]. */
     data class Masked(val text: String, val tokens: List<String>, val trailing: Set<Int>) {
         fun placeholder(index: Int) = "$OPEN${index + 1}$CLOSE"
+
+        /** [text] without the placeholders at its end: for models that should only see the words. */
+        val textWithoutTrailing: String
+            get() = trailing.fold(text) { acc, index -> acc.replace(placeholder(index), " ") }
+                .replace(Regex("""[ \t]+"""), " ").trim()
     }
 
     private const val OPEN = "⟦"
@@ -99,7 +104,7 @@ object AiTextGuard {
      * a placeholder missing, doubled or new, a line break inside, nothing but placeholders left,
      * or clearly longer than the text it got.
      */
-    fun restore(answer: String, masked: Masked): String? {
+    fun restore(answer: String, masked: Masked, trailingOmitted: Boolean = false): String? {
         var cleaned = answer.trim()
         while (cleaned.length >= 2 && cleaned.first() in quotes && cleaned.last() in quotes) {
             cleaned = cleaned.substring(1, cleaned.length - 1).trim()
@@ -108,7 +113,7 @@ object AiTextGuard {
         if (cleaned.length > masked.text.trim().length + LENGTH_SLACK) return null
 
         val found = placeholder.findAll(cleaned).map { it.groupValues[1].toIntOrNull() ?: -1 }.toList()
-        val expected = masked.tokens.indices.map { it + 1 }
+        val expected = masked.tokens.indices.filter { !trailingOmitted || it !in masked.trailing }.map { it + 1 }
         if (found.sorted() != expected) return null
         if (cleaned.count { it == OPEN.single() } != expected.size || cleaned.count { it == CLOSE.single() } != expected.size) return null
         if (!placeholder.replace(cleaned, "").any { it.isLetterOrDigit() }) return null

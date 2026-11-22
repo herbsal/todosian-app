@@ -1,6 +1,16 @@
 package com.isotjs.todosian.data.ai
 
+import android.content.Context
 import android.util.Log
+import com.google.mlkit.genai.common.DownloadCallback
+import com.google.mlkit.genai.rewriting.Rewriter
+import com.google.mlkit.genai.rewriting.RewriterOptions
+import com.google.mlkit.genai.rewriting.Rewriting
+import com.google.mlkit.genai.rewriting.RewritingRequest
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.guava.await
 import com.google.mlkit.genai.common.DownloadStatus
 import com.google.mlkit.genai.common.FeatureStatus
 import com.google.mlkit.genai.common.GenAiException
@@ -56,7 +66,19 @@ sealed interface AiStatus {
  * The Gemini Nano variants the Prompt API offers on consumer devices. AICore may already hold one
  * of them (e.g. for Pixel features) and not the other, so each is checked on its own.
  */
-enum class AiModel { FULL, FAST }
+enum class AiModel {
+    /** Prompt API, model preference FULL: own instruction with examples. */
+    FULL,
+
+    /** Prompt API, model preference FAST. */
+    FAST,
+
+    /**
+     * Rewriting API ("shorten"): a small task adapter on the Gemini Nano base model AICore already
+     * holds for system features, so it may need only a small download.
+     */
+    REWRITE,
+}
 
 /** What AICore says about one [AiModel]; [name] is the base model's name once it is there. */
 data class AiModelInfo(val status: AiStatus = AiStatus.Unknown, val name: String? = null)
@@ -103,6 +125,22 @@ object AiCleanup {
         }
 
     private val clients = mutableMapOf<AiModel, GenerativeModel>()
+    private var rewriter: Rewriter? = null
+    private var appContext: Context? = null
+
+    /** Called once from the application: the Rewriting API needs a context. */
+    fun init(context: Context) {
+        appContext = context.applicationContext
+    }
+
+    private fun rewriter(): Rewriter = synchronized(clients) {
+        rewriter ?: Rewriting.getClient(
+            RewriterOptions.builder(checkNotNull(appContext) { "AiCleanup.init missing" })
+                .setOutputType(RewriterOptions.OutputType.SHORTEN)
+                .setLanguage(RewriterOptions.Language.GERMAN)
+                .build(),
+        ).also { rewriter = it }
+    }
     private val downloadJobs = ConcurrentHashMap<AiModel, Job>()
     private val warmedUp: MutableSet<AiModel> = ConcurrentHashMap.newKeySet()
 
@@ -113,7 +151,7 @@ object AiCleanup {
                     releaseStage = ModelReleaseStage.STABLE
                     preference = when (model) {
                         AiModel.FULL -> ModelPreference.FULL
-                        AiModel.FAST -> ModelPreference.FAST
+                        AiModel.FAST, AiModel.REWRITE -> ModelPreference.FAST
                     }
                 }
             }
@@ -125,9 +163,12 @@ object AiCleanup {
     fun activeModel(): AiModel {
         preferred?.let { return it }
         val models = _models.value
+        // A download is offered for the rewriting adapter first: on top of a base model AICore
+        // already holds, it is the smallest.
+        val downloadOrder = listOf(AiModel.REWRITE, AiModel.FULL, AiModel.FAST)
         return AiModel.entries.firstOrNull { models[it]?.status == AiStatus.Available }
-            ?: AiModel.entries.firstOrNull { models[it]?.status is AiStatus.Downloading }
-            ?: AiModel.entries.firstOrNull { models[it]?.status == AiStatus.Downloadable }
+            ?: downloadOrder.firstOrNull { models[it]?.status is AiStatus.Downloading }
+            ?: downloadOrder.firstOrNull { models[it]?.status == AiStatus.Downloadable }
             ?: AiModel.FULL
     }
 
@@ -148,7 +189,7 @@ object AiCleanup {
     private suspend fun checkAll() {
         AiModel.entries.forEach { check(it) }
         val active = activeModel()
-        if (_models.value[active]?.status == AiStatus.Available && warmedUp.add(active)) {
+        if (active != AiModel.REWRITE && _models.value[active]?.status == AiStatus.Available && warmedUp.add(active)) {
             runCatching { client(active).warmup() }
         }
     }
@@ -156,7 +197,8 @@ object AiCleanup {
     private suspend fun check(model: AiModel): AiStatus {
         if (downloadJobs[model]?.isActive == true) return _models.value[model]?.status ?: AiStatus.Unknown
         val status = try {
-            when (client(model).checkStatus()) {
+            val featureStatus = if (model == AiModel.REWRITE) rewriter().checkFeatureStatus().await() else client(model).checkStatus()
+            when (featureStatus) {
                 FeatureStatus.AVAILABLE -> AiStatus.Available
                 FeatureStatus.DOWNLOADABLE -> AiStatus.Downloadable
                 FeatureStatus.DOWNLOADING -> AiStatus.Downloading(null, null)
@@ -168,7 +210,7 @@ object AiCleanup {
             Log.w(TAG, "Gemini Nano status for $model not available", e)
             if (isPreparing(e)) AiStatus.Preparing else AiStatus.Unavailable
         }
-        val name = if (status == AiStatus.Available) {
+        val name = if (status == AiStatus.Available && model != AiModel.REWRITE) {
             runCatching { client(model).getBaseModelName() }.getOrNull()?.takeIf { it.isNotBlank() }
         } else {
             null
@@ -189,7 +231,7 @@ object AiCleanup {
             var total: Long? = null
             setModel(model, AiModelInfo(AiStatus.Downloading(null, null)))
             try {
-                client(model).download().collect { step ->
+                downloadFlow(model).collect { step ->
                     when (step) {
                         is DownloadStatus.DownloadStarted -> {
                             total = step.bytesToDownload.takeIf { it > 0 }
@@ -211,6 +253,32 @@ object AiCleanup {
             check(model)
         }
     }
+
+    private fun downloadFlow(model: AiModel): Flow<DownloadStatus> =
+        if (model != AiModel.REWRITE) {
+            client(model).download()
+        } else {
+            callbackFlow {
+                rewriter().downloadFeature(object : DownloadCallback {
+                    override fun onDownloadStarted(bytesToDownload: Long) {
+                        trySend(DownloadStatus.DownloadStarted(bytesToDownload))
+                    }
+
+                    override fun onDownloadProgress(totalBytesDownloaded: Long) {
+                        trySend(DownloadStatus.DownloadProgress(totalBytesDownloaded))
+                    }
+
+                    override fun onDownloadCompleted() {
+                        close()
+                    }
+
+                    override fun onDownloadFailed(e: GenAiException) {
+                        close(e)
+                    }
+                })
+                awaitClose { }
+            }
+        }
 
     /**
      * Stops following the download of [model]. The Prompt API has no call to cancel or delete a
@@ -234,11 +302,17 @@ object AiCleanup {
         val model = activeModel()
         if (check(model) != AiStatus.Available) return AiCleanupResult.Failed(AiFailure.NOT_READY)
         val masked = AiTextGuard.mask(text, markers)
-        val prompt = AiCleanupPrompt.build(masked.text)
+        val rewriting = model == AiModel.REWRITE
         return mutex.withLock {
             try {
-                val answer = withTimeout(TIMEOUT_MS) { generate(client(model), prompt, retryWhenBusy = true) }
-                val restored = AiTextGuard.restore(AiCleanupPrompt.answerOf(answer), masked)
+                val answer = withTimeout(TIMEOUT_MS) {
+                    if (rewriting) {
+                        rewrite(masked.textWithoutTrailing, retryWhenBusy = true)
+                    } else {
+                        AiCleanupPrompt.answerOf(generate(client(model), AiCleanupPrompt.build(masked.text), retryWhenBusy = true))
+                    }
+                }
+                val restored = AiTextGuard.restore(answer, masked, trailingOmitted = rewriting)
                 when {
                     restored == null -> AiCleanupResult.Failed(AiFailure.UNSAFE)
                     AiTextGuard.isUnchanged(text, restored) -> AiCleanupResult.Unchanged
@@ -274,6 +348,21 @@ object AiCleanup {
             if (retryWhenBusy && e.errorCode == GenAiException.ErrorCode.BUSY) {
                 delay(BUSY_RETRY_MS)
                 generate(client, prompt, retryWhenBusy = false)
+            } else {
+                throw e
+            }
+        }
+    }
+
+    // The rewriting adapter only sees the words; fields and tags at the end are added back after.
+    private suspend fun rewrite(words: String, retryWhenBusy: Boolean): String {
+        return try {
+            val result = rewriter().runInference(RewritingRequest.builder(words).build()).await()
+            result.results.firstOrNull()?.text?.trim().orEmpty()
+        } catch (e: GenAiException) {
+            if (retryWhenBusy && e.errorCode == GenAiException.ErrorCode.BUSY) {
+                delay(BUSY_RETRY_MS)
+                rewrite(words, retryWhenBusy = false)
             } else {
                 throw e
             }
