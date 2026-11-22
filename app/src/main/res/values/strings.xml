@@ -691,9 +691,12 @@
     <string name="settings_ai_model_downloading_of">Loading… %1$s of %2$s</string>
     <string name="settings_ai_model_choice">Model for the cleanup</string>
     <string name="settings_ai_model_choice_subtitle">Now: %1$s. Automatic uses a model that is already on the device.</string>
-    <string name="settings_ai_model_auto">Automatic</string>
+    <string name="settings_ai_model_auto">Auto</string>
     <string name="settings_ai_download_cancel">Cancel</string>
     <string name="settings_ai_check_again">Check again</string>
     <string name="settings_ai_delete_note">Todosian can\'t delete models: they belong to AICore and other apps use them too, and the interface offers no delete. Cancel stops following a download; AICore may still finish one it started. \"Manage\" opens AICore in the system settings.</string>
     <string name="widget_active_count">%1$d active</string>
+    <string name="settings_ai_model_rewrite">Gemini Nano · Shorten</string>
+    <string name="settings_ai_model_rewrite_short">Shorten</string>
+    <string name="settings_ai_model_rewrite_description">Google\'s ready-made shorten function: a small add-on to the Gemini Nano that AICore may already hold</string>
 </resources>

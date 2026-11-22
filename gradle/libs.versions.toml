@@ -16,8 +16,11 @@ glance = "1.2.0"
 material3 = "1.5.0-beta01"
 markdownRenderer = "0.46.0"
 mlkitGenaiPrompt = "1.0.0-beta4"
+mlkitGenaiRewriting = "1.0.0-beta1"
 
 [libraries]
+google-mlkit-genai-rewriting = { group = "com.google.mlkit", name = "genai-rewriting", version.ref = "mlkitGenaiRewriting" }
+kotlinx-coroutines-guava = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-guava", version.ref = "coroutines" }
 google-mlkit-genai-prompt = { group = "com.google.mlkit", name = "genai-prompt", version.ref = "mlkitGenaiPrompt" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-documentfile = { group = "androidx.documentfile", name = "documentfile", version.ref = "documentFile" }

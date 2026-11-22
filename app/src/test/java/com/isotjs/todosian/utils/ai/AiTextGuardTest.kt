@@ -49,6 +49,17 @@ class AiTextGuardTest {
     }
 
     @Test
+    fun `models that only see the words get the trailing parts back`() {
+        val masked = AiTextGuard.mask("ähm also Geschenk für #lena besorgen #familie 📅 2026-11-30")
+        assertEquals("ähm also Geschenk für ⟦1⟧ besorgen", masked.textWithoutTrailing)
+        assertEquals(
+            "Geschenk für #lena besorgen #familie 📅 2026-11-30",
+            AiTextGuard.restore("Geschenk für ⟦1⟧ besorgen", masked, trailingOmitted = true),
+        )
+        assertNull(AiTextGuard.restore("Geschenk besorgen", masked, trailingOmitted = true))
+    }
+
+    @Test
     fun `missing placeholder is rejected`() {
         val masked = AiTextGuard.mask("Kinderarzt anrufen #kinder 📅 2026-11-23")
         assertNull(AiTextGuard.restore("Kinderarzt anrufen ⟦1⟧", masked))

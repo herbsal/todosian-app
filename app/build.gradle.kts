@@ -124,6 +124,8 @@ dependencies {
     implementation(libs.mikepenz.markdown.coil3)
     // Gemini Nano on the device (AICore) for the optional AI cleanup of task text.
     implementation(libs.google.mlkit.genai.prompt)
+    implementation(libs.google.mlkit.genai.rewriting)
+    implementation(libs.kotlinx.coroutines.guava)
     testImplementation(libs.junit)
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.squareup.leakcanary.android)
