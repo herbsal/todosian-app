@@ -47,6 +47,8 @@ data class WidgetTaskItem(
     val categoryUri: String,
     val categoryName: String,
     val todo: Todo,
+    /** The text as shown, with tags as symbols like in the app ("Müll · ⏱ 5 Min"). */
+    val displayText: String = todo.text,
 )
 
 class TodosianWidget : GlanceAppWidget() {
@@ -138,7 +140,7 @@ class TodosianWidget : GlanceAppWidget() {
                     )
                     if (hasFolder && !missingList) {
                         Text(
-                            text = "$activeCount active",
+                            text = context.getString(R.string.widget_active_count, activeCount),
                             style = TextStyle(
                                 color = GlanceTheme.colors.onSurfaceVariant,
                                 fontSize = 12.sp,
@@ -266,7 +268,7 @@ class TodosianWidget : GlanceAppWidget() {
                     .defaultWeight(),
             ) {
                 Text(
-                    text = todo.text,
+                    text = item.displayText,
                     style = TextStyle(
                         color = if (isDone) GlanceTheme.colors.outline else GlanceTheme.colors.onSurface,
                         fontSize = 14.sp,

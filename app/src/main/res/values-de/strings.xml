@@ -695,4 +695,5 @@
     <string name="settings_ai_download_cancel">Abbrechen</string>
     <string name="settings_ai_check_again">Erneut prüfen</string>
     <string name="settings_ai_delete_note">Todosian kann Modelle nicht löschen: Sie gehören zu AICore, andere Apps nutzen sie mit, und die Schnittstelle bietet kein Löschen. Abbrechen beendet das Mitverfolgen eines Downloads; einen begonnenen Download kann AICore trotzdem fertigstellen. „Verwalten“ öffnet AICore in den Systemeinstellungen.</string>
+    <string name="widget_active_count">%1$d aktiv</string>
 </resources>

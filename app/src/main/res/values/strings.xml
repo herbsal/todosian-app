@@ -695,4 +695,5 @@
     <string name="settings_ai_download_cancel">Cancel</string>
     <string name="settings_ai_check_again">Check again</string>
     <string name="settings_ai_delete_note">Todosian can\'t delete models: they belong to AICore and other apps use them too, and the interface offers no delete. Cancel stops following a download; AICore may still finish one it started. \"Manage\" opens AICore in the system settings.</string>
+    <string name="widget_active_count">%1$d active</string>
 </resources>
