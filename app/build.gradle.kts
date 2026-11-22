@@ -20,6 +20,8 @@ android {
         targetSdk = 37
         versionCode = 10
         versionName = "2.2"
+        // Commit the APK was built from, shown under Settings → About (empty for release builds).
+        buildConfigField("String", "BUILD_COMMIT", "\"\"")
     }
 
     val keystoreProperties = Properties().apply {
@@ -76,6 +78,9 @@ android {
         getByName("debug") {
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"
+            // CI sets GITHUB_SHA; the short form matches the name of the develop-latest APK.
+            val commit = providers.environmentVariable("GITHUB_SHA").orNull?.take(7).orEmpty()
+            buildConfigField("String", "BUILD_COMMIT", "\"$commit\"")
         }
     }
     compileOptions {
