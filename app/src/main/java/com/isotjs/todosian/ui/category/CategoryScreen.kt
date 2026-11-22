@@ -353,7 +353,7 @@ fun CategoryScreen(
                     .padding(horizontal = 16.dp)
                     .windowInsetsPadding(WindowInsets.ime)
                     .padding(bottom = 16.dp)
-                    .verticalScroll(scrollState),
+                    .verticalScroll(scrollState)
                     .clearFocusOnTap(),
             ) {
                 Text(

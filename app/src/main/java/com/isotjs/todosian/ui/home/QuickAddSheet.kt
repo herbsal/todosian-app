@@ -256,7 +256,7 @@ internal fun QuickAddSheet(
                 .windowInsetsPadding(WindowInsets.ime)
                 .padding(bottom = 16.dp)
                 // The sheet is already fully open, so a pull upwards means "more": the normal task sheet.
-                .pullUp(pullDistance) { currentOpenFull() },
+                .pullUp(pullDistance) { currentOpenFull() }
                 .clearFocusOnTap(),
         ) {
             Text(text = stringResource(R.string.quick_add_title), style = MaterialTheme.typography.titleLarge)

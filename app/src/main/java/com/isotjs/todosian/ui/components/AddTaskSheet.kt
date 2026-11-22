@@ -291,7 +291,7 @@ fun AddTaskSheet(
                 .padding(horizontal = 16.dp)
                 .windowInsetsPadding(WindowInsets.ime)
                 .padding(bottom = 16.dp)
-                .verticalScroll(rememberScrollState()),
+                .verticalScroll(rememberScrollState())
                 .clearFocusOnTap(),
         ) {
             Text(text = stringResource(R.string.category_add_todo_title), style = MaterialTheme.typography.titleLarge)
