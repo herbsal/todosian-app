@@ -285,6 +285,7 @@ fun AddTaskSheet(
     }
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+        KeyboardFirstBackHandler()
         Column(
             modifier = Modifier
                 .fillMaxWidth()

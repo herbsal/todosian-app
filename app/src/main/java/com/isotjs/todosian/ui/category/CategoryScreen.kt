@@ -93,6 +93,7 @@ import com.isotjs.todosian.ui.components.fieldValueFor
 import com.isotjs.todosian.ui.components.tagsSetIn
 import com.isotjs.todosian.ui.components.TagSettleEffect
 import com.isotjs.todosian.ui.components.clearFocusOnTap
+import com.isotjs.todosian.ui.components.KeyboardFirstBackHandler
 import com.isotjs.todosian.ui.components.AddTaskSheet
 import com.isotjs.todosian.data.model.Category
 import androidx.compose.runtime.produceState
@@ -293,6 +294,7 @@ fun CategoryScreen(
             },
             sheetState = todoSheetState,
         ) {
+            KeyboardFirstBackHandler()
             val scrollState = rememberScrollState()
             var ignoreDateInText by remember(sheetMode) { mutableStateOf(false) }
             var ignoredTags by remember(sheetMode) { mutableStateOf(emptySet<String>()) }
