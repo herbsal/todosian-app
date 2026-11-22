@@ -160,6 +160,7 @@ internal data class WidgetSnapshot(
             prefs.remove(stringPreferencesKey("${prefix}category_name"))
             prefs.remove(stringPreferencesKey("${prefix}text"))
             prefs.remove(stringPreferencesKey("${prefix}display_text"))
+            prefs.remove(stringPreferencesKey("${prefix}tag_line"))
             prefs.remove(stringPreferencesKey("${prefix}line_index"))
             prefs.remove(stringPreferencesKey("${prefix}is_done"))
             prefs.remove(stringPreferencesKey("${prefix}due_date"))
@@ -178,6 +179,7 @@ internal data class WidgetSnapshot(
             prefs[stringPreferencesKey("${prefix}category_name")] = item.categoryName
             prefs[stringPreferencesKey("${prefix}text")] = item.todo.text
             prefs[stringPreferencesKey("${prefix}display_text")] = item.displayText
+            prefs[stringPreferencesKey("${prefix}tag_line")] = item.tagLine
             prefs[intPreferencesKey("${prefix}line_index")] = item.todo.lineIndex
             prefs[booleanPreferencesKey("${prefix}is_done")] = item.todo.isDone
             item.todo.dueDate?.let { prefs[stringPreferencesKey("${prefix}due_date")] = it }
@@ -216,6 +218,7 @@ internal data class WidgetSnapshot(
                             dueDate = dueDate,
                         ),
                         displayText = prefs[stringPreferencesKey("${prefix}display_text")] ?: text,
+                        tagLine = prefs[stringPreferencesKey("${prefix}tag_line")] ?: "",
                     )
                 )
             }
@@ -300,13 +303,17 @@ object WidgetRefresher {
                     showCompleted = showCompletedFlags[index],
                     focusTitle = context.getString(R.string.home_daily_focus_title),
                 ).let { built ->
-                    // Tags as symbols, as in the app; each list with the tags of its folder.
+                    // Tags as symbols, as in the app, in the second line; each list with the tags of its folder.
                     built.copy(
                         items = built.items.map { item ->
                             val definitions = tagsByList.getOrPut(item.categoryUri) {
                                 runCatching { fileRepository.getTagDefinitions(item.categoryUri.toUri()) }.getOrDefault(TagDefinitions.EMPTY)
                             }
-                            item.copy(displayText = TagDisplay.plainText(item.todo.text, definitions, tagDisplay))
+                            val shown = TagDisplay.split(item.todo.text, definitions, tagDisplay)
+                            item.copy(
+                                displayText = shown.title,
+                                tagLine = shown.badges.joinToString(" • ") { "${it.icon} ${it.label}" },
+                            )
                         },
                     )
                 }
