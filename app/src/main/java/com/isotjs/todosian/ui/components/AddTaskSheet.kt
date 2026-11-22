@@ -33,11 +33,13 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusEvent
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import com.isotjs.todosian.R
@@ -152,6 +154,8 @@ fun AddTaskSheet(
     var askDiscard by remember { mutableStateOf(false) }
     var closing by remember { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
+    val aiCleanup = rememberAiCleanupState()
+    val aiShown = aiCleanupShown(settings)
 
     // Changes are not dropped by a swipe, a tap beside the sheet or Back: first ask.
     val sheetState = rememberModalBottomSheetState(
@@ -302,10 +306,36 @@ fun AddTaskSheet(
                 keyboardOptions = TaskTextField.keyboardOptions,
                 label = { Text(text = stringResource(R.string.category_add_todo_hint)) },
                 trailingIcon = {
-                    RecognitionToggle(
-                        enabled = settings.tagRecognition,
-                        onToggle = { appSettingsRepository.setTagRecognition(!settings.tagRecognition) },
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (aiShown) {
+                            AiCleanupButton(
+                                state = aiCleanup,
+                                settings = settings,
+                                appSettingsRepository = appSettingsRepository,
+                                currentText = { text },
+                                onCleaned = { cleaned -> setText(TextFieldValue(cleaned, TextRange(cleaned.length))) },
+                                markers = markers,
+                                verify = { original, cleaned ->
+                                    keepsRecognized(original, cleaned) { words, now ->
+                                        TaskInputRecognizer.recognize(
+                                            text = words,
+                                            definitions = definitions,
+                                            listNames = byName.keys.toList(),
+                                            recognizeTagsAndLists = settings.tagRecognition,
+                                            ignoreDate = ignoreDate,
+                                            ignoreList = ignoreList || chosenList != null,
+                                            ignoredTags = ignoredTags,
+                                            now = now,
+                                        )
+                                    }
+                                },
+                            )
+                        }
+                        RecognitionToggle(
+                            enabled = settings.tagRecognition,
+                            onToggle = { appSettingsRepository.setTagRecognition(!settings.tagRecognition) },
+                        )
+                    }
                 },
                 modifier = Modifier
                     .fillMaxWidth()
@@ -318,6 +348,11 @@ fun AddTaskSheet(
                         }
                         fieldFocused = state.isFocused
                     },
+            )
+            AiCleanupNotice(
+                state = aiCleanup,
+                currentText = text,
+                onUndo = { original -> setText(TextFieldValue(original, TextRange(original.length))) },
             )
             // Finished tag words typed on the keyboard turn into the tag: "5 Minuten " → "#5min ".
             TagSettleEffect(

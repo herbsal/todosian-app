@@ -81,7 +81,12 @@ import com.isotjs.todosian.data.settings.NewTodoFilePosition
 import com.isotjs.todosian.data.settings.TodoGrouping
 import com.isotjs.todosian.ui.components.TagFilterBar
 import com.isotjs.todosian.ui.components.TagQuickPicker
+import com.isotjs.todosian.ui.components.AiCleanupButton
+import com.isotjs.todosian.ui.components.AiCleanupNotice
+import com.isotjs.todosian.ui.components.AiCleanupState
 import com.isotjs.todosian.ui.components.RecognitionToggle
+import com.isotjs.todosian.ui.components.aiCleanupShown
+import com.isotjs.todosian.ui.components.keepsRecognized
 import com.isotjs.todosian.ui.components.RecognizedDateChip
 import com.isotjs.todosian.ui.components.RecognizedTagChips
 import com.isotjs.todosian.ui.components.fieldValueFor
@@ -95,6 +100,7 @@ import com.isotjs.todosian.ui.components.oneLineValue
 import com.isotjs.todosian.ui.components.settleTags
 import com.isotjs.todosian.utils.TagRecognition
 import com.isotjs.todosian.utils.TagText
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.runtime.SideEffect
 import androidx.compose.material3.SheetValue
@@ -292,6 +298,8 @@ fun CategoryScreen(
             var sheetField by remember(sheetMode) { mutableStateOf(TextFieldValue()) }
             var wordTyped by remember(sheetMode) { mutableStateOf(false) }
             var fieldFocused by remember(sheetMode) { mutableStateOf(false) }
+            val aiCleanup = remember(sheetMode) { AiCleanupState() }
+            val aiShown = aiCleanupShown(settings)
             val isNewTask = sheetMode == TodoSheetMode.Add || sheetMode == TodoSheetMode.AddSubtask
             // C2 and tag recognition: "morgen 17 Uhr", "5 Minuten", "Alex" in a new task's words.
             val recognition = remember(sheetText, isNewTask, ignoreDateInText, ignoredTags, settings.tagRecognition, uiState.tagDefinitions) {
@@ -362,13 +370,43 @@ fun CategoryScreen(
                     maxLines = TaskTextField.MAX_LINES,
                     keyboardOptions = TaskTextField.keyboardOptions,
                     label = { Text(text = stringResource(hintRes)) },
-                    // Always for a new task, as in quick capture: it also switches the list words.
-                    trailingIcon = if (isNewTask) {
+                    // Tag recognition always for a new task, as in quick capture: it also switches
+                    // the list words. The AI cleanup also when editing an existing task.
+                    trailingIcon = if (isNewTask || aiShown) {
                         {
-                            RecognitionToggle(
-                                enabled = settings.tagRecognition,
-                                onToggle = { appSettingsRepository.setTagRecognition(!settings.tagRecognition) },
-                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                if (aiShown) {
+                                    AiCleanupButton(
+                                        state = aiCleanup,
+                                        settings = settings,
+                                        appSettingsRepository = appSettingsRepository,
+                                        currentText = { sheetText },
+                                        onCleaned = { cleaned ->
+                                            sheetField = TextFieldValue(cleaned, TextRange(cleaned.length))
+                                            sheetText = cleaned
+                                        },
+                                        markers = settings.toTaskMarkers(),
+                                        verify = { original, cleaned ->
+                                            keepsRecognized(original, cleaned) { words, now ->
+                                                TaskInputRecognizer.recognize(
+                                                    text = words,
+                                                    definitions = uiState.tagDefinitions,
+                                                    recognizeTagsAndLists = isNewTask && settings.tagRecognition,
+                                                    ignoreDate = !isNewTask || ignoreDateInText,
+                                                    ignoredTags = ignoredTags,
+                                                    now = now,
+                                                )
+                                            }
+                                        },
+                                    )
+                                }
+                                if (isNewTask) {
+                                    RecognitionToggle(
+                                        enabled = settings.tagRecognition,
+                                        onToggle = { appSettingsRepository.setTagRecognition(!settings.tagRecognition) },
+                                    )
+                                }
+                            }
                         }
                     } else {
                         null
@@ -390,6 +428,14 @@ fun CategoryScreen(
                             }
                             fieldFocused = focusState.isFocused
                         },
+                )
+                AiCleanupNotice(
+                    state = aiCleanup,
+                    currentText = sheetText,
+                    onUndo = { original ->
+                        sheetField = TextFieldValue(original, TextRange(original.length))
+                        sheetText = original
+                    },
                 )
                 // Finished tag words typed on the keyboard turn into the tag: "5 Minuten " → "#5min ".
                 TagSettleEffect(

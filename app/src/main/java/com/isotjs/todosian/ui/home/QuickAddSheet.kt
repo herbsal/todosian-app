@@ -53,7 +53,12 @@ import com.isotjs.todosian.data.model.Category
 import com.isotjs.todosian.data.settings.AppSettings
 import com.isotjs.todosian.data.settings.AppSettingsRepository
 import com.isotjs.todosian.data.settings.NewTodoFilePosition
+import com.isotjs.todosian.ui.components.AiCleanupButton
+import com.isotjs.todosian.ui.components.AiCleanupNotice
 import com.isotjs.todosian.ui.components.RecognitionToggle
+import com.isotjs.todosian.ui.components.aiCleanupShown
+import com.isotjs.todosian.ui.components.keepsRecognized
+import com.isotjs.todosian.ui.components.rememberAiCleanupState
 import com.isotjs.todosian.ui.components.RecognizedDateChip
 import com.isotjs.todosian.ui.components.RecognizedTagChips
 import com.isotjs.todosian.ui.components.TaskInputRecognizer
@@ -66,6 +71,7 @@ import com.isotjs.todosian.ui.components.endsTypedWord
 import com.isotjs.todosian.ui.components.oneLineValue
 import com.isotjs.todosian.utils.TagRecognition
 import com.isotjs.todosian.utils.TagText
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import com.isotjs.todosian.utils.MarkdownParser
 import com.isotjs.todosian.utils.TagDefinitions
@@ -123,6 +129,8 @@ internal fun QuickAddSheet(
     var chosenList by remember { mutableStateOf<Category?>(null) }
     var saving by remember { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
+    val aiCleanup = rememberAiCleanupState()
+    val aiShown = aiCleanupShown(settings)
 
     // Lists are matched by their own name, also when they sit in a subfolder ("Familie/Kinder").
     val byName = remember(categories) { categories.associateBy { it.displayName.substringAfterLast('/') } }
@@ -263,14 +271,51 @@ internal fun QuickAddSheet(
                 keyboardOptions = TaskTextField.keyboardOptions,
                 label = { Text(text = stringResource(R.string.quick_add_hint)) },
                 trailingIcon = {
-                    RecognitionToggle(
-                        enabled = settings.tagRecognition,
-                        onToggle = { appSettingsRepository.setTagRecognition(!settings.tagRecognition) },
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (aiShown) {
+                            AiCleanupButton(
+                                state = aiCleanup,
+                                settings = settings,
+                                appSettingsRepository = appSettingsRepository,
+                                currentText = { text },
+                                onCleaned = { cleaned ->
+                                    field = TextFieldValue(cleaned, TextRange(cleaned.length))
+                                    text = cleaned
+                                },
+                                markers = settings.toTaskMarkers(),
+                                verify = { original, cleaned ->
+                                    keepsRecognized(original, cleaned) { words, now ->
+                                        TaskInputRecognizer.recognize(
+                                            text = words,
+                                            definitions = definitions,
+                                            listNames = byName.keys.toList(),
+                                            recognizeTagsAndLists = settings.tagRecognition,
+                                            ignoreDate = ignoreDate,
+                                            ignoreList = ignoreList || chosenList != null,
+                                            ignoredTags = ignoredTags,
+                                            now = now,
+                                        )
+                                    }
+                                },
+                            )
+                        }
+                        RecognitionToggle(
+                            enabled = settings.tagRecognition,
+                            onToggle = { appSettingsRepository.setTagRecognition(!settings.tagRecognition) },
+                        )
+                    }
                 },
                 modifier = Modifier
                     .fillMaxWidth()
                     .focusRequester(focusRequester),
+            )
+            AiCleanupNotice(
+                state = aiCleanup,
+                currentText = text,
+                onUndo = { original ->
+                    field = TextFieldValue(original, TextRange(original.length))
+                    text = original
+                },
             )
             // Finished tag words typed on the keyboard turn into the tag: "5 Minuten " → "#5min ".
             TagSettleEffect(

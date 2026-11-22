@@ -76,6 +76,10 @@ interface AppSettingsRepository {
 
     fun setTagRecognitionRemoveWords(enabled: Boolean) {}
 
+    fun setAiCleanupEnabled(enabled: Boolean) {}
+
+    fun setAiCleanupHintShown() {}
+
     fun setHomeLayout(layout: HomeLayout) {}
     fun setStartTab(tab: StartTab) {}
 
@@ -243,6 +247,14 @@ class SharedPrefsAppSettingsRepository(
         prefs.edit { putBoolean(KEY_TAG_RECOGNITION_REMOVE, enabled) }
     }
 
+    override fun setAiCleanupEnabled(enabled: Boolean) {
+        prefs.edit { putBoolean(KEY_AI_CLEANUP, enabled) }
+    }
+
+    override fun setAiCleanupHintShown() {
+        prefs.edit { putBoolean(KEY_AI_CLEANUP_HINT, true) }
+    }
+
     override fun setHomeLayout(layout: HomeLayout) {
         prefs.edit { putString(KEY_HOME_LAYOUT, layout.name) }
     }
@@ -331,6 +343,8 @@ class SharedPrefsAppSettingsRepository(
             tagDisplay = prefs.getString(KEY_TAG_DISPLAY, null).orEmpty(),
             tagRecognition = prefs.getBoolean(KEY_TAG_RECOGNITION, true),
             tagRecognitionRemoveWords = prefs.getBoolean(KEY_TAG_RECOGNITION_REMOVE, true),
+            aiCleanupEnabled = prefs.getBoolean(KEY_AI_CLEANUP, true),
+            aiCleanupHintShown = prefs.getBoolean(KEY_AI_CLEANUP_HINT, false),
             startTab = prefs.getString(KEY_START_TAB, null)
                 ?.let { raw -> runCatching { StartTab.valueOf(raw) }.getOrNull() } ?: StartTab.LISTS,
             homeLayout = prefs.getString(KEY_HOME_LAYOUT, null)
@@ -398,6 +412,8 @@ class SharedPrefsAppSettingsRepository(
         private const val KEY_TAG_DISPLAY = "tag_display"
         private const val KEY_TAG_RECOGNITION = "tag_recognition"
         private const val KEY_TAG_RECOGNITION_REMOVE = "tag_recognition_remove_words"
+        private const val KEY_AI_CLEANUP = "ai_cleanup"
+        private const val KEY_AI_CLEANUP_HINT = "ai_cleanup_hint_shown"
         private const val KEY_HOME_LAYOUT = "home_layout"
         private const val KEY_START_TAB = "start_tab"
         private const val KEY_HOME_TASKS_PER_LIST = "home_tasks_per_list"
