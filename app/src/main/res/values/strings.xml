@@ -642,7 +642,6 @@
 
     <!-- AI cleanup (Gemini Nano) -->
     <string name="ai_cleanup_button">Clean up with AI (Gemini Nano, on this device)</string>
-    <string name="ai_cleanup_downloading">AI model is loading</string>
     <string name="ai_cleanup_done">Cleaned up with AI</string>
     <string name="ai_cleanup_undo">Undo</string>
     <string name="ai_cleanup_running">AI is cleaning up…</string>
@@ -653,9 +652,6 @@
     <string name="ai_cleanup_failed_not_ready">AI is being prepared, this can take a while</string>
     <string name="ai_cleanup_failed_other">AI cleanup did not work</string>
     <string name="ai_cleanup_unchanged">AI found nothing to clean up</string>
-    <string name="ai_cleanup_download_title">Load the AI model?</string>
-    <string name="ai_cleanup_download_message">Gemini Nano is loaded once by the system app AICore, best on Wi-Fi. After that, the cleanup works offline and your texts never leave the phone.</string>
-    <string name="ai_cleanup_download_confirm">Load</string>
     <string name="ai_cleanup_download_cancel">Not now</string>
     <string name="ai_cleanup_hint_title">Clean up with AI</string>
     <string name="ai_cleanup_hint_message">Removes filler words and repeats from the task with Gemini Nano. Runs only on this device, texts never leave the phone. Tags, dates and lists stay as they are. AI can make mistakes: you can always undo.</string>
@@ -664,15 +660,40 @@
     <string name="settings_section_ai_summary">Clean up task text on this device</string>
     <string name="settings_ai_cleanup">Show AI cleanup</string>
     <string name="settings_ai_cleanup_subtitle">A ✨ with \"AI\" next to the text field removes filler words and repeats</string>
-    <string name="settings_ai_status">Status</string>
     <string name="settings_ai_status_unknown">Checking…</string>
-    <string name="settings_ai_status_available">Ready, works offline</string>
-    <string name="settings_ai_status_downloadable">Supported, model not loaded yet</string>
     <string name="settings_ai_status_downloading">Model is loading…</string>
     <string name="settings_ai_status_downloading_bytes">Model is loading… %1$s</string>
     <string name="settings_ai_status_preparing">AI is being prepared, this can take a while</string>
-    <string name="settings_ai_status_unavailable">Not available on this device (device not supported, unlocked bootloader or AICore missing)</string>
     <string name="settings_ai_download">Load model</string>
     <string name="settings_ai_note">Runs only on this device. Texts never leave the phone. AI can make mistakes.</string>
+    <string name="ai_cleanup_not_ready_title">AI is not ready yet</string>
+    <string name="ai_cleanup_not_ready_downloadable">AICore reports that the Gemini Nano model for this function is not on the device yet. In the AI settings you see what is there and what can be loaded.</string>
+    <string name="ai_cleanup_not_ready_downloading">The AI model is still loading. The AI settings show the progress, and you can cancel there.</string>
+    <string name="ai_cleanup_not_ready_preparing">AICore is still setting up, this can take a while. The AI settings show the current state.</string>
+    <string name="ai_cleanup_not_ready_other">The AI settings show what is missing.</string>
+    <string name="ai_cleanup_open_settings">Open AI settings</string>
+    <string name="ai_settings_close">Close</string>
+    <string name="settings_ai_aicore">AICore (system app)</string>
+    <string name="settings_ai_aicore_installed">Installed, version %1$s. Holds Gemini Nano for all apps.</string>
+    <string name="settings_ai_aicore_missing">Not installed: no Gemini Nano on this device</string>
+    <string name="settings_ai_aicore_manage">Manage</string>
+    <string name="settings_ai_model_full">Gemini Nano · Full</string>
+    <string name="settings_ai_model_fast">Gemini Nano · Fast</string>
+    <string name="settings_ai_model_full_short">Full</string>
+    <string name="settings_ai_model_fast_short">Fast</string>
+    <string name="settings_ai_model_full_description">Best results, a bit slower</string>
+    <string name="settings_ai_model_fast_description">Shortest wait, results may be simpler</string>
+    <string name="settings_ai_model_present">On the device</string>
+    <string name="settings_ai_model_present_named">On the device (%1$s)</string>
+    <string name="settings_ai_model_in_use">in use</string>
+    <string name="settings_ai_model_downloadable">Not on the device, can be loaded by AICore</string>
+    <string name="settings_ai_model_unavailable">Not offered on this device</string>
+    <string name="settings_ai_model_downloading_of">Loading… %1$s of %2$s</string>
+    <string name="settings_ai_model_choice">Model for the cleanup</string>
+    <string name="settings_ai_model_choice_subtitle">Now: %1$s. Automatic uses a model that is already on the device.</string>
+    <string name="settings_ai_model_auto">Automatic</string>
+    <string name="settings_ai_download_cancel">Cancel</string>
+    <string name="settings_ai_check_again">Check again</string>
+    <string name="settings_ai_delete_note">Todosian can\'t delete models: they belong to AICore and other apps use them too, and the interface offers no delete. Cancel stops following a download; AICore may still finish one it started. \"Manage\" opens AICore in the system settings.</string>
     <string name="widget_active_count">%1$d active</string>
 </resources>

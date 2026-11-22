@@ -53,6 +53,8 @@ data class AppSettings(
     val aiCleanupEnabled: Boolean = true,
     /** The one-time note about the AI cleanup was confirmed. */
     val aiCleanupHintShown: Boolean = false,
+    /** Gemini Nano variant for the AI cleanup: "" = whichever is on the device, else FULL or FAST. */
+    val aiModel: String = "",
     /** Tab of the home screen shown when the app opens. */
     val startTab: StartTab = StartTab.LISTS,
     /** Home screen: open tasks per list, or the list tiles. */

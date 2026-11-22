@@ -112,7 +112,10 @@ fun rememberAiCleanupState(): AiCleanupState = remember { AiCleanupState() }
 @Composable
 fun aiCleanupShown(settings: AppSettings): Boolean {
     val status by AiCleanup.status.collectAsStateWithLifecycle()
-    LaunchedEffect(settings.aiCleanupEnabled) { if (settings.aiCleanupEnabled) AiCleanup.refresh() }
+    LaunchedEffect(settings.aiCleanupEnabled, settings.aiModel) {
+        AiCleanup.preferred = settings.preferredAiModel()
+        if (settings.aiCleanupEnabled) AiCleanup.refresh()
+    }
     return settings.aiCleanupEnabled && status != AiStatus.Unknown && status != AiStatus.Unavailable
 }
 
@@ -133,7 +136,8 @@ fun AiCleanupButton(
 ) {
     val status by AiCleanup.status.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
-    var askDownload by remember { mutableStateOf(false) }
+    var askSettings by remember { mutableStateOf(false) }
+    var showSettings by remember { mutableStateOf(false) }
     var askHint by remember { mutableStateOf(false) }
 
     fun run() {
@@ -161,12 +165,9 @@ fun AiCleanupButton(
 
     fun tap() {
         when (status) {
-            AiStatus.Downloadable -> askDownload = true
-            is AiStatus.Downloading, AiStatus.Preparing -> {
-                state.failure = AiFailure.NOT_READY
-                state.noticeText = currentText()
-            }
-            else -> if (!settings.aiCleanupHintShown) askHint = true else run()
+            AiStatus.Available -> if (!settings.aiCleanupHintShown) askHint = true else run()
+            // Not ready yet: offer the AI settings, where the person sees what is missing and can load it.
+            else -> askSettings = true
         }
     }
 
@@ -187,24 +188,39 @@ fun AiCleanupButton(
         }
     }
 
-    if (askDownload) {
+    if (askSettings) {
         AlertDialog(
-            onDismissRequest = { askDownload = false },
-            icon = { BadgedSparkle(badge = "AI", filled = true, tint = MaterialTheme.colorScheme.tertiary) },
-            title = { Text(text = stringResource(R.string.ai_cleanup_download_title)) },
-            text = { Text(text = stringResource(R.string.ai_cleanup_download_message)) },
+            onDismissRequest = { askSettings = false },
+            icon = { BadgedSparkle(badge = "AI", filled = false, tint = MaterialTheme.colorScheme.tertiary) },
+            title = { Text(text = stringResource(R.string.ai_cleanup_not_ready_title)) },
+            text = {
+                Text(
+                    text = stringResource(
+                        when (status) {
+                            AiStatus.Downloadable -> R.string.ai_cleanup_not_ready_downloadable
+                            is AiStatus.Downloading -> R.string.ai_cleanup_not_ready_downloading
+                            AiStatus.Preparing -> R.string.ai_cleanup_not_ready_preparing
+                            else -> R.string.ai_cleanup_not_ready_other
+                        },
+                    ),
+                )
+            },
             confirmButton = {
                 TextButton(onClick = {
-                    askDownload = false
-                    AiCleanup.download()
-                }) { Text(text = stringResource(R.string.ai_cleanup_download_confirm)) }
+                    askSettings = false
+                    showSettings = true
+                }) { Text(text = stringResource(R.string.ai_cleanup_open_settings)) }
             },
             dismissButton = {
-                TextButton(onClick = { askDownload = false }) {
+                TextButton(onClick = { askSettings = false }) {
                     Text(text = stringResource(R.string.ai_cleanup_download_cancel))
                 }
             },
         )
+    }
+
+    if (showSettings) {
+        AiSettingsDialog(settings = settings, appSettingsRepository = appSettingsRepository, onDismiss = { showSettings = false })
     }
 
     if (askHint) {
