@@ -89,7 +89,15 @@ sealed interface AiCleanupResult {
     /** Nothing to clean up: the model gave the text back as it was. */
     data object Unchanged : AiCleanupResult
 
-    data class Failed(val reason: AiFailure) : AiCleanupResult
+    /**
+     * [rejection] says why an answer was not taken ([AiFailure.UNSAFE]); [answer] is what the
+     * model suggested, shown so the person can see what went wrong.
+     */
+    data class Failed(
+        val reason: AiFailure,
+        val rejection: AiTextGuard.Rejection? = null,
+        val answer: String? = null,
+    ) : AiCleanupResult
 }
 
 enum class AiFailure { BUSY, DAILY_LIMIT, TIMEOUT, UNSAFE, NOT_READY, LEFT_APP, OTHER }
@@ -101,6 +109,7 @@ enum class AiFailure { BUSY, DAILY_LIMIT, TIMEOUT, UNSAFE, NOT_READY, LEFT_APP, 
 object AiCleanup {
     private const val TAG = "AiCleanup"
     private const val TIMEOUT_MS = 8_000L
+    private const val MAX_SHOWN_ANSWER = 200
     private const val BUSY_RETRY_MS = 1_000L
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -291,33 +300,45 @@ object AiCleanup {
 
     /**
      * Cleans up one task: filler words and repeats go, tags, fields, list words and links stay as
-     * they are. [verify] gets the cleaned text and may still reject it (e.g. other date words).
+     * they are. [protect] are more parts of [text] the model must keep (words the app turns into a
+     * tag). [verify] gets the cleaned text and may still reject it (e.g. other date words).
      */
     suspend fun clean(
         text: String,
         markers: TaskMarkers = TaskMarkers.Default,
+        protect: List<IntRange> = emptyList(),
         verify: (String) -> Boolean = { true },
     ): AiCleanupResult {
         if (text.isBlank()) return AiCleanupResult.Unchanged
         val model = activeModel()
         if (check(model) != AiStatus.Available) return AiCleanupResult.Failed(AiFailure.NOT_READY)
-        val masked = AiTextGuard.mask(text, markers)
+        val masked = AiTextGuard.mask(text, markers, protect)
+        // Google's shorten function drops or changes placeholders: it only gets the words, and
+        // tags, fields and links go back to the end afterwards.
+        val omitted = if (model == AiModel.REWRITE) masked.allTokens else emptySet()
         val rewriting = model == AiModel.REWRITE
         return mutex.withLock {
             try {
                 val answer = withTimeout(TIMEOUT_MS) {
                     if (rewriting) {
-                        rewrite(masked.textWithoutTrailing, retryWhenBusy = true)
+                        rewrite(masked.textWithout(omitted), retryWhenBusy = true)
                     } else {
                         AiCleanupPrompt.answerOf(generate(client(model), AiCleanupPrompt.build(masked.text), retryWhenBusy = true))
                     }
                 }
-                val restored = AiTextGuard.restore(answer, masked, trailingOmitted = rewriting)
-                when {
-                    restored == null -> AiCleanupResult.Failed(AiFailure.UNSAFE)
-                    AiTextGuard.isUnchanged(text, restored) -> AiCleanupResult.Unchanged
-                    !verify(restored) -> AiCleanupResult.Failed(AiFailure.UNSAFE)
-                    else -> AiCleanupResult.Cleaned(restored)
+                when (val checked = AiTextGuard.check(answer, masked, omitted)) {
+                    is AiTextGuard.Restored.Rejected -> {
+                        Log.i(TAG, "Answer rejected (${checked.reason}): $answer")
+                        AiCleanupResult.Failed(AiFailure.UNSAFE, checked.reason, answer.trim().take(MAX_SHOWN_ANSWER))
+                    }
+                    is AiTextGuard.Restored.Ok -> when {
+                        AiTextGuard.isUnchanged(text, checked.text) -> AiCleanupResult.Unchanged
+                        !verify(checked.text) -> {
+                            Log.i(TAG, "Answer changes recognized words: ${checked.text}")
+                            AiCleanupResult.Failed(AiFailure.UNSAFE, AiTextGuard.Rejection.RECOGNITION, checked.text.take(MAX_SHOWN_ANSWER))
+                        }
+                        else -> AiCleanupResult.Cleaned(checked.text)
+                    }
                 }
             } catch (e: TimeoutCancellationException) {
                 AiCleanupResult.Failed(AiFailure.TIMEOUT)
@@ -354,7 +375,7 @@ object AiCleanup {
         }
     }
 
-    // The rewriting adapter only sees the words; fields and tags at the end are added back after.
+    // The rewriting adapter only sees the words; tags, fields and links are added back after.
     private suspend fun rewrite(words: String, retryWhenBusy: Boolean): String {
         return try {
             val result = rewriter().runInference(RewritingRequest.builder(words).build()).await()

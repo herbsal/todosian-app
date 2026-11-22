@@ -78,6 +78,9 @@ import com.isotjs.todosian.utils.MarkdownParser
 import com.isotjs.todosian.utils.TagDefinitions
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import com.isotjs.todosian.ui.components.TaskRecognition
+import com.isotjs.todosian.ui.components.protectedWords
+import java.time.LocalDateTime
 
 /** How far the sheet is pulled up to open the normal task sheet. */
 private val PULL_UP_DISTANCE = 40.dp
@@ -275,6 +278,18 @@ internal fun QuickAddSheet(
                 trailingIcon = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         if (aiShown) {
+                            val recognizeWords: (String, LocalDateTime) -> TaskRecognition = { words, now ->
+                                TaskInputRecognizer.recognize(
+                                    text = words,
+                                    definitions = definitions,
+                                    listNames = byName.keys.toList(),
+                                    recognizeTagsAndLists = settings.tagRecognition,
+                                    ignoreDate = ignoreDate,
+                                    ignoreList = ignoreList || chosenList != null,
+                                    ignoredTags = ignoredTags,
+                                    now = now,
+                                )
+                            }
                             AiCleanupButton(
                                 state = aiCleanup,
                                 settings = settings,
@@ -285,20 +300,8 @@ internal fun QuickAddSheet(
                                     text = cleaned
                                 },
                                 markers = settings.toTaskMarkers(),
-                                verify = { original, cleaned ->
-                                    keepsRecognized(original, cleaned) { words, now ->
-                                        TaskInputRecognizer.recognize(
-                                            text = words,
-                                            definitions = definitions,
-                                            listNames = byName.keys.toList(),
-                                            recognizeTagsAndLists = settings.tagRecognition,
-                                            ignoreDate = ignoreDate,
-                                            ignoreList = ignoreList || chosenList != null,
-                                            ignoredTags = ignoredTags,
-                                            now = now,
-                                        )
-                                    }
-                                },
+                                protect = { words -> protectedWords(words, recognizeWords) },
+                                verify = { original, cleaned -> keepsRecognized(original, cleaned, recognizeWords) },
                             )
                         }
                         RecognitionToggle(

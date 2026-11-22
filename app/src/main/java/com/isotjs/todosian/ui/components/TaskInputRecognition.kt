@@ -150,6 +150,31 @@ internal fun keepsRecognized(
         before.tags.map { it.term.primaryTag }.toSet() == after.tags.map { it.term.primaryTag }.toSet()
 }
 
+/**
+ * Where in [text] the words are that become a list or a tag ("auf die Einkaufsliste",
+ * "Energie niedrig"), so the AI keeps them. Dates are checked afterwards instead.
+ */
+internal fun protectedWords(
+    text: String,
+    recognize: (text: String, now: LocalDateTime) -> TaskRecognition,
+): List<IntRange> {
+    val recognition = recognize(text, LocalDateTime.now())
+    val ranges = mutableListOf<IntRange>()
+    recognition.list?.let { hit -> if (hit.end <= text.length && hit.start < hit.end) ranges += hit.start until hit.end }
+    // Tag hits point into the text without list and date words; find their words in the full text.
+    var from = 0
+    recognition.tags.sortedBy { it.start }.forEach { hit ->
+        if (hit.end > recognition.baseText.length) return@forEach
+        val phrase = recognition.baseText.substring(hit.start, hit.end)
+        val at = text.indexOf(phrase, from)
+        if (at >= 0) {
+            ranges += at until at + phrase.length
+            from = at + phrase.length
+        }
+    }
+    return ranges
+}
+
 @Composable
 fun RecognizedDateChip(match: DateMatch, onIgnore: (() -> Unit)?) {
     val locale = LocalConfiguration.current.locales[0]

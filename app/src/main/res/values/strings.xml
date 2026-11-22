@@ -651,6 +651,14 @@
     <string name="ai_cleanup_failed_unsafe">AI could not clean up the text safely, it stays as it was</string>
     <string name="ai_cleanup_failed_not_ready">AI is being prepared, this can take a while</string>
     <string name="ai_cleanup_failed_other">AI cleanup did not work</string>
+    <string name="ai_cleanup_failed_unsafe_reason">AI suggestion not taken: %1$s. The text stays as it was</string>
+    <string name="ai_cleanup_rejected_answer">AI suggested: “%1$s”</string>
+    <string name="ai_cleanup_rejected_empty">empty answer</string>
+    <string name="ai_cleanup_rejected_line_break">answer had several lines</string>
+    <string name="ai_cleanup_rejected_too_long">answer longer than the text</string>
+    <string name="ai_cleanup_rejected_placeholders">a tag, date or link went missing</string>
+    <string name="ai_cleanup_rejected_no_words">no words left</string>
+    <string name="ai_cleanup_rejected_recognition">a recognized tag, list or date changed</string>
     <string name="ai_cleanup_unchanged">AI found nothing to clean up</string>
     <string name="ai_cleanup_download_cancel">Not now</string>
     <string name="ai_cleanup_hint_title">Clean up with AI</string>
