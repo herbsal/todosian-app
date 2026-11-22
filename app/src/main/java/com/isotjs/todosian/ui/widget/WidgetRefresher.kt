@@ -1,6 +1,10 @@
 package com.isotjs.todosian.ui.widget
 
 import android.content.Context
+import androidx.core.net.toUri
+import com.isotjs.todosian.utils.TagDefinitions
+import com.isotjs.todosian.utils.TagDisplay
+import com.isotjs.todosian.utils.TagDisplaySettings
 import android.util.Log
 import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
@@ -155,6 +159,7 @@ internal data class WidgetSnapshot(
             prefs.remove(stringPreferencesKey("${prefix}category_uri"))
             prefs.remove(stringPreferencesKey("${prefix}category_name"))
             prefs.remove(stringPreferencesKey("${prefix}text"))
+            prefs.remove(stringPreferencesKey("${prefix}display_text"))
             prefs.remove(stringPreferencesKey("${prefix}line_index"))
             prefs.remove(stringPreferencesKey("${prefix}is_done"))
             prefs.remove(stringPreferencesKey("${prefix}due_date"))
@@ -172,6 +177,7 @@ internal data class WidgetSnapshot(
             prefs[stringPreferencesKey("${prefix}category_uri")] = item.categoryUri
             prefs[stringPreferencesKey("${prefix}category_name")] = item.categoryName
             prefs[stringPreferencesKey("${prefix}text")] = item.todo.text
+            prefs[stringPreferencesKey("${prefix}display_text")] = item.displayText
             prefs[intPreferencesKey("${prefix}line_index")] = item.todo.lineIndex
             prefs[booleanPreferencesKey("${prefix}is_done")] = item.todo.isDone
             item.todo.dueDate?.let { prefs[stringPreferencesKey("${prefix}due_date")] = it }
@@ -209,6 +215,7 @@ internal data class WidgetSnapshot(
                             lineIndex = lineIndex,
                             dueDate = dueDate,
                         ),
+                        displayText = prefs[stringPreferencesKey("${prefix}display_text")] ?: text,
                     )
                 )
             }
@@ -261,7 +268,9 @@ object WidgetRefresher {
             Log.w(TAG, "Unable to access file repository")
             return
         }
-        val markers = app.appSettingsRepository.settings.first().toTaskMarkers()
+        val appSettings = app.appSettingsRepository.settings.first()
+        val markers = appSettings.toTaskMarkers()
+        val tagDisplay = TagDisplaySettings.decode(appSettings.tagDisplay)
 
         refreshMutex.withLock {
             val categories = fileRepository.getCategories(markers).getOrDefault(emptyList())
@@ -278,6 +287,7 @@ object WidgetRefresher {
 
             val savedViews = if (selections.any { it.isView }) fileRepository.getSavedViews() else emptyList()
             val hasFolder = fileRepository.getFolderUri() != null
+            val tagsByList = mutableMapOf<String, TagDefinitions>()
             for ((index, glanceId) in glanceIds.withIndex()) {
                 val snapshot = buildSnapshot(
                     hasFolder = hasFolder,
@@ -289,7 +299,17 @@ object WidgetRefresher {
                     },
                     showCompleted = showCompletedFlags[index],
                     focusTitle = context.getString(R.string.home_daily_focus_title),
-                )
+                ).let { built ->
+                    // Tags as symbols, as in the app; each list with the tags of its folder.
+                    built.copy(
+                        items = built.items.map { item ->
+                            val definitions = tagsByList.getOrPut(item.categoryUri) {
+                                runCatching { fileRepository.getTagDefinitions(item.categoryUri.toUri()) }.getOrDefault(TagDefinitions.EMPTY)
+                            }
+                            item.copy(displayText = TagDisplay.plainText(item.todo.text, definitions, tagDisplay))
+                        },
+                    )
+                }
                 runCatching {
                     updateAppWidgetState(context, PreferencesGlanceStateDefinition, glanceId) { prefs ->
                         prefs.toMutablePreferences().apply { snapshot.writeTo(this) }

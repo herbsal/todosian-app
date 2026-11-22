@@ -48,6 +48,17 @@ class WidgetSnapshotTest {
     }
 
     @Test
+    fun `round trip keeps the shown text apart from the task text`() {
+        val shown = item("Müll #5min").copy(displayText = "Müll · ⏱ 5 Min")
+        val snapshot = WidgetSnapshot(hasFolder = true, activeCount = 1, items = listOf(shown))
+
+        val restored = WidgetSnapshot.fromPreferences(snapshot.toPreferences())
+
+        assertEquals(snapshot, restored)
+        assertEquals("Müll #5min", restored!!.items.single().todo.text)
+    }
+
+    @Test
     fun `round trip preserves empty snapshot`() {
         val snapshot = WidgetSnapshot(hasFolder = true, activeCount = 0, items = emptyList())
 
