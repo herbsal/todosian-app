@@ -674,4 +674,5 @@
     <string name="settings_ai_status_unavailable">Auf diesem Gerät nicht verfügbar (Gerät nicht unterstützt, entsperrter Bootloader oder AICore fehlt)</string>
     <string name="settings_ai_download">Modell laden</string>
     <string name="settings_ai_note">Läuft nur auf diesem Gerät. Texte verlassen das Handy nicht. KI kann Fehler machen.</string>
+    <string name="widget_active_count">%1$d aktiv</string>
 </resources>

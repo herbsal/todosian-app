@@ -674,4 +674,5 @@
     <string name="settings_ai_status_unavailable">Not available on this device (device not supported, unlocked bootloader or AICore missing)</string>
     <string name="settings_ai_download">Load model</string>
     <string name="settings_ai_note">Runs only on this device. Texts never leave the phone. AI can make mistakes.</string>
+    <string name="widget_active_count">%1$d active</string>
 </resources>
