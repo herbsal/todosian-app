@@ -84,6 +84,7 @@ object TagRecognition {
      * and the cursor is not on it, so words still being typed stay. With [removeWords] the words
      * give way to the tag; otherwise, and always for people ("Alex anrufen"), the tag follows them.
      * A new tag of a group with one tag at a time replaces the group's tag already in the text.
+     * With [finishedOnly] false all tag words count, e.g. when leaving the field.
      * Returns null when nothing changes.
      */
     fun settle(
@@ -92,11 +93,13 @@ object TagRecognition {
         definitions: TagDefinitions,
         ignoredTags: Set<String> = emptySet(),
         removeWords: Boolean = true,
+        finishedOnly: Boolean = true,
     ): SettledTags? {
         val hits = find(text, definitions).filter { hit ->
-            hit.term.primaryTag !in ignoredTags &&
-                hit.end < text.length && !text[hit.end].isLetterOrDigit() &&
-                (cursor < hit.start || cursor > hit.end)
+            hit.term.primaryTag !in ignoredTags && (
+                !finishedOnly ||
+                    hit.end < text.length && !text[hit.end].isLetterOrDigit() && (cursor < hit.start || cursor > hit.end)
+                )
         }
         if (hits.isEmpty()) return null
         var result = text

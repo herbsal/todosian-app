@@ -63,7 +63,9 @@ import com.isotjs.todosian.ui.components.TaskInputRecognizer
 import com.isotjs.todosian.ui.components.TaskTextField
 import com.isotjs.todosian.ui.components.fieldValueFor
 import com.isotjs.todosian.ui.components.tagsSetIn
-import com.isotjs.todosian.ui.components.typedTaskText
+import com.isotjs.todosian.ui.components.TagSettleEffect
+import com.isotjs.todosian.ui.components.endsTypedWord
+import com.isotjs.todosian.ui.components.oneLineValue
 import com.isotjs.todosian.utils.TagRecognition
 import com.isotjs.todosian.utils.TagText
 import androidx.compose.ui.text.input.TextFieldValue
@@ -119,6 +121,7 @@ internal fun QuickAddSheet(
     // Words that finished tag words were turned into, to bring them back when a tag is removed.
     var replacedWords by remember { mutableStateOf(emptyMap<String, String>()) }
     var field by remember { mutableStateOf(TextFieldValue()) }
+    var wordTyped by remember { mutableStateOf(false) }
     var chosenList by remember { mutableStateOf<Category?>(null) }
     var showListMenu by remember { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
@@ -162,7 +165,11 @@ internal fun QuickAddSheet(
         if (openingFull) return
         openingFull = true
         // List words go, the list is chosen; date and tag words stay for the task sheet to recognize.
-        val rest = currentFirstPass.list?.let { ListRecognition.remove(text, it) } ?: text
+        val withoutList = currentFirstPass.list?.let { ListRecognition.remove(text, it) } ?: text
+        // Tag words become tags here, also the last (dictated) ones, so the task sheet shows them as tags.
+        val rest = if (!settings.tagRecognition) withoutList else {
+            TagRecognition.settle(withoutList, withoutList.length, definitions, ignoredTags, settings.tagRecognitionRemoveWords, finishedOnly = false)?.text ?: withoutList
+        }
         val list = currentTarget
         if (list != null) {
             onOpenFullAdd(list.uri, rest.trim())
@@ -255,16 +262,8 @@ internal fun QuickAddSheet(
             OutlinedTextField(
                 value = fieldValueFor(field, text),
                 onValueChange = { typed ->
-                    // Finished tag words turn into the tag right away: "5 Minuten " → "#5min ".
-                    val (value, replaced) = typedTaskText(
-                        previous = text,
-                        typed = typed,
-                        settle = settings.tagRecognition,
-                        definitions = definitions,
-                        ignoredTags = ignoredTags,
-                        removeWords = settings.tagRecognitionRemoveWords,
-                    )
-                    replacedWords = replacedWords + replaced
+                    val value = oneLineValue(typed)
+                    if (value.text != text) wordTyped = endsTypedWord(text, value)
                     field = value
                     text = value.text
                 },
@@ -280,6 +279,21 @@ internal fun QuickAddSheet(
                 modifier = Modifier
                     .fillMaxWidth()
                     .focusRequester(focusRequester),
+            )
+            // Finished tag words typed on the keyboard turn into the tag: "5 Minuten " → "#5min ".
+            TagSettleEffect(
+                value = fieldValueFor(field, text),
+                wordTyped = wordTyped,
+                enabled = settings.tagRecognition,
+                definitions = definitions,
+                ignoredTags = ignoredTags,
+                removeWords = settings.tagRecognitionRemoveWords,
+                onSettled = { value, replaced ->
+                    replacedWords = replacedWords + replaced
+                    wordTyped = false
+                    field = value
+                    text = value.text
+                },
             )
             Spacer(modifier = Modifier.height(8.dp))
             // The list chip: where the task goes. Tapping it picks another list.

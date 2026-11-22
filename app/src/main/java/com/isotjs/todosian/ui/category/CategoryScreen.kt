@@ -86,7 +86,10 @@ import com.isotjs.todosian.ui.components.RecognizedDateChip
 import com.isotjs.todosian.ui.components.RecognizedTagChips
 import com.isotjs.todosian.ui.components.fieldValueFor
 import com.isotjs.todosian.ui.components.tagsSetIn
-import com.isotjs.todosian.ui.components.typedTaskText
+import com.isotjs.todosian.ui.components.TagSettleEffect
+import com.isotjs.todosian.ui.components.endsTypedWord
+import com.isotjs.todosian.ui.components.oneLineValue
+import com.isotjs.todosian.ui.components.settleTags
 import com.isotjs.todosian.utils.TagRecognition
 import com.isotjs.todosian.utils.TagText
 import androidx.compose.ui.text.input.TextFieldValue
@@ -259,6 +262,8 @@ fun CategoryScreen(
             // Words that finished tag words were turned into, to bring them back when a tag is removed.
             var replacedWords by remember(sheetMode) { mutableStateOf(emptyMap<String, String>()) }
             var sheetField by remember(sheetMode) { mutableStateOf(TextFieldValue()) }
+            var wordTyped by remember(sheetMode) { mutableStateOf(false) }
+            var fieldFocused by remember(sheetMode) { mutableStateOf(false) }
             val isNewTask = sheetMode == TodoSheetMode.Add || sheetMode == TodoSheetMode.AddSubtask
             // C2 and tag recognition: "morgen 17 Uhr", "5 Minuten", "Alex" in a new task's words.
             val recognition = remember(sheetText, isNewTask, ignoreDateInText, ignoredTags, settings.tagRecognition, uiState.tagDefinitions) {
@@ -321,16 +326,8 @@ fun CategoryScreen(
                 OutlinedTextField(
                     value = fieldValueFor(sheetField, sheetText),
                     onValueChange = { typed ->
-                        // Finished tag words turn into the tag right away: "5 Minuten " → "#5min ".
-                        val (value, replaced) = typedTaskText(
-                            previous = sheetText,
-                            typed = typed,
-                            settle = isNewTask && settings.tagRecognition,
-                            definitions = uiState.tagDefinitions,
-                            ignoredTags = ignoredTags,
-                            removeWords = settings.tagRecognitionRemoveWords,
-                        )
-                        replacedWords = replacedWords + replaced
+                        val value = oneLineValue(typed)
+                        if (value.text != sheetText) wordTyped = endsTypedWord(sheetText, value)
                         sheetField = value
                         sheetText = value.text
                     },
@@ -354,8 +351,32 @@ fun CategoryScreen(
                         .onFocusEvent { focusState ->
                             if (focusState.isFocused) {
                                 scope.launch { todoTextBringIntoView.bringIntoView() }
+                            } else if (fieldFocused && isNewTask && settings.tagRecognition) {
+                                // Leaving the field: the last tag words (also dictated ones) become tags.
+                                settleTags(fieldValueFor(sheetField, sheetText), uiState.tagDefinitions, ignoredTags, settings.tagRecognitionRemoveWords, all = true)
+                                    ?.let { (value, replaced) ->
+                                        replacedWords = replacedWords + replaced
+                                        sheetField = value
+                                        sheetText = value.text
+                                    }
                             }
+                            fieldFocused = focusState.isFocused
                         },
+                )
+                // Finished tag words typed on the keyboard turn into the tag: "5 Minuten " → "#5min ".
+                TagSettleEffect(
+                    value = fieldValueFor(sheetField, sheetText),
+                    wordTyped = wordTyped,
+                    enabled = isNewTask && settings.tagRecognition,
+                    definitions = uiState.tagDefinitions,
+                    ignoredTags = ignoredTags,
+                    removeWords = settings.tagRecognitionRemoveWords,
+                    onSettled = { value, replaced ->
+                        replacedWords = replacedWords + replaced
+                        wordTyped = false
+                        sheetField = value
+                        sheetText = value.text
+                    },
                 )
 
                 // C2: "morgen 17 Uhr ..." becomes ⏰ / 📅 on save; the chip shows it and can turn it off.
