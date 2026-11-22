@@ -786,7 +786,8 @@ fun SettingsScreen(
                         SettingsInfoRow(
                             icon = Icons.Filled.Info,
                             title = stringResource(R.string.settings_version),
-                            subtitle = "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
+                            subtitle = "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})" +
+                                BuildConfig.BUILD_COMMIT.takeIf { it.isNotEmpty() }?.let { " · $it" }.orEmpty(),
                         )
 
                         SettingsDivider()
