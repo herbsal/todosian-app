@@ -10,10 +10,10 @@ class AiTextGuardTest {
 
     @Test
     fun `plain text has nothing to protect`() {
-        val masked = AiTextGuard.mask("ähm ja also Nudeltopf, den Nudeltopf aufräumen")
-        assertEquals("ähm ja also Nudeltopf, den Nudeltopf aufräumen", masked.text)
+        val masked = AiTextGuard.mask("ähm ja also Werkzeugkasten, den Werkzeugkasten aufräumen")
+        assertEquals("ähm ja also Werkzeugkasten, den Werkzeugkasten aufräumen", masked.text)
         assertTrue(masked.tokens.isEmpty())
-        assertEquals("Nudeltopf aufräumen", AiTextGuard.restore("Nudeltopf aufräumen", masked))
+        assertEquals("Werkzeugkasten aufräumen", AiTextGuard.restore("Werkzeugkasten aufräumen", masked))
     }
 
     @Test
@@ -61,22 +61,22 @@ class AiTextGuardTest {
 
     @Test
     fun `models that see no placeholder get all parts back at the end`() {
-        val masked = AiTextGuard.mask("Alex #person/alex nudeltopf nudeltopf aufgefunden und ähm draußen saubermachen")
-        assertEquals("Alex nudeltopf nudeltopf aufgefunden und ähm draußen saubermachen", masked.textWithout(masked.allTokens))
+        val masked = AiTextGuard.mask("Michael #person/michael werkzeugkasten werkzeugkasten gefunden und ähm in der Garage aufräumen")
+        assertEquals("Michael werkzeugkasten werkzeugkasten gefunden und ähm in der Garage aufräumen", masked.textWithout(masked.allTokens))
         assertEquals(
-            "Nudeltopf draußen saubermachen #person/alex",
-            AiTextGuard.restore("Nudeltopf draußen saubermachen.", masked, masked.allTokens),
+            "Werkzeugkasten in der Garage aufräumen #person/michael",
+            AiTextGuard.restore("Werkzeugkasten in der Garage aufräumen.", masked, masked.allTokens),
         )
     }
 
     @Test
     fun `extra ranges are protected like tags`() {
-        val text = "ähm Nudeltopf aufräumen Energie niedrig"
+        val text = "ähm Werkzeugkasten aufräumen Energie niedrig"
         val start = text.indexOf("Energie")
         val masked = AiTextGuard.mask(text, extra = listOf(start until text.length))
         assertEquals(listOf("Energie niedrig"), masked.tokens)
-        assertEquals("ähm Nudeltopf aufräumen ⟦1⟧", masked.text)
-        assertEquals("Nudeltopf aufräumen Energie niedrig", AiTextGuard.restore("Nudeltopf aufräumen", masked, masked.allTokens))
+        assertEquals("ähm Werkzeugkasten aufräumen ⟦1⟧", masked.text)
+        assertEquals("Werkzeugkasten aufräumen Energie niedrig", AiTextGuard.restore("Werkzeugkasten aufräumen", masked, masked.allTokens))
     }
 
     @Test
@@ -114,27 +114,27 @@ class AiTextGuardTest {
 
     @Test
     fun `line breaks and empty answers are rejected`() {
-        val masked = AiTextGuard.mask("ähm Nudeltopf aufräumen")
-        assertNull(AiTextGuard.restore("Nudeltopf\naufräumen", masked))
+        val masked = AiTextGuard.mask("ähm Werkzeugkasten aufräumen")
+        assertNull(AiTextGuard.restore("Werkzeugkasten\naufräumen", masked))
         assertNull(AiTextGuard.restore("   ", masked))
     }
 
     @Test
     fun `answers with only placeholders are rejected`() {
-        val masked = AiTextGuard.mask("ähm Nudeltopf aufräumen #haushalt")
+        val masked = AiTextGuard.mask("ähm Werkzeugkasten aufräumen #haushalt")
         assertNull(AiTextGuard.restore("⟦1⟧", masked))
     }
 
     @Test
     fun `clearly longer answers are rejected`() {
-        val masked = AiTextGuard.mask("Nudeltopf aufräumen")
-        assertNull(AiTextGuard.restore("Den großen Nudeltopf in der Küche gründlich aufräumen und spülen", masked))
+        val masked = AiTextGuard.mask("Werkzeugkasten aufräumen")
+        assertNull(AiTextGuard.restore("Den großen Werkzeugkasten in der Garage gründlich aufräumen und sortieren", masked))
     }
 
     @Test
     fun `surrounding quotes are dropped`() {
-        val masked = AiTextGuard.mask("ähm Nudeltopf aufräumen")
-        assertEquals("Nudeltopf aufräumen", AiTextGuard.restore("„Nudeltopf aufräumen“", masked))
+        val masked = AiTextGuard.mask("ähm Werkzeugkasten aufräumen")
+        assertEquals("Werkzeugkasten aufräumen", AiTextGuard.restore("„Werkzeugkasten aufräumen“", masked))
     }
 
     @Test
@@ -158,13 +158,13 @@ class AiTextGuardTest {
 
     @Test
     fun `unchanged ignores spaces`() {
-        assertTrue(AiTextGuard.isUnchanged("Nudeltopf  aufräumen ", "Nudeltopf aufräumen"))
-        assertFalse(AiTextGuard.isUnchanged("ähm Nudeltopf aufräumen", "Nudeltopf aufräumen"))
+        assertTrue(AiTextGuard.isUnchanged("Werkzeugkasten  aufräumen ", "Werkzeugkasten aufräumen"))
+        assertFalse(AiTextGuard.isUnchanged("ähm Werkzeugkasten aufräumen", "Werkzeugkasten aufräumen"))
     }
 
     @Test
     fun `prompt answer takes the first line without prefix`() {
-        assertEquals("Nudeltopf aufräumen", AiCleanupPrompt.answerOf(" Aufgabe: Nudeltopf aufräumen\n\nText: x"))
+        assertEquals("Werkzeugkasten aufräumen", AiCleanupPrompt.answerOf(" Aufgabe: Werkzeugkasten aufräumen\n\nText: x"))
         assertTrue(AiCleanupPrompt.build("ähm ⟦1⟧ test").endsWith("Text: ähm ⟦1⟧ test\nAufgabe:"))
     }
 }

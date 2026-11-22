@@ -10,23 +10,23 @@ class PersonScopeTest {
     private val definitions = TagDefinitionParser.parse(
         listOf(
             "## Person",
-            "- Alex: #person/alex, #alex",
+            "- Michael: #person/michael, #michael",
             "- Sam: #person/sam",
         ),
     )
 
     @Test
     fun onlyMine() {
-        val scope = PersonScope("Person", setOf("#person/alex"), includeUnassigned = false)
-        assertTrue(scope.allows("Zahnarzt #alex", definitions))
+        val scope = PersonScope("Person", setOf("#person/michael"), includeUnassigned = false)
+        assertTrue(scope.allows("Zahnarzt #michael", definitions))
         assertFalse(scope.allows("Einkauf #person/sam", definitions))
         assertFalse(scope.allows("Müll raus", definitions))
-        assertTrue(scope.allows("Gemeinsam #person/sam #person/alex", definitions))
+        assertTrue(scope.allows("Gemeinsam #person/sam #person/michael", definitions))
     }
 
     @Test
     fun mineAndUnassigned() {
-        val scope = PersonScope("person", setOf("#person/alex"), includeUnassigned = true)
+        val scope = PersonScope("person", setOf("#person/michael"), includeUnassigned = true)
         assertTrue(scope.allows("Müll raus", definitions))
         assertFalse(scope.allows("Einkauf #person/sam", definitions))
     }
@@ -39,7 +39,7 @@ class PersonScopeTest {
 
     @Test
     fun encodeRoundTrip() {
-        val scope = PersonScope("Person", setOf("#person/sam", "#person/alex"), includeUnassigned = true)
+        val scope = PersonScope("Person", setOf("#person/sam", "#person/michael"), includeUnassigned = true)
         assertEquals(scope, PersonScope.decode(scope.encode()))
         assertEquals(PersonScope("Person", emptySet(), false), PersonScope.decode(PersonScope("Person", emptySet(), false).encode()))
         assertNull(PersonScope.decode(null))

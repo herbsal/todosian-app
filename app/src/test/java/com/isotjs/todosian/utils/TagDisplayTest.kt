@@ -12,15 +12,15 @@ class TagDisplayTest {
             "## 🧠 Energie",
             "- Niedrig: #energie/niedrig",
             "## Person",
-            "- Alex: #person/alex",
+            "- Michael: #person/michael",
         ),
     )
 
     @Test
     fun definedTagsBecomeBadges() {
-        val result = TagDisplay.split("Müll rausbringen #kurz #person/alex", definitions, TagDisplaySettings())
+        val result = TagDisplay.split("Müll rausbringen #kurz #person/michael", definitions, TagDisplaySettings())
         assertEquals("Müll rausbringen", result.title)
-        assertEquals(listOf(TagBadge("⏱", "5 Min"), TagBadge("👤", "Alex", isPerson = true)), result.badges)
+        assertEquals(listOf(TagBadge("⏱", "5 Min"), TagBadge("👤", "Michael", isPerson = true)), result.badges)
     }
 
     @Test
@@ -37,7 +37,7 @@ class TagDisplayTest {
         val settings = TagDisplaySettings()
             .withGroup(person, TagDisplayMode.HIDDEN)
             .withGroup(effort, TagDisplayMode.TEXT)
-        val result = TagDisplay.split("Bild #person/alex #5min #urlaub", definitions, settings)
+        val result = TagDisplay.split("Bild #person/michael #5min #urlaub", definitions, settings)
         assertEquals("Bild #5min #urlaub", result.title)
         assertEquals(emptyList<TagBadge>(), result.badges)
 
@@ -70,9 +70,9 @@ class TagDisplayTest {
 
     @Test
     fun severalPeopleBecomeSeveralPersonBadges() {
-        val defs = TagDefinitionParser.parse(listOf("## Person", "- Alex: #person/alex", "- Sam: #person/sam"))
-        val result = TagDisplay.split("Elternabend #person/alex #person/sam", defs, TagDisplaySettings())
+        val defs = TagDefinitionParser.parse(listOf("## Person", "- Michael: #person/michael", "- Sam: #person/sam"))
+        val result = TagDisplay.split("Elternabend #person/michael #person/sam", defs, TagDisplaySettings())
         assertEquals("Elternabend", result.title)
-        assertEquals(listOf(TagBadge("👤", "Alex", true), TagBadge("👤", "Sam", true)), result.badges)
+        assertEquals(listOf(TagBadge("👤", "Michael", true), TagBadge("👤", "Sam", true)), result.badges)
     }
 }

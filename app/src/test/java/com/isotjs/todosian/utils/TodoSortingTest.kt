@@ -9,7 +9,7 @@ import java.util.Locale
 
 class TodoSortingTest {
     private val defs = TagDefinitionParser.parse(
-        listOf("## Aufwand", "- 5 Min: #5min", "- 30 Min: #30min", "- 2 Std: #2h", "## Person", "- Alex: #alex"),
+        listOf("## Aufwand", "- 5 Min: #5min", "- 30 Min: #30min", "- 2 Std: #2h", "## Person", "- Michael: #michael"),
     )
 
     private fun todo(line: Int, text: String, indent: Int = 0, due: String? = null, reminder: String? = null, prio: TasksPriority? = null) =

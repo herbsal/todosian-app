@@ -390,7 +390,7 @@ private fun AvatarCircle(text: String, container: Color, content: Color) {
     }
 }
 
-/** "Alex" → "A", "Anna Lena" → "AL". */
+/** "Michael" → "M", "Anna Lena" → "AL". */
 internal fun initialsOf(name: String): String {
     val words = name.trim().split(Regex("""[\s_\-/]+""")).filter { it.isNotEmpty() }
     if (words.isEmpty()) return "?"

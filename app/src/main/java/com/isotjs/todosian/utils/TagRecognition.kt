@@ -9,10 +9,10 @@ data class TagHit(val group: TagGroup, val term: TagTerm, val start: Int, val en
 data class SettledTags(val text: String, val cursor: Int, val replaced: Map<String, String>)
 
 /**
- * Finds tags of the tag note written as plain words, e.g. dictated: "Alex Müll rausbringen
- * 5 Minuten wenig Energie" finds 👤 Alex, ⏱ 5 Min and 🔋 Niedrig. Only tags the note defines
+ * Finds tags of the tag note written as plain words, e.g. dictated: "Michael Müll rausbringen
+ * 5 Minuten wenig Energie" finds 👤 Michael, ⏱ 5 Min and 🔋 Niedrig. Only tags the note defines
  * are found. Words that match:
- * - the term's name ("Alex", "5 Min") and its tags without # ("5min", "energie niedrig"),
+ * - the term's name ("Michael", "5 Min") and its tags without # ("5min", "energie niedrig"),
  * - durations in other spellings ("5 Minuten", "2 Std.", "halbe Stunde"),
  * - name and group together, also with common words ("Energie niedrig", "wenig Energie"),
  * - the user's own words for the term in the note ("dreißig Minuten").
@@ -61,7 +61,7 @@ object TagRecognition {
 
     /**
      * Sets the found tags in [text]. With [removeWords] the found words leave the title, except
-     * people's names, which usually belong to the sentence ("Alex anrufen").
+     * people's names, which usually belong to the sentence ("Michael anrufen").
      */
     fun apply(text: String, hits: List<TagHit>, removeWords: Boolean): String {
         var result = text
@@ -82,7 +82,7 @@ object TagRecognition {
      * Turns finished tag words into the tag right in the text while typing: "5 Minuten " becomes
      * "#5min ". A phrase counts as finished once something other than a letter or digit follows it
      * and the cursor is not on it, so words still being typed stay. With [removeWords] the words
-     * give way to the tag; otherwise, and always for people ("Alex anrufen"), the tag follows them.
+     * give way to the tag; otherwise, and always for people ("Michael anrufen"), the tag follows them.
      * A new tag of a group with one tag at a time replaces the group's tag already in the text.
      * With [finishedOnly] false all tag words count, e.g. when leaving the field.
      * Returns null when nothing changes.
@@ -171,7 +171,7 @@ object TagRecognition {
         return words.filter { it.isNotBlank() }
     }
 
-    /** "#energie/niedrig" is written "energie niedrig", "#person/alex" only by the person's name. */
+    /** "#energie/niedrig" is written "energie niedrig", "#person/michael" only by the person's name. */
     private fun tagWords(tag: String): String {
         val plain = tag.removePrefix("#")
         return if (plain.startsWith("person/", ignoreCase = true)) plain.substringAfter('/') else plain.replace(Regex("[/_-]"), " ")
