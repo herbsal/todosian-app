@@ -153,6 +153,9 @@ data class TagNote(val lines: List<String>, val groups: List<TagNoteGroup>, val 
     val editableGroups: List<TagNoteGroup> get() = groups.filter { it.name != null || it.terms.isNotEmpty() }
 }
 
+/** A task's text parted by [TagText.split]. */
+data class TagSplit(val words: String, val tags: List<String>, val cursor: Int)
+
 /** Reading and setting keywords in a todo's text. */
 object TagText {
     private val tagRegex = Regex("""(?<![\p{L}\p{N}_])#[\p{L}\p{N}_/\-]+""")
@@ -173,6 +176,33 @@ object TagText {
         }
         result = tidy(result)
         return if (result.isEmpty()) term.primaryTag else "$result ${term.primaryTag}"
+    }
+
+    /**
+     * [text] parted into its words and the keywords of [definitions] set in it, so a task's tags
+     * can show as chips beside its words: "Zahnarzt #5min anrufen" is "Zahnarzt anrufen" and
+     * `#5min`. Other tags stay in the words. [cursor] in [text] is moved along into the words.
+     */
+    fun split(text: String, cursor: Int, definitions: TagDefinitions): TagSplit {
+        var words = text
+        var c = cursor.coerceIn(0, text.length)
+        val found = tagRegex.findAll(text).filter { definitions.termFor(it.value) != null }.toList()
+        found.asReversed().forEach { m ->
+            var start = m.range.first
+            var end = m.range.last + 1
+            // One space goes with the tag: the one before it, else the one after it.
+            if (start > 0 && words[start - 1] == ' ') start-- else if (end < words.length && words[end] == ' ') end++
+            words = words.removeRange(start, end)
+            if (c >= end) c -= end - start else if (c > start) c = start
+        }
+        return TagSplit(words, found.map { it.value }, c.coerceIn(0, words.length))
+    }
+
+    /** The task text of [words] with [tags] after them; a cursor in [words] stays valid in it. */
+    fun join(words: String, tags: List<String>): String {
+        if (tags.isEmpty()) return words
+        val gap = if (words.isEmpty() || words.endsWith(' ')) "" else " "
+        return words + gap + tags.joinToString(" ")
     }
 
     private fun removeTags(text: String, tags: List<String>): String =

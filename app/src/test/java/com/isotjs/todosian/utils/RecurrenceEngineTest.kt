@@ -237,4 +237,34 @@ class RecurrenceEngineTest {
         val result = next("every month", due = "2023-01-31")
         assertEquals("2023-02-28", result?.dueDate?.toString())
     }
+
+    @Test
+    fun `every 2 months on the 15th`() {
+        val result = next("every 2 months on the 15th", due = "2024-03-15")
+        assertEquals("2024-05-15", result?.dueDate?.toString())
+    }
+
+    @Test
+    fun `every month on the 2nd Wednesday`() {
+        val result = next("every month on the 2nd Wednesday", due = "2024-03-13")
+        assertEquals("2024-04-10", result?.dueDate?.toString())
+    }
+
+    @Test
+    fun `every 3 months on the last`() {
+        val result = next("every 3 months on the last", due = "2024-01-31")
+        assertEquals("2024-04-30", result?.dueDate?.toString())
+    }
+
+    @Test
+    fun `every November on the 24th`() {
+        assertEquals("2025-11-24", next("every November on the 24th", due = "2024-11-24")?.dueDate?.toString())
+        assertEquals("2024-11-24", next("every November on the 24th", due = "2024-03-01")?.dueDate?.toString())
+    }
+
+    @Test
+    fun `every February on the last`() {
+        val result = next("every February on the last", due = "2023-02-28")
+        assertEquals("2024-02-29", result?.dueDate?.toString())
+    }
 }

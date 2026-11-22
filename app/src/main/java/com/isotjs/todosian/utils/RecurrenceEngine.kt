@@ -16,9 +16,12 @@ import java.time.temporal.TemporalAdjusters
  *   every N weeks on <day>[, <day>...]
  *   every month
  *   every N months
- *   every month on the <Nth>
- *   every month on the last <day>
- *   every month on the last
+ *   every [N] months on the <Nth>
+ *   every [N] months on the <1st..4th> <day>
+ *   every [N] months on the last <day>
+ *   every [N] months on the last
+ *   every <month> on the <Nth>
+ *   every <month> on the last
  *   every year
  *   every N years
  *   Any of the above with " when done" appended
@@ -43,11 +46,19 @@ internal object RecurrenceEngine {
     private val EVERY_N_MONTHS = Regex("""^every\s+(\d+)\s+months?$""", RegexOption.IGNORE_CASE)
     private val EVERY_MONTH = Regex("""^every\s+month$""", RegexOption.IGNORE_CASE)
     private val EVERY_MONTH_ON_THE_NTH = Regex(
-        """^every\s+month\s+on\s+the\s+(\d+)(?:st|nd|rd|th)$""",
+        """^every\s+(?:(\d+)\s+)?months?\s+on\s+the\s+(\d+)(?:st|nd|rd|th)$""",
+        RegexOption.IGNORE_CASE,
+    )
+    private val EVERY_MONTH_ON_NTH_WEEKDAY = Regex(
+        """^every\s+(?:(\d+)\s+)?months?\s+on\s+the\s+([1-4])(?:st|nd|rd|th)\s+(\w+)$""",
         RegexOption.IGNORE_CASE,
     )
     private val EVERY_MONTH_ON_LAST = Regex(
-        """^every\s+month\s+on\s+the\s+last(?:\s+(\w+))?$""",
+        """^every\s+(?:(\d+)\s+)?months?\s+on\s+the\s+last(?:\s+(\w+))?$""",
+        RegexOption.IGNORE_CASE,
+    )
+    private val EVERY_NAMED_MONTH = Regex(
+        """^every\s+(\w+)\s+on\s+the\s+(?:(\d+)(?:st|nd|rd|th)|(last))$""",
         RegexOption.IGNORE_CASE,
     )
 
@@ -70,6 +81,11 @@ internal object RecurrenceEngine {
         "sunday" to DayOfWeek.SUNDAY,
         "sun" to DayOfWeek.SUNDAY,
     )
+
+    private val MONTH_NAMES: Map<String, java.time.Month> = java.time.Month.entries.flatMap { month ->
+        val name = month.name.lowercase()
+        listOf(name to month, name.take(3) to month)
+    }.toMap()
 
     data class NextOccurrence(
         val dueDate: LocalDate?,
@@ -139,17 +155,37 @@ internal object RecurrenceEngine {
             return nextMonthSameDay(base, n)
         }
         EVERY_MONTH_ON_THE_NTH.find(rule)?.let { m ->
-            val nth = m.groupValues[1].toIntOrNull() ?: return null
-            return nextMonthOnNth(base, 1, nth)
+            val months = m.groupValues[1].toIntOrNull() ?: 1
+            val nth = m.groupValues[2].toIntOrNull() ?: return null
+            return nextMonthOnNth(base, months, nth)
+        }
+        EVERY_MONTH_ON_NTH_WEEKDAY.find(rule)?.let { m ->
+            val months = m.groupValues[1].toIntOrNull() ?: 1
+            val nth = m.groupValues[2].toInt()
+            val dow = DAY_NAMES[m.groupValues[3].lowercase()] ?: return null
+            return base.plusMonths(months.toLong()).with(TemporalAdjusters.dayOfWeekInMonth(nth, dow))
         }
         EVERY_MONTH_ON_LAST.find(rule)?.let { m ->
-            val dayName = m.groupValues[1].trim().lowercase()
-            return if (dayName.isEmpty()) {
-                nextMonthOnLast(base, 1)
+            val months = m.groupValues[1].toIntOrNull() ?: 1
+            val dayName = m.groupValues[2].trim().lowercase()
+            return if (dayName.isEmpty() || dayName == "day") {
+                nextMonthOnLast(base, months)
             } else {
                 val dow = DAY_NAMES[dayName] ?: return null
-                nextMonthOnLastDow(base, 1, dow)
+                nextMonthOnLastDow(base, months, dow)
             }
+        }
+        EVERY_NAMED_MONTH.find(rule)?.let { m ->
+            val month = MONTH_NAMES[m.groupValues[1].lowercase()] ?: return null
+            val day = m.groupValues[2].toIntOrNull()
+            // The next such day after [base]: this year when still ahead, else next year.
+            fun inYear(year: Int): LocalDate {
+                val first = LocalDate.of(year, month, 1)
+                val last = first.lengthOfMonth()
+                return first.withDayOfMonth(if (day == null) last else day.coerceAtMost(last))
+            }
+            val thisYear = inYear(base.year)
+            return if (thisYear.isAfter(base)) thisYear else inYear(base.year + 1)
         }
 
         EVERY_YEAR.find(rule)?.let { return nextYearSameDay(base, 1) }

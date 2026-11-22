@@ -8,14 +8,16 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.InputChip
 import androidx.compose.material3.InputChipDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberUpdatedState
 import kotlinx.coroutines.delay
 import androidx.compose.ui.Modifier
@@ -117,17 +119,17 @@ internal fun applyRecognizedDate(
     }
 }
 
-/** ✨ with "#" at the end of the text field: turns finding tags (and lists) in the words on or off. */
+/** A star with "#" on the text field's edge: turns finding tags (and lists) in the words on or off. */
 @Composable
 fun RecognitionToggle(enabled: Boolean, onToggle: () -> Unit) {
     val description = stringResource(
         if (enabled) R.string.recognition_toggle_on else R.string.recognition_toggle_off,
     )
-    IconButton(onClick = onToggle, modifier = Modifier.semantics { contentDescription = description }) {
+    EdgeIconButton(onClick = onToggle, selected = enabled, description = description) {
         BadgedSparkle(
             badge = "#",
             filled = enabled,
-            tint = if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+            tint = if (enabled) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }
@@ -213,6 +215,45 @@ fun RecognizedTagChips(
         hits.forEach { hit ->
             RemovableChip(label = "${TagDisplay.iconFor(hit.group)} ${hit.term.label}", onRemove = { onRemove(hit) })
         }
+    }
+}
+
+/**
+ * The text of a new task while it is written: the [words] in the text field and the [tags] of
+ * the tag note, which show as chips instead of in the field ([TagText.split]). [text] is both
+ * together, as it is saved. Positions in [field] are the same in [text], since the tags follow.
+ */
+@Stable
+internal class TaskDraft(initial: String) {
+    var words by mutableStateOf(initial)
+        private set
+    var tags by mutableStateOf(emptyList<String>())
+        private set
+    var field by mutableStateOf(TextFieldValue(initial, TextRange(initial.length)))
+        private set
+
+    val text: String get() = TagText.join(words, tags)
+
+    /** [text] with the field's cursor, for turning tag words into tags. */
+    val value: TextFieldValue get() = TextFieldValue(text, field.selection, field.composition)
+
+    /** A change typed or dictated in the field. */
+    fun type(value: TextFieldValue) {
+        words = value.text
+        field = value
+    }
+
+    /** New words from elsewhere (AI cleanup, undo), the cursor at their end; the tags stay. */
+    fun replaceWords(newWords: String) {
+        type(TextFieldValue(newWords, TextRange(newWords.length)))
+    }
+
+    /** A new whole [full] text: its tags of [definitions] go to the chips, the rest to the field. */
+    fun setText(full: String, definitions: TagDefinitions, cursor: Int = full.length) {
+        val split = TagText.split(full, cursor, definitions)
+        words = split.words
+        tags = split.tags
+        field = TextFieldValue(split.words, TextRange(split.cursor))
     }
 }
 
