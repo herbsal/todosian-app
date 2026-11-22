@@ -1,6 +1,7 @@
 package com.isotjs.todosian.ui.components
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -47,6 +48,7 @@ import com.isotjs.todosian.data.ai.AiStatus
 import com.isotjs.todosian.data.settings.AppSettings
 import com.isotjs.todosian.data.settings.AppSettingsRepository
 import com.isotjs.todosian.utils.TaskMarkers
+import com.isotjs.todosian.utils.ai.AiTextGuard
 import kotlinx.coroutines.launch
 
 /**
@@ -95,11 +97,19 @@ class AiCleanupState {
     var unchanged by mutableStateOf(false)
         internal set
 
+    /** Why the AI's answer was not taken, and the answer itself. */
+    var rejection by mutableStateOf<AiTextGuard.Rejection?>(null)
+        internal set
+    var rejectedAnswer by mutableStateOf<String?>(null)
+        internal set
+
     /** The text a failure or "nothing to clean up" belongs to; typing on hides the note. */
     internal var noticeText by mutableStateOf<String?>(null)
 
     internal fun clearNotice() {
         failure = null
+        rejection = null
+        rejectedAnswer = null
         unchanged = false
         noticeText = null
     }
@@ -122,6 +132,7 @@ fun aiCleanupShown(settings: AppSettings): Boolean {
 /**
  * The "AI" button at the end of a task's text field. Tapping it cleans up [currentText] and hands
  * the result to [onCleaned]; nothing is loaded or sent anywhere without the person's yes.
+ * [protect] gives the parts of the text the AI must keep, e.g. words that become a tag.
  * [verify] may reject a result (e.g. when the words for a date changed).
  */
 @Composable
@@ -132,6 +143,7 @@ fun AiCleanupButton(
     currentText: () -> String,
     onCleaned: (String) -> Unit,
     markers: TaskMarkers = TaskMarkers.Default,
+    protect: (text: String) -> List<IntRange> = { emptyList() },
     verify: (original: String, cleaned: String) -> Boolean = { _, _ -> true },
 ) {
     val status by AiCleanup.status.collectAsStateWithLifecycle()
@@ -146,7 +158,7 @@ fun AiCleanupButton(
         state.clearNotice()
         state.running = true
         scope.launch {
-            val result = AiCleanup.clean(start, markers) { cleaned -> verify(start, cleaned) }
+            val result = AiCleanup.clean(start, markers, protect(start)) { cleaned -> verify(start, cleaned) }
             state.running = false
             // Typed on while the AI worked: the newer words win, the result is dropped.
             if (currentText() != start) return@launch
@@ -158,7 +170,11 @@ fun AiCleanupButton(
                     onCleaned(result.text)
                 }
                 AiCleanupResult.Unchanged -> state.unchanged = true
-                is AiCleanupResult.Failed -> if (result.reason != AiFailure.LEFT_APP) state.failure = result.reason
+                is AiCleanupResult.Failed -> if (result.reason != AiFailure.LEFT_APP) {
+                    state.failure = result.reason
+                    state.rejection = result.rejection
+                    state.rejectedAnswer = result.answer
+                }
             }
         }
     }
@@ -275,12 +291,25 @@ fun AiCleanupNotice(state: AiCleanupState, currentText: String, onUndo: (String)
                 onUndo(original)
             }) { Text(text = stringResource(R.string.ai_cleanup_undo)) }
         }
-        failure != null -> Text(
-            text = stringResource(failureText(failure)),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.error,
-            modifier = Modifier.padding(top = 4.dp),
-        )
+        failure != null -> Column(modifier = Modifier.padding(top = 4.dp)) {
+            val rejection = state.rejection
+            Text(
+                text = if (rejection == null) {
+                    stringResource(failureText(failure))
+                } else {
+                    stringResource(R.string.ai_cleanup_failed_unsafe_reason, stringResource(rejectionText(rejection)))
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+            state.rejectedAnswer?.takeIf { it.isNotBlank() }?.let { answer ->
+                Text(
+                    text = stringResource(R.string.ai_cleanup_rejected_answer, answer),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
         noticeShown && state.unchanged -> Text(
             text = stringResource(R.string.ai_cleanup_unchanged),
             style = MaterialTheme.typography.bodySmall,
@@ -288,6 +317,15 @@ fun AiCleanupNotice(state: AiCleanupState, currentText: String, onUndo: (String)
             modifier = Modifier.padding(top = 4.dp),
         )
     }
+}
+
+private fun rejectionText(rejection: AiTextGuard.Rejection): Int = when (rejection) {
+    AiTextGuard.Rejection.EMPTY -> R.string.ai_cleanup_rejected_empty
+    AiTextGuard.Rejection.LINE_BREAK -> R.string.ai_cleanup_rejected_line_break
+    AiTextGuard.Rejection.TOO_LONG -> R.string.ai_cleanup_rejected_too_long
+    AiTextGuard.Rejection.PLACEHOLDERS -> R.string.ai_cleanup_rejected_placeholders
+    AiTextGuard.Rejection.NO_WORDS -> R.string.ai_cleanup_rejected_no_words
+    AiTextGuard.Rejection.RECOGNITION -> R.string.ai_cleanup_rejected_recognition
 }
 
 private fun failureText(failure: AiFailure): Int = when (failure) {

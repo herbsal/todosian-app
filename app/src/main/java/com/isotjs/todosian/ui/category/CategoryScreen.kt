@@ -126,6 +126,8 @@ import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.ime
 import java.time.LocalDate
+import com.isotjs.todosian.ui.components.TaskRecognition
+import com.isotjs.todosian.ui.components.protectedWords
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -376,6 +378,16 @@ fun CategoryScreen(
                         {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 if (aiShown) {
+                                    val recognizeWords: (String, LocalDateTime) -> TaskRecognition = { words, now ->
+                                        TaskInputRecognizer.recognize(
+                                            text = words,
+                                            definitions = uiState.tagDefinitions,
+                                            recognizeTagsAndLists = isNewTask && settings.tagRecognition,
+                                            ignoreDate = !isNewTask || ignoreDateInText,
+                                            ignoredTags = ignoredTags,
+                                            now = now,
+                                        )
+                                    }
                                     AiCleanupButton(
                                         state = aiCleanup,
                                         settings = settings,
@@ -386,18 +398,8 @@ fun CategoryScreen(
                                             sheetText = cleaned
                                         },
                                         markers = settings.toTaskMarkers(),
-                                        verify = { original, cleaned ->
-                                            keepsRecognized(original, cleaned) { words, now ->
-                                                TaskInputRecognizer.recognize(
-                                                    text = words,
-                                                    definitions = uiState.tagDefinitions,
-                                                    recognizeTagsAndLists = isNewTask && settings.tagRecognition,
-                                                    ignoreDate = !isNewTask || ignoreDateInText,
-                                                    ignoredTags = ignoredTags,
-                                                    now = now,
-                                                )
-                                            }
-                                        },
+                                        protect = { words -> protectedWords(words, recognizeWords) },
+                                        verify = { original, cleaned -> keepsRecognized(original, cleaned, recognizeWords) },
                                     )
                                 }
                                 if (isNewTask) {

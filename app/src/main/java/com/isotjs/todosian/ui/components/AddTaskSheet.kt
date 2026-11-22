@@ -308,6 +308,18 @@ fun AddTaskSheet(
                 trailingIcon = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         if (aiShown) {
+                            val recognizeWords: (String, LocalDateTime) -> TaskRecognition = { words, now ->
+                                TaskInputRecognizer.recognize(
+                                    text = words,
+                                    definitions = definitions,
+                                    listNames = byName.keys.toList(),
+                                    recognizeTagsAndLists = settings.tagRecognition,
+                                    ignoreDate = ignoreDate,
+                                    ignoreList = ignoreList || chosenList != null,
+                                    ignoredTags = ignoredTags,
+                                    now = now,
+                                )
+                            }
                             AiCleanupButton(
                                 state = aiCleanup,
                                 settings = settings,
@@ -315,20 +327,8 @@ fun AddTaskSheet(
                                 currentText = { text },
                                 onCleaned = { cleaned -> setText(TextFieldValue(cleaned, TextRange(cleaned.length))) },
                                 markers = markers,
-                                verify = { original, cleaned ->
-                                    keepsRecognized(original, cleaned) { words, now ->
-                                        TaskInputRecognizer.recognize(
-                                            text = words,
-                                            definitions = definitions,
-                                            listNames = byName.keys.toList(),
-                                            recognizeTagsAndLists = settings.tagRecognition,
-                                            ignoreDate = ignoreDate,
-                                            ignoreList = ignoreList || chosenList != null,
-                                            ignoredTags = ignoredTags,
-                                            now = now,
-                                        )
-                                    }
-                                },
+                                protect = { words -> protectedWords(words, recognizeWords) },
+                                verify = { original, cleaned -> keepsRecognized(original, cleaned, recognizeWords) },
                             )
                         }
                         RecognitionToggle(

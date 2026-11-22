@@ -54,9 +54,38 @@ class AiTextGuardTest {
         assertEquals("ähm also Geschenk für ⟦1⟧ besorgen", masked.textWithoutTrailing)
         assertEquals(
             "Geschenk für #lena besorgen #familie 📅 2026-11-30",
-            AiTextGuard.restore("Geschenk für ⟦1⟧ besorgen", masked, trailingOmitted = true),
+            AiTextGuard.restore("Geschenk für ⟦1⟧ besorgen", masked, masked.trailing),
         )
-        assertNull(AiTextGuard.restore("Geschenk besorgen", masked, trailingOmitted = true))
+        assertNull(AiTextGuard.restore("Geschenk besorgen", masked, masked.trailing))
+    }
+
+    @Test
+    fun `models that see no placeholder get all parts back at the end`() {
+        val masked = AiTextGuard.mask("Alex #person/alex nudeltopf nudeltopf aufgefunden und ähm draußen saubermachen")
+        assertEquals("Alex nudeltopf nudeltopf aufgefunden und ähm draußen saubermachen", masked.textWithout(masked.allTokens))
+        assertEquals(
+            "Nudeltopf draußen saubermachen #person/alex",
+            AiTextGuard.restore("Nudeltopf draußen saubermachen.", masked, masked.allTokens),
+        )
+    }
+
+    @Test
+    fun `extra ranges are protected like tags`() {
+        val text = "ähm Nudeltopf aufräumen Energie niedrig"
+        val start = text.indexOf("Energie")
+        val masked = AiTextGuard.mask(text, extra = listOf(start until text.length))
+        assertEquals(listOf("Energie niedrig"), masked.tokens)
+        assertEquals("ähm Nudeltopf aufräumen ⟦1⟧", masked.text)
+        assertEquals("Nudeltopf aufräumen Energie niedrig", AiTextGuard.restore("Nudeltopf aufräumen", masked, masked.allTokens))
+    }
+
+    @Test
+    fun `rejection says why`() {
+        val masked = AiTextGuard.mask("Kinderarzt anrufen #kinder")
+        assertEquals(
+            AiTextGuard.Restored.Rejected(AiTextGuard.Rejection.PLACEHOLDERS),
+            AiTextGuard.check("Kinderarzt anrufen", masked),
+        )
     }
 
     @Test

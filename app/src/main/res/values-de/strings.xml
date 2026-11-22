@@ -651,6 +651,14 @@
     <string name="ai_cleanup_failed_unsafe">KI konnte den Text nicht sicher aufräumen, er bleibt wie er war</string>
     <string name="ai_cleanup_failed_not_ready">KI wird vorbereitet, das kann dauern</string>
     <string name="ai_cleanup_failed_other">KI-Aufräumen hat nicht geklappt</string>
+    <string name="ai_cleanup_failed_unsafe_reason">KI-Vorschlag nicht übernommen: %1$s. Der Text bleibt, wie er war</string>
+    <string name="ai_cleanup_rejected_answer">KI schlug vor: „%1$s“</string>
+    <string name="ai_cleanup_rejected_empty">leere Antwort</string>
+    <string name="ai_cleanup_rejected_line_break">Antwort hatte mehrere Zeilen</string>
+    <string name="ai_cleanup_rejected_too_long">Antwort länger als der Text</string>
+    <string name="ai_cleanup_rejected_placeholders">ein Tag, Datum oder Link fehlte</string>
+    <string name="ai_cleanup_rejected_no_words">keine Wörter übrig</string>
+    <string name="ai_cleanup_rejected_recognition">ein erkannter Tag, eine Liste oder ein Datum hat sich geändert</string>
     <string name="ai_cleanup_unchanged">KI hat nichts zum Aufräumen gefunden</string>
     <string name="ai_cleanup_download_cancel">Nicht jetzt</string>
     <string name="ai_cleanup_hint_title">Mit KI aufräumen</string>
