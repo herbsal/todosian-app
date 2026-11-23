@@ -27,7 +27,8 @@ class SnoozeActivity : ComponentActivity() {
             finish()
             return
         }
-        val title = extras.getString(TaskReminderScheduler.EXTRA_TEXT).orEmpty()
+        // As in the notification: tags as symbols ("⏱ 5 Min"), not as #tags.
+        val title = (extras.getString(TaskReminderScheduler.EXTRA_DISPLAY_TEXT) ?: extras.getString(TaskReminderScheduler.EXTRA_TEXT)).orEmpty()
         setContent {
             TodosianTheme {
                 AlertDialog(
