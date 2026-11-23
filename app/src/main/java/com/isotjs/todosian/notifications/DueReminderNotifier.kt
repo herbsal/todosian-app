@@ -118,14 +118,21 @@ object DueReminderNotifier {
             payload.totalCount,
         )
 
-        val body = if (payload.totalCount == 1) {
-            appContext.getString(
+        // "Overdue" is said on its own: "… ist überfällig", not "… ist überfällig fällig".
+        val overdue = payload.nextDueDate.isBefore(LocalDate.now())
+        val body = when {
+            payload.totalCount == 1 && overdue -> appContext.getString(R.string.notification_due_body_single_overdue, payload.topTodoText)
+            payload.totalCount == 1 -> appContext.getString(
                 R.string.notification_due_body_single,
                 payload.topTodoText,
                 dueLabel(appContext, payload.nextDueDate),
             )
-        } else {
-            appContext.resources.getQuantityString(
+            overdue -> appContext.resources.getQuantityString(
+                R.plurals.notification_due_body_multi_overdue,
+                payload.totalCount,
+                payload.totalCount,
+            )
+            else -> appContext.resources.getQuantityString(
                 R.plurals.notification_due_body_multi,
                 payload.totalCount,
                 dueLabel(appContext, payload.nextDueDate),

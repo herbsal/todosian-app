@@ -282,9 +282,14 @@
     </plurals>
     <string name="notification_due_body_single">%1$s ist %2$s fällig.</string>
     <plurals name="notification_due_body_multi">
-        <item quantity="one">Nächste fällig %1$s. Tippen, um %2$d Aufgabe anzusehen.</item>
-        <item quantity="other">Nächste fällig %1$s. Tippen, um %2$d Aufgaben anzusehen.</item>
+        <item quantity="one">Sie ist %1$s fällig. Tippen, um %2$d Aufgabe anzusehen.</item>
+        <item quantity="other">Die nächste ist %1$s fällig. Tippen, um alle %2$d anzusehen.</item>
     </plurals>
+    <plurals name="notification_due_body_multi_overdue">
+        <item quantity="one">Sie ist überfällig. Tippen, um %1$d Aufgabe anzusehen.</item>
+        <item quantity="other">Mindestens eine ist schon überfällig. Tippen, um alle %1$d anzusehen.</item>
+    </plurals>
+    <string name="notification_due_body_single_overdue">%1$s ist überfällig.</string>
     <string name="notification_due_when_overdue">überfällig</string>
     <string name="notification_due_when_today">heute</string>
     <string name="notification_due_when_tomorrow">morgen</string>

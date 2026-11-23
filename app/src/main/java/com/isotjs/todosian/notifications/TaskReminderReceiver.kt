@@ -179,6 +179,8 @@ class TaskReminderReceiver : BroadcastReceiver() {
         ).apply {
             putBoolean(TaskReminderScheduler.EXTRA_FROM_PROFILE, target.fromProfile)
             putString(TaskReminderScheduler.EXTRA_TASK_ID, target.taskId)
+            // The title with tags as symbols, for the "Later" dialog and the actions.
+            putString(TaskReminderScheduler.EXTRA_DISPLAY_TEXT, target.displayText)
         }
 
     private fun laterChoiceIntent(context: Context, target: Target): PendingIntent {

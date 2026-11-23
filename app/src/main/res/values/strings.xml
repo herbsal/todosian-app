@@ -282,9 +282,14 @@
     </plurals>
     <string name="notification_due_body_single">%1$s is due %2$s.</string>
     <plurals name="notification_due_body_multi">
-        <item quantity="one">Next due %1$s. Tap to review %2$d task.</item>
-        <item quantity="other">Next due %1$s. Tap to review %2$d tasks.</item>
+        <item quantity="one">It is due %1$s. Tap to see %2$d task.</item>
+        <item quantity="other">The next one is due %1$s. Tap to see all %2$d.</item>
     </plurals>
+    <plurals name="notification_due_body_multi_overdue">
+        <item quantity="one">It is overdue. Tap to see %1$d task.</item>
+        <item quantity="other">At least one is already overdue. Tap to see all %1$d.</item>
+    </plurals>
+    <string name="notification_due_body_single_overdue">%1$s is overdue.</string>
     <string name="notification_due_when_overdue">overdue</string>
     <string name="notification_due_when_today">today</string>
     <string name="notification_due_when_tomorrow">tomorrow</string>
